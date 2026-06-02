@@ -23,6 +23,8 @@ export default function FieldEditor({
   const [tool, setTool] = useState<InkTool>('pen')
   const [color, setColor] = useState(PEN_COLORS[0])
   const [size, setSize] = useState(6)
+  // 기본: 펜/마우스만 (손바닥 거부). 손가락으로 쓰려면 토글 ON
+  const [acceptTouch, setAcceptTouch] = useState(false)
 
   const setMode = (mode: Field['mode']) => onChange({ ...field, mode })
   const setStrokes = (strokes: Stroke[]) => onChange({ ...field, strokes })
@@ -50,7 +52,7 @@ export default function FieldEditor({
       ) : (
         <div>
           {/* 손글씨 툴바 */}
-          <div className="mb-2 flex flex-wrap items-center gap-2">
+          <div className="mb-2 flex flex-wrap items-center gap-2 touch-manipulation select-none">
             <button
               type="button"
               onClick={() => setTool('pen')}
@@ -110,6 +112,17 @@ export default function FieldEditor({
             >
               전체 지우기
             </button>
+
+            <span className="mx-1 h-4 w-px bg-rose-line" />
+
+            <button
+              type="button"
+              onClick={() => setAcceptTouch((v) => !v)}
+              title="끄면 펜으로 쓸 때 손바닥이 닿아도 무시돼요"
+              className={`rounded-lg px-2.5 py-1 text-sm ${acceptTouch ? 'bg-rose-chip text-rose-ink' : 'text-zinc-500'}`}
+            >
+              {acceptTouch ? '✋ 손가락 ON' : '🖐️ 손가락 OFF'}
+            </button>
           </div>
 
           <InkCanvas
@@ -118,6 +131,7 @@ export default function FieldEditor({
             color={color}
             size={size}
             tool={tool}
+            acceptTouch={acceptTouch}
             height={inkHeight}
           />
         </div>

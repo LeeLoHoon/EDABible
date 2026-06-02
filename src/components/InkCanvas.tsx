@@ -10,6 +10,8 @@ interface Props {
   color: string
   size: number
   tool: InkTool
+  /** 손가락 터치 입력 허용 여부 (기본 false = 펜/마우스만, 손바닥 거부) */
+  acceptTouch?: boolean
   /** 캔버스 높이(px) */
   height?: number
 }
@@ -54,16 +56,19 @@ export default function InkCanvas({
   color,
   size,
   tool,
+  acceptTouch = false,
   height = 240,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
   const drawing = useRef<Stroke | null>(null)
+  // 현재 그리는 중인 포인터 ID (손바닥 멀티터치 차단용 — 하나만 허용)
+  const activePointer = useRef<number | null>(null)
   // 최신 props를 이벤트 핸들러에서 참조하기 위한 ref
   const strokesRef = useRef(strokes)
   strokesRef.current = strokes
-  const propRef = useRef({ color, size, tool, onChange })
-  propRef.current = { color, size, tool, onChange }
+  const propRef = useRef({ color, size, tool, onChange, acceptTouch })
+  propRef.current = { color, size, tool, onChange, acceptTouch }
 
   const redraw = useCallback(() => {
     const canvas = canvasRef.current
@@ -112,16 +117,27 @@ export default function InkCanvas({
     return [e.clientX - rect.left, e.clientY - rect.top, pressure]
   }
 
+  const erase = (x: number, y: number) => {
+    const { size, onChange } = propRef.current
+    const threshold = Math.max(size, 12)
+    const kept = strokesRef.current.filter((s) => distToStroke(s, x, y) > threshold)
+    if (kept.length !== strokesRef.current.length) onChange(kept)
+  }
+
   const onPointerDown = (e: React.PointerEvent) => {
+    const { tool, color, size, acceptTouch } = propRef.current
+    // 손가락/손바닥 거부: 펜·마우스만 받기 (acceptTouch면 손가락도 허용)
+    if (e.pointerType === 'touch' && !acceptTouch) return
+    // 이미 다른 포인터가 그리는 중이면 무시 (필기 중 손바닥 닿음)
+    if (activePointer.current !== null) return
+
     e.preventDefault()
+    activePointer.current = e.pointerId
     canvasRef.current?.setPointerCapture(e.pointerId)
     const [x, y, p] = getPoint(e)
-    const { tool, color, size, onChange } = propRef.current
 
     if (tool === 'eraser') {
-      const threshold = Math.max(size, 12)
-      const kept = strokesRef.current.filter((s) => distToStroke(s, x, y) > threshold)
-      if (kept.length !== strokesRef.current.length) onChange(kept)
+      erase(x, y)
       return
     }
     drawing.current = { points: [[x, y, p]], color, size }
@@ -129,22 +145,22 @@ export default function InkCanvas({
   }
 
   const onPointerMove = (e: React.PointerEvent) => {
-    const { tool, size, onChange } = propRef.current
+    if (activePointer.current !== e.pointerId) return
+    const { tool } = propRef.current
     const [x, y] = getPoint(e)
 
     if (tool === 'eraser') {
-      if (e.buttons === 0) return
-      const threshold = Math.max(size, 12)
-      const kept = strokesRef.current.filter((s) => distToStroke(s, x, y) > threshold)
-      if (kept.length !== strokesRef.current.length) onChange(kept)
+      erase(x, y)
       return
     }
     if (!drawing.current) return
-    drawing.current.points.push(getPoint(e))
+    drawing.current.points.push([x, y, e.pressure && e.pressure > 0 ? e.pressure : 0.5])
     redraw()
   }
 
-  const onPointerUp = () => {
+  const onPointerUp = (e: React.PointerEvent) => {
+    if (activePointer.current !== e.pointerId) return
+    activePointer.current = null
     if (propRef.current.tool === 'eraser') return
     if (!drawing.current) return
     const finished = drawing.current
