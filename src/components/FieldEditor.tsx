@@ -23,8 +23,6 @@ export default function FieldEditor({
   const [tool, setTool] = useState<InkTool>('pen')
   const [color, setColor] = useState(PEN_COLORS[0])
   const [size, setSize] = useState(6)
-  // 기본: 펜/마우스만 (손바닥 거부). 손가락으로 쓰려면 토글 ON
-  const [acceptTouch, setAcceptTouch] = useState(false)
   // 손가락 입력 거부 시 잠깐 뜨는 안내
   const [showHint, setShowHint] = useState(false)
   const hintTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -120,17 +118,6 @@ export default function FieldEditor({
             >
               전체 지우기
             </button>
-
-            <span className="mx-1 h-4 w-px bg-rose-line" />
-
-            <button
-              type="button"
-              onClick={() => setAcceptTouch((v) => !v)}
-              title="끄면 펜으로 쓸 때 손바닥이 닿아도 무시돼요"
-              className={`rounded-lg px-2.5 py-1 text-sm ${acceptTouch ? 'bg-rose-chip text-rose-ink' : 'text-zinc-500'}`}
-            >
-              {acceptTouch ? '✋ 손가락 ON' : '🖐️ 손가락 OFF'}
-            </button>
           </div>
 
           <div className="relative">
@@ -140,14 +127,13 @@ export default function FieldEditor({
               color={color}
               size={size}
               tool={tool}
-              acceptTouch={acceptTouch}
               onTouchRejected={flashHint}
               height={inkHeight}
             />
             {showHint && (
               <div className="pointer-events-none absolute inset-x-0 top-3 flex justify-center">
                 <span className="rounded-full bg-rose-ink/85 px-3 py-1.5 text-sm font-medium text-white shadow">
-                  ✍️ 펜으로 써주세요 · 손가락은 위 “🖐️ 손가락” 버튼으로 켜기
+                  ✍️ 손글씨는 펜으로만 쓸 수 있어요
                 </span>
               </div>
             )}
