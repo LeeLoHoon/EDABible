@@ -26,6 +26,18 @@ body {
   -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;
   overscroll-behavior: none;
+  /* 롱프레스 시 텍스트 선택·복사/검색 메뉴·콜아웃 방지 (전체 페이지) */
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* 입력칸은 편집·선택·붙여넣기 가능하도록 예외 */
+input,
+textarea {
+  user-select: text;
+  -webkit-user-select: text;
+  -webkit-touch-callout: default;
 }
 
 /* 손글씨 캔버스: 펜 입력 중 스크롤/제스처/선택/콜아웃 방지 */
