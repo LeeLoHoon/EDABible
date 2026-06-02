@@ -24,21 +24,10 @@ export default function FieldEditor({
   const [color, setColor] = useState(PEN_COLORS[0])
   const [size, setSize] = useState(6)
 
-  const setMode = (mode: Field['mode']) => onChange({ ...field, mode })
   const setStrokes = (strokes: Stroke[]) => onChange({ ...field, strokes })
 
   return (
     <div className="rounded-2xl border border-rose-line bg-rose-card p-2 shadow-sm">
-      {/* 모드 전환 */}
-      <div className="mb-2 flex items-center gap-1">
-        <ModeButton active={field.mode === 'text'} onClick={() => setMode('text')}>
-          ⌨️ 타이핑
-        </ModeButton>
-        <ModeButton active={field.mode === 'ink'} onClick={() => setMode('ink')}>
-          ✍️ 손글씨
-        </ModeButton>
-      </div>
-
       {field.mode === 'text' ? (
         <textarea
           className="w-full resize-y rounded-xl border border-rose-line bg-white p-3 text-[17px] leading-relaxed text-zinc-700 outline-none focus:border-rose-accent"
@@ -123,27 +112,5 @@ export default function FieldEditor({
         </div>
       )}
     </div>
-  )
-}
-
-function ModeButton({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean
-  onClick: () => void
-  children: React.ReactNode
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`rounded-full px-3 py-1 text-sm font-medium transition ${
-        active ? 'bg-rose-accent text-white' : 'bg-rose-chip text-rose-ink'
-      }`}
-    >
-      {children}
-    </button>
   )
 }

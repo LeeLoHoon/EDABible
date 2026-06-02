@@ -1,4 +1,5 @@
-import { QUESTIONS, QUESTION_KEYWORDS, type Entry, type Field } from '../types'
+import { QUESTIONS, QUESTION_KEYWORDS, type Entry, type Field, type FieldMode } from '../types'
+import ModeToggle from '../components/ModeToggle'
 
 interface Props {
   entry: Entry
@@ -27,10 +28,17 @@ export default function QuestionsSection({ entry, update, FieldEditor }: Props) 
       return { ...e, answers }
     })
 
+  const mode = entry.answers[0]?.mode ?? 'text'
+  const setMode = (m: FieldMode) =>
+    update((e) => ({ ...e, answers: e.answers.map((a) => ({ ...a, mode: m })) }))
+
   return (
     <div className="space-y-5">
-      <div className="rounded-2xl bg-rose-chip px-4 py-2">
-        <h3 className="font-bold text-rose-ink">5가지 질문</h3>
+      <div className="flex items-center justify-between">
+        <div className="rounded-2xl bg-rose-chip px-4 py-2">
+          <h3 className="font-bold text-rose-ink">5가지 질문</h3>
+        </div>
+        <ModeToggle mode={mode} onChange={setMode} />
       </div>
       {QUESTIONS.map((q, i) => (
         <div key={i}>

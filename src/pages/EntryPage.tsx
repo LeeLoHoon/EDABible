@@ -10,8 +10,8 @@ type Tab = 'transcribe' | 'questions' | 'prayer'
 
 const TABS: { key: Tab; label: string; icon: string }[] = [
   { key: 'transcribe', label: '필사', icon: '📖' },
-  { key: 'questions', label: '5가지 질문', icon: '❓' },
   { key: 'prayer', label: '기도', icon: '🙏' },
+  { key: 'questions', label: '5가지 질문', icon: '❓' },
 ]
 
 function formatDate(date: string): string {

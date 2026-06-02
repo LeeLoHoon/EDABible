@@ -1,4 +1,5 @@
-import { emptyField, type Entry, type Field } from '../types'
+import { emptyField, type Entry, type Field, type FieldMode } from '../types'
+import ModeToggle from '../components/ModeToggle'
 
 interface Props {
   entry: Entry
@@ -16,8 +17,16 @@ export default function PrayerSection({ entry, update, FieldEditor }: Props) {
       return { ...e, prayerTopics }
     })
 
+  const mode = entry.spousePrayer.mode
+  const setMode = (m: FieldMode) =>
+    update((e) => ({
+      ...e,
+      spousePrayer: { ...e.spousePrayer, mode: m },
+      prayerTopics: e.prayerTopics.map((t) => ({ ...t, mode: m })),
+    }))
+
   const addTopic = () =>
-    update((e) => ({ ...e, prayerTopics: [...e.prayerTopics, emptyField()] }))
+    update((e) => ({ ...e, prayerTopics: [...e.prayerTopics, { ...emptyField(), mode }] }))
 
   const removeTopic = (i: number) =>
     update((e) => ({
@@ -27,6 +36,11 @@ export default function PrayerSection({ entry, update, FieldEditor }: Props) {
 
   return (
     <div className="space-y-6">
+      {/* 입력 방식 토글 (배우자 기도 + 기도제목 전체에 적용) */}
+      <div className="flex items-center justify-end">
+        <ModeToggle mode={mode} onChange={setMode} />
+      </div>
+
       {/* 배우자 기도 */}
       <div>
         <div className="mb-2 rounded-2xl bg-rose-chip px-4 py-2">

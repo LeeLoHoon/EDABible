@@ -1,4 +1,5 @@
-import type { Entry, Field } from '../types'
+import type { Entry, Field, FieldMode } from '../types'
+import ModeToggle from '../components/ModeToggle'
 
 interface Props {
   entry: Entry
@@ -8,6 +9,9 @@ interface Props {
 
 export default function TranscribeSection({ entry, update, FieldEditor }: Props) {
   const setTranscription = (transcription: Field) => update({ transcription })
+  const mode = entry.transcription.mode
+  const setMode = (m: FieldMode) =>
+    update({ transcription: { ...entry.transcription, mode: m } })
 
   return (
     <div className="space-y-4">
@@ -30,7 +34,10 @@ export default function TranscribeSection({ entry, update, FieldEditor }: Props)
 
       {/* 필사 */}
       <div>
-        <h3 className="mb-2 text-lg font-bold text-zinc-700">필사</h3>
+        <div className="mb-2 flex items-center justify-between">
+          <h3 className="text-lg font-bold text-zinc-700">필사</h3>
+          <ModeToggle mode={mode} onChange={setMode} />
+        </div>
         <FieldEditor
           field={entry.transcription}
           onChange={setTranscription}
