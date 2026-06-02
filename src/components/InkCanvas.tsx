@@ -12,6 +12,8 @@ interface Props {
   tool: InkTool
   /** 손가락 터치 입력 허용 여부 (기본 false = 펜/마우스만, 손바닥 거부) */
   acceptTouch?: boolean
+  /** 손가락 입력이 거부됐을 때 호출 (안내 표시용) */
+  onTouchRejected?: () => void
   /** 캔버스 높이(px) */
   height?: number
 }
@@ -57,6 +59,7 @@ export default function InkCanvas({
   size,
   tool,
   acceptTouch = false,
+  onTouchRejected,
   height = 240,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -67,8 +70,8 @@ export default function InkCanvas({
   // 최신 props를 이벤트 핸들러에서 참조하기 위한 ref
   const strokesRef = useRef(strokes)
   strokesRef.current = strokes
-  const propRef = useRef({ color, size, tool, onChange, acceptTouch })
-  propRef.current = { color, size, tool, onChange, acceptTouch }
+  const propRef = useRef({ color, size, tool, onChange, acceptTouch, onTouchRejected })
+  propRef.current = { color, size, tool, onChange, acceptTouch, onTouchRejected }
 
   const redraw = useCallback(() => {
     const canvas = canvasRef.current
@@ -127,7 +130,10 @@ export default function InkCanvas({
   const onPointerDown = (e: React.PointerEvent) => {
     const { tool, color, size, acceptTouch } = propRef.current
     // 손가락/손바닥 거부: 펜·마우스만 받기 (acceptTouch면 손가락도 허용)
-    if (e.pointerType === 'touch' && !acceptTouch) return
+    if (e.pointerType === 'touch' && !acceptTouch) {
+      propRef.current.onTouchRejected?.()
+      return
+    }
     // 이미 다른 포인터가 그리는 중이면 무시 (필기 중 손바닥 닿음)
     if (activePointer.current !== null) return
 

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import type { Field, Stroke } from '../types'
 import InkCanvas, { type InkTool } from './InkCanvas'
 
@@ -25,6 +25,14 @@ export default function FieldEditor({
   const [size, setSize] = useState(6)
   // 기본: 펜/마우스만 (손바닥 거부). 손가락으로 쓰려면 토글 ON
   const [acceptTouch, setAcceptTouch] = useState(false)
+  // 손가락 입력 거부 시 잠깐 뜨는 안내
+  const [showHint, setShowHint] = useState(false)
+  const hintTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const flashHint = () => {
+    setShowHint(true)
+    if (hintTimer.current) clearTimeout(hintTimer.current)
+    hintTimer.current = setTimeout(() => setShowHint(false), 1800)
+  }
 
   const setMode = (mode: Field['mode']) => onChange({ ...field, mode })
   const setStrokes = (strokes: Stroke[]) => onChange({ ...field, strokes })
@@ -125,15 +133,25 @@ export default function FieldEditor({
             </button>
           </div>
 
-          <InkCanvas
-            strokes={field.strokes}
-            onChange={setStrokes}
-            color={color}
-            size={size}
-            tool={tool}
-            acceptTouch={acceptTouch}
-            height={inkHeight}
-          />
+          <div className="relative">
+            <InkCanvas
+              strokes={field.strokes}
+              onChange={setStrokes}
+              color={color}
+              size={size}
+              tool={tool}
+              acceptTouch={acceptTouch}
+              onTouchRejected={flashHint}
+              height={inkHeight}
+            />
+            {showHint && (
+              <div className="pointer-events-none absolute inset-x-0 top-3 flex justify-center">
+                <span className="rounded-full bg-rose-ink/85 px-3 py-1.5 text-sm font-medium text-white shadow">
+                  ✍️ 펜으로 써주세요 · 손가락은 위 “🖐️ 손가락” 버튼으로 켜기
+                </span>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
