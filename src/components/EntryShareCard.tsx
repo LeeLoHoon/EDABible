@@ -95,7 +95,6 @@ export default function EntryShareCard({
 
         {sections.prayer && (
           <Section title="기도">
-            <LabeledField label="배우자 기도" field={entry.spousePrayer} minHeight={120} />
             <div className="grid grid-cols-2 gap-4">
               {entry.prayerTopics.map((topic, index) => (
                 <LabeledField
@@ -106,6 +105,7 @@ export default function EntryShareCard({
                 />
               ))}
             </div>
+            <LabeledField label="배우자 기도" field={entry.spousePrayer} minHeight={120} />
           </Section>
         )}
 

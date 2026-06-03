@@ -41,20 +41,6 @@ export default function PrayerSection({ entry, update, FieldEditor }: Props) {
         <ModeToggle mode={mode} onChange={setMode} />
       </div>
 
-      {/* 배우자 기도 */}
-      <div>
-        <div className="mb-2 rounded-2xl bg-rose-chip px-4 py-2">
-          <h3 className="font-bold text-rose-ink">배우자 기도</h3>
-        </div>
-        <FieldEditor
-          field={entry.spousePrayer}
-          onChange={setSpouse}
-          placeholder="배우자(또는 미래의 배우자)를 위한 기도를 적어보세요."
-          rows={3}
-          inkHeight={160}
-        />
-      </div>
-
       {/* 기도제목 */}
       <div>
         <div className="mb-2 flex items-center justify-between rounded-2xl bg-rose-chip px-4 py-2">
@@ -94,6 +80,20 @@ export default function PrayerSection({ entry, update, FieldEditor }: Props) {
             </div>
           ))}
         </div>
+      </div>
+
+      {/* 배우자 기도 */}
+      <div>
+        <div className="mb-2 rounded-2xl bg-rose-chip px-4 py-2">
+          <h3 className="font-bold text-rose-ink">배우자 기도</h3>
+        </div>
+        <FieldEditor
+          field={entry.spousePrayer}
+          onChange={setSpouse}
+          placeholder="배우자(또는 미래의 배우자)를 위한 기도를 적어보세요."
+          rows={3}
+          inkHeight={160}
+        />
       </div>
     </div>
   )
