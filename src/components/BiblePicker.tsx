@@ -146,16 +146,32 @@ export default function BiblePicker({ value, onChange }: Props) {
 
       {error && <p className="mt-2 text-sm text-red-500">{error}</p>}
 
-      {/* 선택한 본문 표시 (읽으며 필사) */}
-      {loading && <p className="mt-3 text-sm text-rose-key/70">본문 불러오는 중…</p>}
-      {!loading && passage && (
-        <div className="mt-3 max-h-72 overflow-y-auto rounded-xl border border-rose-line bg-rose-card px-4 py-3.5">
-          <p className="mb-1.5 font-serif text-sm font-bold tracking-wide text-rose-accent">
-            {activeDoc?.book} {chapter}장
-          </p>
-          <p className="whitespace-pre-wrap font-serif text-[16px] leading-[1.85] text-zinc-700">
-            {passage}
-          </p>
+      {/* 선택한 본문 표시 (읽으며 필사) — 로딩 중엔 스켈레톤, 완료되면 페이드 인 */}
+      {meta && !error && (loading || passage) && (
+        <div className="mt-3 rounded-xl border border-rose-line bg-rose-card px-4 py-3.5">
+          {loading ? (
+            <div className="animate-pulse space-y-2.5 py-0.5" aria-label="본문 불러오는 중">
+              <div className="mb-3 h-4 w-20 rounded bg-rose-line/70" />
+              <div className="h-3 w-full rounded bg-rose-line/50" />
+              <div className="h-3 w-[94%] rounded bg-rose-line/50" />
+              <div className="h-3 w-[98%] rounded bg-rose-line/50" />
+              <div className="h-3 w-[88%] rounded bg-rose-line/50" />
+              <div className="h-3 w-[72%] rounded bg-rose-line/50" />
+            </div>
+          ) : (
+            <div
+              key={`${activeDoc?.book}-${chapter}`}
+              className="max-h-72 overflow-y-auto"
+              style={{ animation: 'fadeIn 0.35s ease' }}
+            >
+              <p className="mb-1.5 font-serif text-sm font-bold tracking-wide text-rose-accent">
+                {activeDoc?.book} {chapter}장
+              </p>
+              <p className="whitespace-pre-wrap font-serif text-[16px] leading-[1.85] text-zinc-700">
+                {passage}
+              </p>
+            </div>
+          )}
         </div>
       )}
 

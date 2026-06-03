@@ -57,21 +57,59 @@ export default function HomePage() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl px-4 pb-28 pt-6">
-      <header className="mb-6">
-        <h1 className="font-serif text-3xl font-extrabold tracking-tight text-rose-ink">EDABible</h1>
-        <p className="mt-1.5 text-sm text-rose-key">매일의 말씀 묵상과 필사</p>
-      </header>
+    <div className="mx-auto max-w-2xl">
+      {/* 책 표지 — 첫 페이지 */}
+      <section className="relative flex min-h-[86vh] flex-col items-center justify-center px-6 text-center">
+        {/* 표지 프레임 (책 테두리) */}
+        <div className="pointer-events-none absolute inset-x-4 inset-y-4 rounded-[28px] border border-rose-line" />
+        <div className="pointer-events-none absolute inset-x-[22px] inset-y-[26px] rounded-[22px] border border-rose-line/50" />
 
-      {loading ? (
-        <p className="py-12 text-center text-zinc-400">불러오는 중…</p>
-      ) : entries.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-rose-line bg-rose-card/60 py-16 text-center">
-          <p className="text-zinc-500">아직 묵상 기록이 없어요.</p>
-          <p className="mt-1 text-sm text-zinc-400">아래 버튼으로 오늘의 묵상을 시작해보세요.</p>
+        <p className="font-serif text-[13px] tracking-[0.45em] text-rose-key">DAILY&nbsp;DEVOTION</p>
+
+        <div className="my-7 flex items-center gap-3 text-rose-accent/70">
+          <span className="h-px w-10 bg-rose-line" />
+          <span className="text-lg">✦</span>
+          <span className="h-px w-10 bg-rose-line" />
         </div>
-      ) : (
-        <ul className="space-y-3">
+
+        <h1 className="font-serif text-[2.75rem] font-extrabold leading-[1.15] tracking-tight text-rose-ink">
+          말씀
+          <br />
+          묵상 노트
+        </h1>
+        <p className="mt-4 font-serif text-base tracking-wide text-rose-key">EDABible</p>
+
+        <blockquote className="mt-10 max-w-xs font-serif text-[15px] leading-7 text-rose-ink/80">
+          “주의 말씀은 내 발에 등이요
+          <br />내 길에 빛이니이다”
+          <footer className="mt-2.5 text-sm text-rose-key">— 시편 119:105</footer>
+        </blockquote>
+
+        <div className="absolute inset-x-0 bottom-7 flex flex-col items-center gap-1 text-rose-key/70">
+          <span className="font-serif text-xs tracking-[0.25em]">펼쳐보기</span>
+          <span className="animate-bounce text-base leading-none">⌄</span>
+        </div>
+      </section>
+
+      {/* 묵상 기록 — 목차 */}
+      <div className="px-4 pb-28 pt-2">
+        <header className="mb-5 flex items-center gap-3">
+          <h2 className="font-serif text-xl font-bold text-rose-ink">묵상 기록</h2>
+          {!loading && entries.length > 0 && (
+            <span className="text-sm text-rose-key">총 {entries.length}편</span>
+          )}
+          <span className="h-px flex-1 bg-rose-line" />
+        </header>
+
+        {loading ? (
+          <p className="py-12 text-center text-zinc-400">불러오는 중…</p>
+        ) : entries.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-rose-line bg-rose-card/60 py-16 text-center">
+            <p className="text-zinc-500">아직 묵상 기록이 없어요.</p>
+            <p className="mt-1 text-sm text-zinc-400">아래 버튼으로 오늘의 묵상을 시작해보세요.</p>
+          </div>
+        ) : (
+          <ul className="space-y-3">
           {entries.map((e) => {
             const p = progress(e)
             return (
@@ -102,7 +140,8 @@ export default function HomePage() {
             )
           })}
         </ul>
-      )}
+        )}
+      </div>
 
       {/* 새 묵상 시작 (플로팅) */}
       <button

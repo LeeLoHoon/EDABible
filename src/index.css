@@ -53,3 +53,15 @@ textarea {
 .safe-pad {
   padding-bottom: env(safe-area-inset-bottom);
 }
+
+/* 본문 전환 페이드 인 (장·책 변경 시 자연스럽게) */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
