@@ -1,14 +1,14 @@
 @import 'tailwindcss';
 
-/* 고전적인 베이지 디자인 토큰 */
+/* 파스텔 핑크 디자인 토큰 */
 @theme {
-  --color-rose-bg: #e8decb;
-  --color-rose-card: #fbf7ee;
-  --color-rose-chip: #ded0b8;
-  --color-rose-ink: #2f261d;
-  --color-rose-accent: #6f4e2f;
-  --color-rose-key: #4b3a2b;
-  --color-rose-line: #b7a68c;
+  --color-rose-bg: #fdf2f8;
+  --color-rose-card: #ffffff;
+  --color-rose-chip: #fce7f3;
+  --color-rose-ink: #9d174d;
+  --color-rose-accent: #ec4899;
+  --color-rose-key: #be185d;
+  --color-rose-line: #fbcfe8;
   --font-sans: 'Pretendard', system-ui, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
 }
 
@@ -20,11 +20,8 @@ body,
 
 body {
   margin: 0;
-  background:
-    linear-gradient(180deg, rgba(47, 38, 29, 0.1), rgba(232, 222, 203, 0) 260px),
-    linear-gradient(135deg, rgba(255, 255, 255, 0.22), rgba(47, 38, 29, 0.04)),
-    var(--color-rose-bg);
-  color: #2f2a24;
+  background: var(--color-rose-bg);
+  color: #3f3f46;
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;
@@ -54,10 +51,4 @@ textarea {
 /* 안전영역(노치/홈바) */
 .safe-pad {
   padding-bottom: env(safe-area-inset-bottom);
-}
-
-textarea,
-select,
-input {
-  color-scheme: light;
 }

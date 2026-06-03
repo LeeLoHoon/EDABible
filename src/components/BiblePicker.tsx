@@ -110,7 +110,7 @@ export default function BiblePicker({ value, onChange }: Props) {
   const loading = !!meta && !activeDoc && !error
 
   return (
-    <div className="rounded-2xl border border-rose-line bg-rose-chip/80 px-4 py-3 shadow-inner shadow-rose-ink/10">
+    <div className="rounded-2xl bg-rose-chip px-4 py-3">
       <label className="mb-2 block text-sm font-semibold text-rose-ink">
         오늘의 본문 (성경·장 선택)
       </label>
@@ -119,7 +119,7 @@ export default function BiblePicker({ value, onChange }: Props) {
         <select
           value={order}
           onChange={(e) => setOrder(e.target.value ? Number(e.target.value) : '')}
-          className="min-w-0 flex-1 rounded-xl border border-rose-line bg-rose-card px-3 py-2 text-base font-medium text-rose-ink outline-none focus:border-rose-accent"
+          className="min-w-0 flex-1 rounded-xl border border-rose-line bg-white px-3 py-2 text-base font-medium text-rose-ink outline-none focus:border-rose-accent"
         >
           <option value="">성경 선택</option>
           {index.map((b) => (
@@ -133,7 +133,7 @@ export default function BiblePicker({ value, onChange }: Props) {
           value={chapter}
           onChange={(e) => setChapter(e.target.value ? Number(e.target.value) : '')}
           disabled={!activeDoc}
-          className="w-28 rounded-xl border border-rose-line bg-rose-card px-3 py-2 text-base font-medium text-rose-ink outline-none focus:border-rose-accent disabled:opacity-50"
+          className="w-28 rounded-xl border border-rose-line bg-white px-3 py-2 text-base font-medium text-rose-ink outline-none focus:border-rose-accent disabled:opacity-50"
         >
           <option value="">장</option>
           {chapterOptions.map((n) => (
@@ -149,7 +149,7 @@ export default function BiblePicker({ value, onChange }: Props) {
       {/* 선택한 본문 표시 (읽으며 필사) */}
       {loading && <p className="mt-3 text-sm text-rose-key/70">본문 불러오는 중…</p>}
       {!loading && passage && (
-        <div className="mt-3 max-h-72 overflow-y-auto rounded-xl border border-rose-line bg-rose-card px-4 py-3 shadow-sm shadow-rose-ink/10">
+        <div className="mt-3 max-h-72 overflow-y-auto rounded-xl border border-rose-line bg-white px-4 py-3">
           <p className="mb-1 text-sm font-bold text-rose-accent">
             {activeDoc?.book} {chapter}장
           </p>

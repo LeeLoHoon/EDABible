@@ -11,7 +11,7 @@ interface Props {
   inkHeight?: number
 }
 
-const PEN_COLORS = ['#2f261d', '#6f4e2f', '#1f4f57', '#315b3b', '#8a5d19']
+const PEN_COLORS = ['#3f3f46', '#be185d', '#2563eb', '#059669', '#d97706']
 
 export default function FieldEditor({
   field,
@@ -27,10 +27,10 @@ export default function FieldEditor({
   const setStrokes = (strokes: Stroke[]) => onChange({ ...field, strokes })
 
   return (
-    <div className="rounded-2xl border border-rose-line bg-rose-card p-2 shadow-md shadow-rose-ink/10">
+    <div className="rounded-2xl border border-rose-line bg-rose-card p-2 shadow-sm">
       {field.mode === 'text' ? (
         <textarea
-          className="w-full resize-y rounded-xl border border-rose-line bg-[#fffaf1] p-3 text-[17px] leading-relaxed text-rose-ink outline-none focus:border-rose-accent"
+          className="w-full resize-y rounded-xl border border-rose-line bg-white p-3 text-[17px] leading-relaxed text-zinc-700 outline-none focus:border-rose-accent"
           rows={rows}
           placeholder={placeholder}
           value={field.text}
@@ -43,14 +43,14 @@ export default function FieldEditor({
             <button
               type="button"
               onClick={() => setTool('pen')}
-              className={`rounded-lg px-2.5 py-1 text-sm ${tool === 'pen' ? 'bg-rose-chip text-rose-ink' : 'text-rose-key/65'}`}
+              className={`rounded-lg px-2.5 py-1 text-sm ${tool === 'pen' ? 'bg-rose-chip text-rose-ink' : 'text-zinc-500'}`}
             >
               ✏️ 펜
             </button>
             <button
               type="button"
               onClick={() => setTool('eraser')}
-              className={`rounded-lg px-2.5 py-1 text-sm ${tool === 'eraser' ? 'bg-rose-chip text-rose-ink' : 'text-rose-key/65'}`}
+              className={`rounded-lg px-2.5 py-1 text-sm ${tool === 'eraser' ? 'bg-rose-chip text-rose-ink' : 'text-zinc-500'}`}
             >
               🧽 지우개
             </button>
@@ -66,7 +66,7 @@ export default function FieldEditor({
                   setColor(c)
                   setTool('pen')
                 }}
-                className={`h-6 w-6 rounded-full border-2 ${color === c && tool === 'pen' ? 'border-rose-accent' : 'border-rose-card'}`}
+                className={`h-6 w-6 rounded-full border-2 ${color === c && tool === 'pen' ? 'border-rose-accent' : 'border-white'}`}
                 style={{ background: c }}
               />
             ))}
@@ -87,7 +87,7 @@ export default function FieldEditor({
               type="button"
               onClick={() => setStrokes(field.strokes.slice(0, -1))}
               disabled={field.strokes.length === 0}
-              className="rounded-lg px-2.5 py-1 text-sm text-rose-key/65 disabled:opacity-40"
+              className="rounded-lg px-2.5 py-1 text-sm text-zinc-500 disabled:opacity-40"
             >
               ↩️ 취소
             </button>
@@ -95,7 +95,7 @@ export default function FieldEditor({
               type="button"
               onClick={() => setStrokes([])}
               disabled={field.strokes.length === 0}
-              className="rounded-lg px-2.5 py-1 text-sm text-rose-key/65 disabled:opacity-40"
+              className="rounded-lg px-2.5 py-1 text-sm text-zinc-500 disabled:opacity-40"
             >
               전체 지우기
             </button>

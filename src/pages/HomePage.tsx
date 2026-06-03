@@ -42,18 +42,18 @@ export default function HomePage() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl px-4 pb-28 pt-7">
-      <header className="mb-7 border-b border-rose-line/70 pb-5">
+    <div className="mx-auto max-w-2xl px-4 pb-28 pt-6">
+      <header className="mb-6">
         <h1 className="text-3xl font-extrabold tracking-tight text-rose-ink">EDABible</h1>
-        <p className="mt-1 text-sm font-medium text-rose-key/75">매일의 말씀 묵상과 필사</p>
+        <p className="mt-1 text-sm text-rose-key/70">매일의 말씀 묵상과 필사</p>
       </header>
 
       {loading ? (
         <p className="py-12 text-center text-zinc-400">불러오는 중…</p>
       ) : entries.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-rose-line bg-rose-card/80 py-16 text-center shadow-sm shadow-rose-ink/10">
-          <p className="font-medium text-rose-key/80">아직 묵상 기록이 없어요.</p>
-          <p className="mt-1 text-sm text-rose-key/55">아래 버튼으로 오늘의 묵상을 시작해보세요.</p>
+        <div className="rounded-2xl border border-dashed border-rose-line bg-rose-card/60 py-16 text-center">
+          <p className="text-zinc-500">아직 묵상 기록이 없어요.</p>
+          <p className="mt-1 text-sm text-zinc-400">아래 버튼으로 오늘의 묵상을 시작해보세요.</p>
         </div>
       ) : (
         <ul className="space-y-3">
@@ -63,21 +63,21 @@ export default function HomePage() {
               <li
                 key={e.id}
                 onClick={() => navigate(`/entry/${e.id}`)}
-                className="group flex cursor-pointer items-center justify-between rounded-2xl border border-rose-line bg-rose-card px-4 py-3.5 shadow-md shadow-rose-ink/10 transition hover:border-rose-accent hover:bg-[#fffaf1]"
+                className="group flex cursor-pointer items-center justify-between rounded-2xl border border-rose-line bg-rose-card px-4 py-3.5 shadow-sm transition hover:border-rose-accent"
               >
                 <div className="min-w-0">
                   <p className="font-bold text-rose-ink">{formatDate(e.date)}</p>
-                  <p className="truncate text-sm font-medium text-rose-key/80">
+                  <p className="truncate text-sm text-rose-key">
                     {e.bibleRef || '본문 미입력'}
                   </p>
                 </div>
                 <div className="flex items-center gap-3">
-                  <span className="rounded-full bg-rose-chip px-2.5 py-1 text-xs font-semibold text-rose-ink shadow-inner">
+                  <span className="rounded-full bg-rose-chip px-2.5 py-1 text-xs font-medium text-rose-ink">
                     {p.done}/{p.total}
                   </span>
                   <button
                     onClick={(ev) => remove(e.id, ev)}
-                    className="text-sm text-rose-key/35 hover:text-rose-accent"
+                    className="text-sm text-zinc-300 hover:text-rose-accent"
                     aria-label="삭제"
                   >
                     ✕
@@ -94,7 +94,7 @@ export default function HomePage() {
         onClick={startNew}
         className="safe-pad fixed inset-x-0 bottom-0 mx-auto flex max-w-2xl items-center justify-center"
       >
-        <span className="mb-5 w-[calc(100%-2rem)] rounded-2xl bg-rose-accent py-4 text-center text-lg font-bold text-[#fff8ed] shadow-xl shadow-rose-ink/25 ring-1 ring-black/10 active:scale-[0.99]">
+        <span className="mb-5 w-[calc(100%-2rem)] rounded-2xl bg-rose-accent py-4 text-center text-lg font-bold text-white shadow-lg shadow-rose-accent/30 active:scale-[0.99]">
           ✏️ 오늘 묵상 시작
         </span>
       </button>

@@ -43,7 +43,7 @@ export default function PrayerSection({ entry, update, FieldEditor }: Props) {
 
       {/* 배우자 기도 */}
       <div>
-        <div className="mb-2 rounded-2xl border border-rose-line bg-rose-chip px-4 py-2 shadow-inner shadow-rose-ink/10">
+        <div className="mb-2 rounded-2xl bg-rose-chip px-4 py-2">
           <h3 className="font-bold text-rose-ink">배우자 기도</h3>
         </div>
         <FieldEditor
@@ -57,12 +57,12 @@ export default function PrayerSection({ entry, update, FieldEditor }: Props) {
 
       {/* 기도제목 */}
       <div>
-        <div className="mb-2 flex items-center justify-between rounded-2xl border border-rose-line bg-rose-chip px-4 py-2 shadow-inner shadow-rose-ink/10">
+        <div className="mb-2 flex items-center justify-between rounded-2xl bg-rose-chip px-4 py-2">
           <h3 className="font-bold text-rose-ink">기도 제목</h3>
           <button
             type="button"
             onClick={addTopic}
-            className="rounded-full bg-rose-accent px-3 py-1 text-sm font-semibold text-[#fff8ed] shadow-sm shadow-rose-ink/20"
+            className="rounded-full bg-rose-accent px-3 py-1 text-sm font-medium text-white"
           >
             + 추가
           </button>
@@ -78,7 +78,7 @@ export default function PrayerSection({ entry, update, FieldEditor }: Props) {
                   <button
                     type="button"
                     onClick={() => removeTopic(i)}
-                    className="text-sm text-rose-key/45 hover:text-rose-accent"
+                    className="text-sm text-zinc-400 hover:text-rose-accent"
                   >
                     삭제
                   </button>

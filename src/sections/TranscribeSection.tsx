@@ -25,7 +25,7 @@ export default function TranscribeSection({ entry, update, FieldEditor }: Props)
       {/* 필사 */}
       <div>
         <div className="mb-2 flex items-center justify-between">
-          <h3 className="text-lg font-bold text-rose-ink">필사</h3>
+          <h3 className="text-lg font-bold text-zinc-700">필사</h3>
           <ModeToggle mode={mode} onChange={setMode} />
         </div>
         <FieldEditor
