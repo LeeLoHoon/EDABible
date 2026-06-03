@@ -103,6 +103,15 @@ export default function BiblePicker({ value, onChange }: Props) {
 
       {error && <p className="mt-2 text-sm text-red-500">{error}</p>}
 
+      {meta && chapter !== '' && (
+        <div className="mt-3 rounded-xl border border-rose-line bg-white px-4 py-3">
+          <p className="text-sm font-bold text-rose-accent">선택한 본문</p>
+          <p className="mt-1 text-lg font-semibold text-rose-ink">
+            {meta.book} {chapter}장
+          </p>
+        </div>
+      )}
+
       <p className="mt-2 text-xs text-rose-key/70">
         📖 본문은 성경(앱·책)에서 직접 읽고, 아래에 필사하세요.
       </p>
