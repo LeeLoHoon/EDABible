@@ -10,22 +10,25 @@ type SaveState = 'idle' | 'saving' | 'saved'
  */
 export function useEntry(id: string | undefined) {
   const [entry, setEntry] = useState<Entry | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [loadedId, setLoadedId] = useState<string | undefined>(undefined)
   const [saveState, setSaveState] = useState<SaveState>('idle')
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const loading = id !== loadedId
 
   useEffect(() => {
     let alive = true
-    setLoading(true)
     if (!id) {
-      setEntry(null)
-      setLoading(false)
+      Promise.resolve().then(() => {
+        if (!alive) return
+        setEntry(null)
+        setLoadedId(undefined)
+      })
       return
     }
     getEntry(id).then((e) => {
       if (!alive) return
       setEntry(e ?? null)
-      setLoading(false)
+      setLoadedId(id)
     })
     return () => {
       alive = false

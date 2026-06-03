@@ -1,12 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import {
-  loadIndex,
-  loadBook,
-  makeRef,
-  parseRef,
-  type BookMeta,
-  type BookDoc,
-} from '../bible'
+import { loadIndex, makeRef, parseRef, type BookMeta } from '../bible'
 
 interface Props {
   /** 현재 bibleRef (예: '창세기 3장') */
@@ -18,7 +11,6 @@ interface Props {
 export default function BiblePicker({ value, onChange }: Props) {
   const [index, setIndex] = useState<BookMeta[]>([])
   const [order, setOrder] = useState<number | ''>('')
-  const [doc, setDoc] = useState<BookDoc | null>(null)
   const [chapter, setChapter] = useState<number | ''>('')
   const [error, setError] = useState<string | null>(null)
   const [inited, setInited] = useState(false)
@@ -33,7 +25,14 @@ export default function BiblePicker({ value, onChange }: Props) {
         const parsed = parseRef(value)
         if (parsed) {
           const meta = idx.find((b) => b.book === parsed.book)
-          if (meta) setOrder(meta.order)
+          if (meta) {
+            setOrder(meta.order)
+            setChapter(
+              parsed.chapter >= 1 && parsed.chapter <= meta.chapters
+                ? parsed.chapter
+                : 1,
+            )
+          }
         }
         setInited(true)
       })
@@ -50,47 +49,18 @@ export default function BiblePicker({ value, onChange }: Props) {
     [index, order],
   )
 
-  // 책 선택 → 본문 로드
-  useEffect(() => {
-    if (!meta) return
-    let alive = true
-    loadBook(meta.file)
-      .then((d) => {
-        if (!alive) return
-        setError(null)
-        setDoc(d)
-        const parsed = parseRef(value)
-        const wanted =
-          parsed && parsed.book === d.book ? parsed.chapter : undefined
-        const has = wanted && d.chapters.some((c) => c.chapter === wanted)
-        setChapter(has ? (wanted as number) : (d.chapters[0]?.chapter ?? ''))
-      })
-      .catch((e) => alive && setError(String(e.message ?? e)))
-    return () => {
-      alive = false
-    }
-    // meta 변경시에만
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [meta])
-
-  // 선택한 책과 실제 로드된 본문이 일치할 때만 사용 (전환 중 옛 데이터 방지)
-  const activeDoc = meta && doc?.order === meta.order ? doc : null
+  const chapters = useMemo(
+    () => (meta ? Array.from({ length: meta.chapters }, (_, i) => i + 1) : []),
+    [meta],
+  )
 
   // 선택이 바뀌면 bibleRef 갱신 (초기화 완료 후, 사용자 변경분)
   useEffect(() => {
-    if (!inited || !activeDoc || chapter === '') return
-    const ref = makeRef(activeDoc.book, chapter as number)
+    if (!inited || !meta || chapter === '') return
+    const ref = makeRef(meta.book, chapter as number)
     if (ref !== value) onChange(ref)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeDoc, chapter])
-
-  const passage = useMemo(
-    () => activeDoc?.chapters.find((c) => c.chapter === chapter)?.text ?? '',
-    [activeDoc, chapter],
-  )
-
-  // 로딩 상태는 파생: 책은 골랐지만 해당 본문이 아직 안 옴
-  const loading = !!meta && !activeDoc && !error
+  }, [meta, chapter])
 
   return (
     <div className="rounded-2xl bg-rose-chip px-4 py-3">
@@ -101,7 +71,11 @@ export default function BiblePicker({ value, onChange }: Props) {
       <div className="flex gap-2">
         <select
           value={order}
-          onChange={(e) => setOrder(e.target.value ? Number(e.target.value) : '')}
+          onChange={(e) => {
+            const nextOrder = e.target.value ? Number(e.target.value) : ''
+            setOrder(nextOrder)
+            setChapter(nextOrder === '' ? '' : 1)
+          }}
           className="min-w-0 flex-1 rounded-xl border border-rose-line bg-white px-3 py-2 text-base font-medium text-rose-ink outline-none focus:border-rose-accent"
         >
           <option value="">성경 선택</option>
@@ -115,13 +89,13 @@ export default function BiblePicker({ value, onChange }: Props) {
         <select
           value={chapter}
           onChange={(e) => setChapter(e.target.value ? Number(e.target.value) : '')}
-          disabled={!activeDoc}
+          disabled={!meta}
           className="w-28 rounded-xl border border-rose-line bg-white px-3 py-2 text-base font-medium text-rose-ink outline-none focus:border-rose-accent disabled:opacity-50"
         >
           <option value="">장</option>
-          {activeDoc?.chapters.map((c) => (
-            <option key={c.chapter} value={c.chapter}>
-              {c.chapter}장
+          {chapters.map((n) => (
+            <option key={n} value={n}>
+              {n}장
             </option>
           ))}
         </select>
@@ -129,21 +103,8 @@ export default function BiblePicker({ value, onChange }: Props) {
 
       {error && <p className="mt-2 text-sm text-red-500">{error}</p>}
 
-      {/* 선택한 본문 표시 (읽으며 필사) */}
-      {loading && <p className="mt-3 text-sm text-rose-key/70">본문 불러오는 중…</p>}
-      {!loading && passage && (
-        <div className="mt-3 max-h-72 overflow-y-auto rounded-xl border border-rose-line bg-white px-4 py-3">
-          <p className="mb-1 text-sm font-bold text-rose-accent">
-            {activeDoc?.book} {chapter}장
-          </p>
-          <p className="whitespace-pre-wrap text-[15px] leading-7 text-zinc-700">
-            {passage}
-          </p>
-        </div>
-      )}
-
       <p className="mt-2 text-xs text-rose-key/70">
-        📖 메시지 성경 본문입니다. 위 본문을 읽고 아래에 필사하세요.
+        📖 본문은 성경(앱·책)에서 직접 읽고, 아래에 필사하세요.
       </p>
     </div>
   )

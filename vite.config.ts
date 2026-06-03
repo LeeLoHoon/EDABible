@@ -32,17 +32,6 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
-        // 성경 JSON은 런타임 캐시(설치 부피↓, 첫 접근 후 오프라인 가능)
-        runtimeCaching: [
-          {
-            urlPattern: ({ url }) => url.pathname.includes('/bible/'),
-            handler: 'StaleWhileRevalidate',
-            options: {
-              cacheName: 'bible-json',
-              expiration: { maxEntries: 70, maxAgeSeconds: 60 * 60 * 24 * 365 },
-            },
-          },
-        ],
       },
     }),
   ],

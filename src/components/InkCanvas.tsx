@@ -63,9 +63,15 @@ export default function InkCanvas({
   const activePointer = useRef<number | null>(null)
   // 최신 props를 이벤트 핸들러에서 참조하기 위한 ref
   const strokesRef = useRef(strokes)
-  strokesRef.current = strokes
   const propRef = useRef({ color, size, tool, onChange })
-  propRef.current = { color, size, tool, onChange }
+
+  useEffect(() => {
+    strokesRef.current = strokes
+  }, [strokes])
+
+  useEffect(() => {
+    propRef.current = { color, size, tool, onChange }
+  }, [color, size, tool, onChange])
 
   const redraw = useCallback(() => {
     const canvas = canvasRef.current
