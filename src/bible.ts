@@ -1,32 +1,24 @@
-/** 성경 권/장 메타데이터와 본문 로더. */
+/** 메시지 성경(권별 JSON) 로더. public/bible/ 에서 fetch, 메모리 캐시. */
 
 export interface BookMeta {
   order: number
   book: string
   abbr: string
-  chapters: number
   file: string
-  translation?: string
+  chapters: number
+  standardChapters: number
 }
 
-export interface BibleVerse {
-  verse: number
-  text: string
-}
-
-export interface BibleChapter {
+export interface Chapter {
   chapter: number
   text: string
-  verses: BibleVerse[]
 }
 
 export interface BookDoc {
   order: number
   book: string
   abbr: string
-  translation: string
-  source: string
-  chapters: BibleChapter[]
+  chapters: Chapter[]
 }
 
 // Vite base('/EDABible/') 기준 — GitHub Pages 서브경로 대응
@@ -46,16 +38,15 @@ export function loadIndex(): Promise<BookMeta[]> {
 }
 
 export function loadBook(file: string): Promise<BookDoc> {
-  if (!bookCache.has(file)) {
-    bookCache.set(
-      file,
-      fetch(`${BASE}bible/${file}`).then((r) => {
-        if (!r.ok) throw new Error('성경 본문을 불러오지 못했습니다')
-        return r.json()
-      }),
-    )
+  let p = bookCache.get(file)
+  if (!p) {
+    p = fetch(`${BASE}bible/${file}`).then((r) => {
+      if (!r.ok) throw new Error('본문을 불러오지 못했습니다')
+      return r.json()
+    })
+    bookCache.set(file, p)
   }
-  return bookCache.get(file)!
+  return p
 }
 
 /** 'YYYY' 형태가 아니라 '창세기 3장' 같은 참조 문자열을 만든다. */

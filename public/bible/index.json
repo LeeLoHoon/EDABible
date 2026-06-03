@@ -1,530 +1,530 @@
 [
-  {
-    "order": 1,
-    "book": "창세기",
-    "abbr": "창",
-    "chapters": 50,
-    "file": "01_창.json",
-    "translation": "개역한글"
-  },
-  {
-    "order": 2,
-    "book": "출애굽기",
-    "abbr": "출",
-    "chapters": 40,
-    "file": "02_출.json",
-    "translation": "개역한글"
-  },
-  {
-    "order": 3,
-    "book": "레위기",
-    "abbr": "레",
-    "chapters": 27,
-    "file": "03_레.json",
-    "translation": "개역한글"
-  },
-  {
-    "order": 4,
-    "book": "민수기",
-    "abbr": "민",
-    "chapters": 36,
-    "file": "04_민.json",
-    "translation": "개역한글"
-  },
-  {
-    "order": 5,
-    "book": "신명기",
-    "abbr": "신",
-    "chapters": 34,
-    "file": "05_신.json",
-    "translation": "개역한글"
-  },
-  {
-    "order": 6,
-    "book": "여호수아",
-    "abbr": "수",
-    "chapters": 24,
-    "file": "06_수.json",
-    "translation": "개역한글"
-  },
-  {
-    "order": 7,
-    "book": "사사기",
-    "abbr": "삿",
-    "chapters": 21,
-    "file": "07_삿.json",
-    "translation": "개역한글"
-  },
-  {
-    "order": 8,
-    "book": "룻기",
-    "abbr": "룻",
-    "chapters": 4,
-    "file": "08_룻.json",
-    "translation": "개역한글"
-  },
-  {
-    "order": 9,
-    "book": "사무엘상",
-    "abbr": "삼상",
-    "chapters": 31,
-    "file": "09_삼상.json",
-    "translation": "개역한글"
-  },
-  {
-    "order": 10,
-    "book": "사무엘하",
-    "abbr": "삼하",
-    "chapters": 24,
-    "file": "10_삼하.json",
-    "translation": "개역한글"
-  },
-  {
-    "order": 11,
-    "book": "열왕기상",
-    "abbr": "왕상",
-    "chapters": 22,
-    "file": "11_왕상.json",
-    "translation": "개역한글"
-  },
-  {
-    "order": 12,
-    "book": "열왕기하",
-    "abbr": "왕하",
-    "chapters": 25,
-    "file": "12_왕하.json",
-    "translation": "개역한글"
-  },
-  {
-    "order": 13,
-    "book": "역대상",
-    "abbr": "대상",
-    "chapters": 29,
-    "file": "13_대상.json",
-    "translation": "개역한글"
-  },
-  {
-    "order": 14,
-    "book": "역대하",
-    "abbr": "대하",
-    "chapters": 36,
-    "file": "14_대하.json",
-    "translation": "개역한글"
-  },
-  {
-    "order": 15,
-    "book": "에스라",
-    "abbr": "스",
-    "chapters": 10,
-    "file": "15_스.json",
-    "translation": "개역한글"
-  },
-  {
-    "order": 16,
-    "book": "느헤미야",
-    "abbr": "느",
-    "chapters": 13,
-    "file": "16_느.json",
-    "translation": "개역한글"
-  },
-  {
-    "order": 17,
-    "book": "에스더",
-    "abbr": "에",
-    "chapters": 10,
-    "file": "17_에.json",
-    "translation": "개역한글"
-  },
-  {
-    "order": 18,
-    "book": "욥기",
-    "abbr": "욥",
-    "chapters": 42,
-    "file": "18_욥.json",
-    "translation": "개역한글"
-  },
-  {
-    "order": 19,
-    "book": "시편",
-    "abbr": "시",
-    "chapters": 150,
-    "file": "19_시.json",
-    "translation": "개역한글"
-  },
-  {
-    "order": 20,
-    "book": "잠언",
-    "abbr": "잠",
-    "chapters": 31,
-    "file": "20_잠.json",
-    "translation": "개역한글"
-  },
-  {
-    "order": 21,
-    "book": "전도서",
-    "abbr": "전",
-    "chapters": 12,
-    "file": "21_전.json",
-    "translation": "개역한글"
-  },
-  {
-    "order": 22,
-    "book": "아가",
-    "abbr": "아",
-    "chapters": 8,
-    "file": "22_아.json",
-    "translation": "개역한글"
-  },
-  {
-    "order": 23,
-    "book": "이사야",
-    "abbr": "사",
-    "chapters": 66,
-    "file": "23_사.json",
-    "translation": "개역한글"
-  },
-  {
-    "order": 24,
-    "book": "예레미야",
-    "abbr": "렘",
-    "chapters": 52,
-    "file": "24_렘.json",
-    "translation": "개역한글"
-  },
-  {
-    "order": 25,
-    "book": "예레미야애가",
-    "abbr": "애",
-    "chapters": 5,
-    "file": "25_애.json",
-    "translation": "개역한글"
-  },
-  {
-    "order": 26,
-    "book": "에스겔",
-    "abbr": "겔",
-    "chapters": 48,
-    "file": "26_겔.json",
-    "translation": "개역한글"
-  },
-  {
-    "order": 27,
-    "book": "다니엘",
-    "abbr": "단",
-    "chapters": 12,
-    "file": "27_단.json",
-    "translation": "개역한글"
-  },
-  {
-    "order": 28,
-    "book": "호세아",
-    "abbr": "호",
-    "chapters": 14,
-    "file": "28_호.json",
-    "translation": "개역한글"
-  },
-  {
-    "order": 29,
-    "book": "요엘",
-    "abbr": "욜",
-    "chapters": 3,
-    "file": "29_욜.json",
-    "translation": "개역한글"
-  },
-  {
-    "order": 30,
-    "book": "아모스",
-    "abbr": "암",
-    "chapters": 9,
-    "file": "30_암.json",
-    "translation": "개역한글"
-  },
-  {
-    "order": 31,
-    "book": "오바댜",
-    "abbr": "옵",
-    "chapters": 1,
-    "file": "31_옵.json",
-    "translation": "개역한글"
-  },
-  {
-    "order": 32,
-    "book": "요나",
-    "abbr": "욘",
-    "chapters": 4,
-    "file": "32_욘.json",
-    "translation": "개역한글"
-  },
-  {
-    "order": 33,
-    "book": "미가",
-    "abbr": "미",
-    "chapters": 7,
-    "file": "33_미.json",
-    "translation": "개역한글"
-  },
-  {
-    "order": 34,
-    "book": "나훔",
-    "abbr": "나",
-    "chapters": 3,
-    "file": "34_나.json",
-    "translation": "개역한글"
-  },
-  {
-    "order": 35,
-    "book": "하박국",
-    "abbr": "합",
-    "chapters": 3,
-    "file": "35_합.json",
-    "translation": "개역한글"
-  },
-  {
-    "order": 36,
-    "book": "스바냐",
-    "abbr": "습",
-    "chapters": 3,
-    "file": "36_습.json",
-    "translation": "개역한글"
-  },
-  {
-    "order": 37,
-    "book": "학개",
-    "abbr": "학",
-    "chapters": 2,
-    "file": "37_학.json",
-    "translation": "개역한글"
-  },
-  {
-    "order": 38,
-    "book": "스가랴",
-    "abbr": "슥",
-    "chapters": 14,
-    "file": "38_슥.json",
-    "translation": "개역한글"
-  },
-  {
-    "order": 39,
-    "book": "말라기",
-    "abbr": "말",
-    "chapters": 4,
-    "file": "39_말.json",
-    "translation": "개역한글"
-  },
-  {
-    "order": 40,
-    "book": "마태복음",
-    "abbr": "마",
-    "chapters": 28,
-    "file": "40_마.json",
-    "translation": "개역한글"
-  },
-  {
-    "order": 41,
-    "book": "마가복음",
-    "abbr": "막",
-    "chapters": 16,
-    "file": "41_막.json",
-    "translation": "개역한글"
-  },
-  {
-    "order": 42,
-    "book": "누가복음",
-    "abbr": "눅",
-    "chapters": 24,
-    "file": "42_눅.json",
-    "translation": "개역한글"
-  },
-  {
-    "order": 43,
-    "book": "요한복음",
-    "abbr": "요",
-    "chapters": 21,
-    "file": "43_요.json",
-    "translation": "개역한글"
-  },
-  {
-    "order": 44,
-    "book": "사도행전",
-    "abbr": "행",
-    "chapters": 28,
-    "file": "44_행.json",
-    "translation": "개역한글"
-  },
-  {
-    "order": 45,
-    "book": "로마서",
-    "abbr": "롬",
-    "chapters": 16,
-    "file": "45_롬.json",
-    "translation": "개역한글"
-  },
-  {
-    "order": 46,
-    "book": "고린도전서",
-    "abbr": "고전",
-    "chapters": 16,
-    "file": "46_고전.json",
-    "translation": "개역한글"
-  },
-  {
-    "order": 47,
-    "book": "고린도후서",
-    "abbr": "고후",
-    "chapters": 13,
-    "file": "47_고후.json",
-    "translation": "개역한글"
-  },
-  {
-    "order": 48,
-    "book": "갈라디아서",
-    "abbr": "갈",
-    "chapters": 6,
-    "file": "48_갈.json",
-    "translation": "개역한글"
-  },
-  {
-    "order": 49,
-    "book": "에베소서",
-    "abbr": "엡",
-    "chapters": 6,
-    "file": "49_엡.json",
-    "translation": "개역한글"
-  },
-  {
-    "order": 50,
-    "book": "빌립보서",
-    "abbr": "빌",
-    "chapters": 4,
-    "file": "50_빌.json",
-    "translation": "개역한글"
-  },
-  {
-    "order": 51,
-    "book": "골로새서",
-    "abbr": "골",
-    "chapters": 4,
-    "file": "51_골.json",
-    "translation": "개역한글"
-  },
-  {
-    "order": 52,
-    "book": "데살로니가전서",
-    "abbr": "살전",
-    "chapters": 5,
-    "file": "52_살전.json",
-    "translation": "개역한글"
-  },
-  {
-    "order": 53,
-    "book": "데살로니가후서",
-    "abbr": "살후",
-    "chapters": 3,
-    "file": "53_살후.json",
-    "translation": "개역한글"
-  },
-  {
-    "order": 54,
-    "book": "디모데전서",
-    "abbr": "딤전",
-    "chapters": 6,
-    "file": "54_딤전.json",
-    "translation": "개역한글"
-  },
-  {
-    "order": 55,
-    "book": "디모데후서",
-    "abbr": "딤후",
-    "chapters": 4,
-    "file": "55_딤후.json",
-    "translation": "개역한글"
-  },
-  {
-    "order": 56,
-    "book": "디도서",
-    "abbr": "딛",
-    "chapters": 3,
-    "file": "56_딛.json",
-    "translation": "개역한글"
-  },
-  {
-    "order": 57,
-    "book": "빌레몬서",
-    "abbr": "몬",
-    "chapters": 1,
-    "file": "57_몬.json",
-    "translation": "개역한글"
-  },
-  {
-    "order": 58,
-    "book": "히브리서",
-    "abbr": "히",
-    "chapters": 13,
-    "file": "58_히.json",
-    "translation": "개역한글"
-  },
-  {
-    "order": 59,
-    "book": "야고보서",
-    "abbr": "약",
-    "chapters": 5,
-    "file": "59_약.json",
-    "translation": "개역한글"
-  },
-  {
-    "order": 60,
-    "book": "베드로전서",
-    "abbr": "벧전",
-    "chapters": 5,
-    "file": "60_벧전.json",
-    "translation": "개역한글"
-  },
-  {
-    "order": 61,
-    "book": "베드로후서",
-    "abbr": "벧후",
-    "chapters": 3,
-    "file": "61_벧후.json",
-    "translation": "개역한글"
-  },
-  {
-    "order": 62,
-    "book": "요한일서",
-    "abbr": "요일",
-    "chapters": 5,
-    "file": "62_요일.json",
-    "translation": "개역한글"
-  },
-  {
-    "order": 63,
-    "book": "요한이서",
-    "abbr": "요이",
-    "chapters": 1,
-    "file": "63_요이.json",
-    "translation": "개역한글"
-  },
-  {
-    "order": 64,
-    "book": "요한삼서",
-    "abbr": "요삼",
-    "chapters": 1,
-    "file": "64_요삼.json",
-    "translation": "개역한글"
-  },
-  {
-    "order": 65,
-    "book": "유다서",
-    "abbr": "유",
-    "chapters": 1,
-    "file": "65_유.json",
-    "translation": "개역한글"
-  },
-  {
-    "order": 66,
-    "book": "요한계시록",
-    "abbr": "계",
-    "chapters": 22,
-    "file": "66_계.json",
-    "translation": "개역한글"
-  }
+ {
+  "order": 1,
+  "book": "창세기",
+  "abbr": "창",
+  "file": "01_창.json",
+  "chapters": 49,
+  "standardChapters": 50
+ },
+ {
+  "order": 2,
+  "book": "출애굽기",
+  "abbr": "출",
+  "file": "02_출.json",
+  "chapters": 40,
+  "standardChapters": 40
+ },
+ {
+  "order": 3,
+  "book": "레위기",
+  "abbr": "레",
+  "file": "03_레.json",
+  "chapters": 27,
+  "standardChapters": 27
+ },
+ {
+  "order": 4,
+  "book": "민수기",
+  "abbr": "민",
+  "file": "04_민.json",
+  "chapters": 36,
+  "standardChapters": 36
+ },
+ {
+  "order": 5,
+  "book": "신명기",
+  "abbr": "신",
+  "file": "05_신.json",
+  "chapters": 34,
+  "standardChapters": 34
+ },
+ {
+  "order": 6,
+  "book": "여호수아",
+  "abbr": "수",
+  "file": "06_수.json",
+  "chapters": 24,
+  "standardChapters": 24
+ },
+ {
+  "order": 7,
+  "book": "사사기",
+  "abbr": "삿",
+  "file": "07_삿.json",
+  "chapters": 21,
+  "standardChapters": 21
+ },
+ {
+  "order": 8,
+  "book": "룻기",
+  "abbr": "룻",
+  "file": "08_룻.json",
+  "chapters": 4,
+  "standardChapters": 4
+ },
+ {
+  "order": 9,
+  "book": "사무엘상",
+  "abbr": "삼상",
+  "file": "09_삼상.json",
+  "chapters": 31,
+  "standardChapters": 31
+ },
+ {
+  "order": 10,
+  "book": "사무엘하",
+  "abbr": "삼하",
+  "file": "10_삼하.json",
+  "chapters": 24,
+  "standardChapters": 24
+ },
+ {
+  "order": 11,
+  "book": "열왕기상",
+  "abbr": "왕상",
+  "file": "11_왕상.json",
+  "chapters": 22,
+  "standardChapters": 22
+ },
+ {
+  "order": 12,
+  "book": "열왕기하",
+  "abbr": "왕하",
+  "file": "12_왕하.json",
+  "chapters": 25,
+  "standardChapters": 25
+ },
+ {
+  "order": 13,
+  "book": "역대상",
+  "abbr": "대상",
+  "file": "13_대상.json",
+  "chapters": 29,
+  "standardChapters": 29
+ },
+ {
+  "order": 14,
+  "book": "역대하",
+  "abbr": "대하",
+  "file": "14_대하.json",
+  "chapters": 36,
+  "standardChapters": 36
+ },
+ {
+  "order": 15,
+  "book": "에스라",
+  "abbr": "스",
+  "file": "15_스.json",
+  "chapters": 10,
+  "standardChapters": 10
+ },
+ {
+  "order": 16,
+  "book": "느헤미야",
+  "abbr": "느",
+  "file": "16_느.json",
+  "chapters": 13,
+  "standardChapters": 13
+ },
+ {
+  "order": 17,
+  "book": "에스더",
+  "abbr": "에",
+  "file": "17_에.json",
+  "chapters": 10,
+  "standardChapters": 10
+ },
+ {
+  "order": 18,
+  "book": "욥기",
+  "abbr": "욥",
+  "file": "18_욥.json",
+  "chapters": 42,
+  "standardChapters": 42
+ },
+ {
+  "order": 19,
+  "book": "시편",
+  "abbr": "시",
+  "file": "19_시.json",
+  "chapters": 145,
+  "standardChapters": 150
+ },
+ {
+  "order": 20,
+  "book": "잠언",
+  "abbr": "잠",
+  "file": "20_잠.json",
+  "chapters": 31,
+  "standardChapters": 31
+ },
+ {
+  "order": 21,
+  "book": "전도서",
+  "abbr": "전",
+  "file": "21_전.json",
+  "chapters": 12,
+  "standardChapters": 12
+ },
+ {
+  "order": 22,
+  "book": "아가",
+  "abbr": "아",
+  "file": "22_아.json",
+  "chapters": 8,
+  "standardChapters": 8
+ },
+ {
+  "order": 23,
+  "book": "이사야",
+  "abbr": "사",
+  "file": "23_사.json",
+  "chapters": 66,
+  "standardChapters": 66
+ },
+ {
+  "order": 24,
+  "book": "예레미야",
+  "abbr": "렘",
+  "file": "24_렘.json",
+  "chapters": 52,
+  "standardChapters": 52
+ },
+ {
+  "order": 25,
+  "book": "예레미야애가",
+  "abbr": "애",
+  "file": "25_애.json",
+  "chapters": 5,
+  "standardChapters": 5
+ },
+ {
+  "order": 26,
+  "book": "에스겔",
+  "abbr": "겔",
+  "file": "26_겔.json",
+  "chapters": 46,
+  "standardChapters": 48
+ },
+ {
+  "order": 27,
+  "book": "다니엘",
+  "abbr": "단",
+  "file": "27_단.json",
+  "chapters": 12,
+  "standardChapters": 12
+ },
+ {
+  "order": 28,
+  "book": "호세아",
+  "abbr": "호",
+  "file": "28_호.json",
+  "chapters": 14,
+  "standardChapters": 14
+ },
+ {
+  "order": 29,
+  "book": "요엘",
+  "abbr": "욜",
+  "file": "29_욜.json",
+  "chapters": 3,
+  "standardChapters": 3
+ },
+ {
+  "order": 30,
+  "book": "아모스",
+  "abbr": "암",
+  "file": "30_암.json",
+  "chapters": 9,
+  "standardChapters": 9
+ },
+ {
+  "order": 31,
+  "book": "오바댜",
+  "abbr": "옵",
+  "file": "31_옵.json",
+  "chapters": 1,
+  "standardChapters": 1
+ },
+ {
+  "order": 32,
+  "book": "요나",
+  "abbr": "욘",
+  "file": "32_욘.json",
+  "chapters": 4,
+  "standardChapters": 4
+ },
+ {
+  "order": 33,
+  "book": "미가",
+  "abbr": "미",
+  "file": "33_미.json",
+  "chapters": 7,
+  "standardChapters": 7
+ },
+ {
+  "order": 34,
+  "book": "나훔",
+  "abbr": "나",
+  "file": "34_나.json",
+  "chapters": 3,
+  "standardChapters": 3
+ },
+ {
+  "order": 35,
+  "book": "하박국",
+  "abbr": "합",
+  "file": "35_합.json",
+  "chapters": 3,
+  "standardChapters": 3
+ },
+ {
+  "order": 36,
+  "book": "스바냐",
+  "abbr": "습",
+  "file": "36_습.json",
+  "chapters": 3,
+  "standardChapters": 3
+ },
+ {
+  "order": 37,
+  "book": "학개",
+  "abbr": "학",
+  "file": "37_학.json",
+  "chapters": 2,
+  "standardChapters": 2
+ },
+ {
+  "order": 38,
+  "book": "스가랴",
+  "abbr": "슥",
+  "file": "38_슥.json",
+  "chapters": 13,
+  "standardChapters": 14
+ },
+ {
+  "order": 39,
+  "book": "말라기",
+  "abbr": "말",
+  "file": "39_말.json",
+  "chapters": 4,
+  "standardChapters": 4
+ },
+ {
+  "order": 40,
+  "book": "마태복음",
+  "abbr": "마",
+  "file": "40_마.json",
+  "chapters": 28,
+  "standardChapters": 28
+ },
+ {
+  "order": 41,
+  "book": "마가복음",
+  "abbr": "막",
+  "file": "41_막.json",
+  "chapters": 16,
+  "standardChapters": 16
+ },
+ {
+  "order": 42,
+  "book": "누가복음",
+  "abbr": "눅",
+  "file": "42_눅.json",
+  "chapters": 24,
+  "standardChapters": 24
+ },
+ {
+  "order": 43,
+  "book": "요한복음",
+  "abbr": "요",
+  "file": "43_요.json",
+  "chapters": 21,
+  "standardChapters": 21
+ },
+ {
+  "order": 44,
+  "book": "사도행전",
+  "abbr": "행",
+  "file": "44_행.json",
+  "chapters": 28,
+  "standardChapters": 28
+ },
+ {
+  "order": 45,
+  "book": "로마서",
+  "abbr": "롬",
+  "file": "45_롬.json",
+  "chapters": 16,
+  "standardChapters": 16
+ },
+ {
+  "order": 46,
+  "book": "고린도전서",
+  "abbr": "고전",
+  "file": "46_고전.json",
+  "chapters": 16,
+  "standardChapters": 16
+ },
+ {
+  "order": 47,
+  "book": "고린도후서",
+  "abbr": "고후",
+  "file": "47_고후.json",
+  "chapters": 13,
+  "standardChapters": 13
+ },
+ {
+  "order": 48,
+  "book": "갈라디아서",
+  "abbr": "갈",
+  "file": "48_갈.json",
+  "chapters": 6,
+  "standardChapters": 6
+ },
+ {
+  "order": 49,
+  "book": "에베소서",
+  "abbr": "엡",
+  "file": "49_엡.json",
+  "chapters": 6,
+  "standardChapters": 6
+ },
+ {
+  "order": 50,
+  "book": "빌립보서",
+  "abbr": "빌",
+  "file": "50_빌.json",
+  "chapters": 4,
+  "standardChapters": 4
+ },
+ {
+  "order": 51,
+  "book": "골로새서",
+  "abbr": "골",
+  "file": "51_골.json",
+  "chapters": 4,
+  "standardChapters": 4
+ },
+ {
+  "order": 52,
+  "book": "데살로니가전서",
+  "abbr": "살전",
+  "file": "52_살전.json",
+  "chapters": 5,
+  "standardChapters": 5
+ },
+ {
+  "order": 53,
+  "book": "데살로니가후서",
+  "abbr": "살후",
+  "file": "53_살후.json",
+  "chapters": 3,
+  "standardChapters": 3
+ },
+ {
+  "order": 54,
+  "book": "디모데전서",
+  "abbr": "딤전",
+  "file": "54_딤전.json",
+  "chapters": 6,
+  "standardChapters": 6
+ },
+ {
+  "order": 55,
+  "book": "디모데후서",
+  "abbr": "딤후",
+  "file": "55_딤후.json",
+  "chapters": 4,
+  "standardChapters": 4
+ },
+ {
+  "order": 56,
+  "book": "디도서",
+  "abbr": "딛",
+  "file": "56_딛.json",
+  "chapters": 3,
+  "standardChapters": 3
+ },
+ {
+  "order": 57,
+  "book": "빌레몬서",
+  "abbr": "몬",
+  "file": "57_몬.json",
+  "chapters": 1,
+  "standardChapters": 1
+ },
+ {
+  "order": 58,
+  "book": "히브리서",
+  "abbr": "히",
+  "file": "58_히.json",
+  "chapters": 13,
+  "standardChapters": 13
+ },
+ {
+  "order": 59,
+  "book": "야고보서",
+  "abbr": "약",
+  "file": "59_약.json",
+  "chapters": 5,
+  "standardChapters": 5
+ },
+ {
+  "order": 60,
+  "book": "베드로전서",
+  "abbr": "벧전",
+  "file": "60_벧전.json",
+  "chapters": 5,
+  "standardChapters": 5
+ },
+ {
+  "order": 61,
+  "book": "베드로후서",
+  "abbr": "벧후",
+  "file": "61_벧후.json",
+  "chapters": 3,
+  "standardChapters": 3
+ },
+ {
+  "order": 62,
+  "book": "요한일서",
+  "abbr": "요일",
+  "file": "62_요일.json",
+  "chapters": 5,
+  "standardChapters": 5
+ },
+ {
+  "order": 63,
+  "book": "요한이서",
+  "abbr": "요이",
+  "file": "63_요이.json",
+  "chapters": 1,
+  "standardChapters": 1
+ },
+ {
+  "order": 64,
+  "book": "요한삼서",
+  "abbr": "요삼",
+  "file": "64_요삼.json",
+  "chapters": 1,
+  "standardChapters": 1
+ },
+ {
+  "order": 65,
+  "book": "유다서",
+  "abbr": "유",
+  "file": "65_유.json",
+  "chapters": 1,
+  "standardChapters": 1
+ },
+ {
+  "order": 66,
+  "book": "요한계시록",
+  "abbr": "계",
+  "file": "66_계.json",
+  "chapters": 22,
+  "standardChapters": 22
+ }
 ]
