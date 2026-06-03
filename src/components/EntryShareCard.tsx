@@ -4,6 +4,14 @@ import ReadonlyField from './ReadonlyField'
 
 interface Props {
   entry: Entry
+  sections?: ShareSections
+}
+
+export interface ShareSections {
+  transcribe: boolean
+  prayer: boolean
+  questions: boolean
+  victory: boolean
 }
 
 const STAGE_TITLES = [
@@ -54,7 +62,15 @@ function LabeledField({
   )
 }
 
-export default function EntryShareCard({ entry }: Props) {
+export default function EntryShareCard({
+  entry,
+  sections = {
+    transcribe: true,
+    prayer: true,
+    questions: true,
+    victory: true,
+  },
+}: Props) {
   const worksheet = {
     ...emptyTemptationVictory(),
     ...(entry.temptationVictory ?? {}),
@@ -71,84 +87,94 @@ export default function EntryShareCard({ entry }: Props) {
       </header>
 
       <div className="space-y-8">
-        <Section title="필사">
-          <ReadonlyField field={entry.transcription} minHeight={240} />
-        </Section>
+        {sections.transcribe && (
+          <Section title="필사">
+            <ReadonlyField field={entry.transcription} minHeight={240} />
+          </Section>
+        )}
 
-        <Section title="기도">
-          <LabeledField label="배우자 기도" field={entry.spousePrayer} minHeight={120} />
-          <div className="grid grid-cols-2 gap-4">
-            {entry.prayerTopics.map((topic, index) => (
+        {sections.prayer && (
+          <Section title="기도">
+            <LabeledField label="배우자 기도" field={entry.spousePrayer} minHeight={120} />
+            <div className="grid grid-cols-2 gap-4">
+              {entry.prayerTopics.map((topic, index) => (
+                <LabeledField
+                  key={index}
+                  label={`기도제목 ${index + 1}`}
+                  field={topic}
+                  minHeight={96}
+                />
+              ))}
+            </div>
+          </Section>
+        )}
+
+        {sections.questions && (
+          <Section title="5가지 질문">
+            <div className="space-y-4">
+              {QUESTIONS.map((question, index) => (
+                <LabeledField
+                  key={question}
+                  label={`${index + 1}. ${question}`}
+                  field={entry.answers[index]}
+                  minHeight={112}
+                />
+              ))}
+            </div>
+          </Section>
+        )}
+
+        {sections.victory && (
+          <>
+            <Section title="7가지 단계">
               <LabeledField
-                key={index}
-                label={`기도제목 ${index + 1}`}
-                field={topic}
-                minHeight={96}
+                label="나의 죄"
+                description="승리하고 싶은 죄 한가지를 떠올려 자세히 적어주세요."
+                field={worksheet.sin}
+                minHeight={120}
               />
-            ))}
-          </div>
-        </Section>
-
-        <Section title="5가지 질문">
-          <div className="space-y-4">
-            {QUESTIONS.map((question, index) => (
+              <div className="rounded-xl border border-rose-line bg-white px-4 py-3">
+                <p className="mb-2 text-[16px] font-bold text-zinc-700">나의 상태</p>
+                <p className="text-[15px] text-zinc-700">
+                  {worksheet.stage ? STAGE_TITLES[worksheet.stage - 1] : '선택된 단계가 없습니다.'}
+                </p>
+              </div>
               <LabeledField
-                key={question}
-                label={`${index + 1}. ${question}`}
-                field={entry.answers[index]}
-                minHeight={112}
+                label="나의 상태 기록"
+                description="선택한 단계에서 내 상태가 어떤지 적은 내용"
+                field={worksheet.stageNote}
+                minHeight={120}
               />
-            ))}
-          </div>
-        </Section>
+            </Section>
 
-        <Section title="7가지 단계">
-          <LabeledField
-            label="나의 죄"
-            description="승리하고 싶은 죄 한가지를 떠올려 자세히 적어주세요."
-            field={worksheet.sin}
-            minHeight={120}
-          />
-          <div className="rounded-xl border border-rose-line bg-white px-4 py-3">
-            <p className="mb-2 text-[16px] font-bold text-zinc-700">나의 상태</p>
-            <p className="text-[15px] text-zinc-700">
-              {worksheet.stage ? STAGE_TITLES[worksheet.stage - 1] : '선택된 단계가 없습니다.'}
-            </p>
-          </div>
-          <LabeledField
-            label="나의 상태 기록"
-            description="선택한 단계에서 내 상태가 어떤지 적은 내용"
-            field={worksheet.stageNote}
-            minHeight={120}
-          />
-        </Section>
-
-        <Section title="죄로부터 승리">
-          <LabeledField
-            label="HELP"
-            description="다른 사람에게 요청할 도움이나 중보기도"
-            field={worksheet.help}
-            minHeight={120}
-          />
-          <LabeledField
-            label="PRAY"
-            description="회개기도"
-            field={worksheet.pray}
-            minHeight={140}
-          />
-          <LabeledField
-            label="VICTORY"
-            description="승리 여부와 감사기도"
-            field={worksheet.victory}
-            minHeight={140}
-          />
-          <LabeledField
-            label="GROW"
-            description="승리 후 성장"
-            field={worksheet.grow}
-            minHeight={140}
-          />
-        </Section>
+            <Section title="죄로부터 승리">
+              <LabeledField
+                label="HELP"
+                description="다른 사람에게 요청할 도움이나 중보기도"
+                field={worksheet.help}
+                minHeight={120}
+              />
+              <LabeledField
+                label="PRAY"
+                description="회개기도"
+                field={worksheet.pray}
+                minHeight={140}
+              />
+              <LabeledField
+                label="VICTORY"
+                description="승리 여부와 감사기도"
+                field={worksheet.victory}
+                minHeight={140}
+              />
+              <LabeledField
+                label="GROW"
+                description="승리 후 성장"
+                field={worksheet.grow}
+                minHeight={140}
+              />
+            </Section>
+          </>
+        )}
       </div>
     </article>
   )

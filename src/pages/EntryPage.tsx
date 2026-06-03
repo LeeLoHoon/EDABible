@@ -2,7 +2,7 @@ import { useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useEntry } from '../hooks/useEntry'
 import FieldEditor from '../components/FieldEditor'
-import EntryShareCard from '../components/EntryShareCard'
+import EntryShareCard, { type ShareSections } from '../components/EntryShareCard'
 import TranscribeSection from '../sections/TranscribeSection'
 import QuestionsSection from '../sections/QuestionsSection'
 import PrayerSection from '../sections/PrayerSection'
@@ -33,11 +33,20 @@ export default function EntryPage() {
   const navigate = useNavigate()
   const { entry, loading, saveState, update } = useEntry(id)
   const [tab, setTab] = useState<Tab>('transcribe')
+  const [shareOpen, setShareOpen] = useState(false)
   const [shareState, setShareState] = useState<'idle' | 'working'>('idle')
+  const [shareSections, setShareSections] = useState<ShareSections>({
+    transcribe: true,
+    prayer: true,
+    questions: true,
+    victory: true,
+  })
   const shareRef = useRef<HTMLDivElement>(null)
+  const canShare = Object.values(shareSections).some(Boolean)
 
   const shareEntry = async () => {
-    if (!entry || !shareRef.current || shareState === 'working') return
+    if (!entry || !shareRef.current || shareState === 'working' || !canShare) return
+    setShareOpen(false)
     setShareState('working')
     try {
       const file = await createEntryImageFile(shareRef.current, entry)
@@ -92,12 +101,48 @@ export default function EntryPage() {
           </span>
           <button
             type="button"
-            onClick={shareEntry}
+            onClick={() => setShareOpen((v) => !v)}
             disabled={shareState === 'working'}
             className="rounded-full bg-rose-chip px-2.5 py-1 text-sm font-medium text-rose-ink disabled:opacity-50"
           >
             공유
           </button>
+          {shareOpen && (
+            <div className="absolute right-0 top-9 z-20 w-44 rounded-xl border border-rose-line bg-rose-card p-3 text-sm shadow-lg">
+              <p className="mb-2 font-semibold text-rose-ink">공유할 탭</p>
+              <div className="space-y-2.5">
+                {[
+                  ['transcribe', '필사'],
+                  ['prayer', '기도'],
+                  ['questions', '5가지 질문'],
+                  ['victory', '승리'],
+                ].map(([key, label]) => (
+                  <label key={key} className="flex items-center gap-2 text-zinc-700">
+                    <input
+                      type="checkbox"
+                      checked={shareSections[key as keyof ShareSections]}
+                      onChange={(e) =>
+                        setShareSections((prev) => ({
+                          ...prev,
+                          [key]: e.target.checked,
+                        }))
+                      }
+                      className="h-4 w-4 accent-rose-accent"
+                    />
+                    <span>{label}</span>
+                  </label>
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={shareEntry}
+                disabled={!canShare || shareState === 'working'}
+                className="mt-3 w-full rounded-lg bg-rose-accent px-3 py-2 font-semibold text-white disabled:opacity-50"
+              >
+                JPG 공유
+              </button>
+            </div>
+          )}
         </div>
       </header>
 
@@ -135,7 +180,7 @@ export default function EntryPage() {
 
       <div className="pointer-events-none fixed -left-[10000px] top-0">
         <div ref={shareRef}>
-          <EntryShareCard entry={entry} />
+          <EntryShareCard entry={entry} sections={shareSections} />
         </div>
       </div>
     </div>
