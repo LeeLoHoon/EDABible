@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { listEntries, putEntry, deleteEntry } from '../db'
-import { createEntry, isFieldEmpty, type Entry } from '../types'
+import { createEntry, emptyTemptationVictory, isFieldEmpty, type Entry } from '../types'
 
 function formatDate(date: string): string {
   const [y, m, d] = date.split('-')
@@ -12,7 +12,18 @@ function formatDate(date: string): string {
 
 /** 작성 진행 칸 수 / 전체 칸 수 */
 function progress(e: Entry): { done: number; total: number } {
-  const fields = [e.transcription, ...e.answers, e.spousePrayer, ...e.prayerTopics]
+  const worksheet = e.temptationVictory ?? emptyTemptationVictory()
+  const fields = [
+    e.transcription,
+    ...e.answers,
+    e.spousePrayer,
+    ...e.prayerTopics,
+    worksheet.sin,
+    worksheet.help,
+    worksheet.pray,
+    worksheet.victory,
+    worksheet.grow,
+  ]
   return { done: fields.filter((f) => !isFieldEmpty(f)).length, total: fields.length }
 }
 

@@ -24,8 +24,18 @@ export interface Entry {
   answers: Field[] // 5가지 질문 답변 (길이 5)
   spousePrayer: Field // 배우자 기도
   prayerTopics: Field[] // 기도제목 (가변)
+  temptationVictory: TemptationVictory // 7가지 유혹 / 죄로부터 승리
   createdAt: number
   updatedAt: number
+}
+
+export interface TemptationVictory {
+  sin: Field
+  stage: number | null
+  help: Field
+  pray: Field
+  victory: Field
+  grow: Field
 }
 
 /** 이미지 기준 고정 5가지 질문 (시편 2편 묵상 틀) */
@@ -42,6 +52,17 @@ export const QUESTION_KEYWORDS = ['말', '시간', '만남', '일', '자기 관�
 
 export function emptyField(): Field {
   return { mode: 'text', text: '', strokes: [] }
+}
+
+export function emptyTemptationVictory(): TemptationVictory {
+  return {
+    sin: emptyField(),
+    stage: null,
+    help: emptyField(),
+    pray: emptyField(),
+    victory: emptyField(),
+    grow: emptyField(),
+  }
 }
 
 export function isFieldEmpty(f: Field): boolean {
@@ -66,6 +87,7 @@ export function createEntry(now: Date): Entry {
     answers: QUESTIONS.map(() => emptyField()),
     spousePrayer: emptyField(),
     prayerTopics: [emptyField()],
+    temptationVictory: emptyTemptationVictory(),
     createdAt: ts,
     updatedAt: ts,
   }

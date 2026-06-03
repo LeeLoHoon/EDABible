@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { Entry } from '../types'
+import { emptyTemptationVictory, type Entry } from '../types'
 import { getEntry, putEntry } from '../db'
 
 type SaveState = 'idle' | 'saving' | 'saved'
@@ -27,7 +27,7 @@ export function useEntry(id: string | undefined) {
     }
     getEntry(id).then((e) => {
       if (!alive) return
-      setEntry(e ?? null)
+      setEntry(e ? normalizeEntry(e) : null)
       setLoadedId(id)
     })
     return () => {
@@ -61,4 +61,11 @@ export function useEntry(id: string | undefined) {
   }, [])
 
   return { entry, loading, saveState, update }
+}
+
+function normalizeEntry(entry: Entry): Entry {
+  return {
+    ...entry,
+    temptationVictory: entry.temptationVictory ?? emptyTemptationVictory(),
+  }
 }
