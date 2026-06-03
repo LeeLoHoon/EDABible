@@ -33,12 +33,13 @@ body {
   -webkit-touch-callout: none;
 }
 
-/* 입력칸은 편집·선택·붙여넣기 가능하도록 예외 */
+/* 입력칸은 편집·선택·붙여넣기는 가능하게 두되,
+   롱프레스 콜아웃("링크 만들기" 등)은 끈다 (펜 필기 중 방해 방지) */
 input,
 textarea {
   user-select: text;
   -webkit-user-select: text;
-  -webkit-touch-callout: default;
+  -webkit-touch-callout: none;
 }
 
 /* 손글씨 캔버스: 펜 입력 중 스크롤/제스처/선택/콜아웃 방지 */
