@@ -130,7 +130,7 @@ export default function HomePage() {
                   </span>
                   <button
                     onClick={(ev) => remove(e.id, ev)}
-                    className="-mr-1.5 flex h-10 w-10 items-center justify-center rounded-full text-lg text-zinc-300 hover:bg-rose-chip hover:text-rose-accent"
+                    className="-mr-2 flex h-12 w-12 items-center justify-center rounded-full text-2xl text-zinc-300 hover:bg-rose-chip hover:text-rose-accent"
                     aria-label="삭제"
                   >
                     ✕
