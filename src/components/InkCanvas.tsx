@@ -109,6 +109,32 @@ export default function InkCanvas({
     return () => ro.disconnect()
   }, [resize])
 
+  // iOS: 필기 중 손바닥/손가락이 캔버스에 닿으면 롱프레스로 인식돼
+  // 선택·콜아웃 메뉴("링크 만들기" 등)가 뜬다. 터치 기본 동작을 막아 차단.
+  // (펜은 pointer 이벤트로 처리하므로 필기에는 영향 없음)
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const prevent = (e: TouchEvent) => {
+      // 펜(stylus)이 아닌 터치(손바닥·손가락)만 차단 — 펜 필기는 그대로 통과
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        const t = e.changedTouches[i] as Touch & { touchType?: string }
+        if (t.touchType !== 'stylus') {
+          e.preventDefault()
+          return
+        }
+      }
+    }
+    canvas.addEventListener('touchstart', prevent, { passive: false })
+    canvas.addEventListener('touchmove', prevent, { passive: false })
+    canvas.addEventListener('touchend', prevent, { passive: false })
+    return () => {
+      canvas.removeEventListener('touchstart', prevent)
+      canvas.removeEventListener('touchmove', prevent)
+      canvas.removeEventListener('touchend', prevent)
+    }
+  }, [])
+
   // strokes가 외부에서 바뀌면 다시 그림
   useEffect(() => {
     redraw()
