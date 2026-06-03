@@ -35,14 +35,14 @@ export default function QuestionsSection({ entry, update, FieldEditor }: Props) 
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
-        <div className="rounded-2xl bg-rose-chip px-4 py-2">
+        <div className="rounded-2xl border border-rose-line bg-rose-chip px-4 py-2 shadow-inner shadow-rose-ink/10">
           <h3 className="font-bold text-rose-ink">5가지 질문</h3>
         </div>
         <ModeToggle mode={mode} onChange={setMode} />
       </div>
       {QUESTIONS.map((q, i) => (
         <div key={i}>
-          <p className="mb-2 text-[17px] font-semibold text-zinc-700">
+          <p className="mb-2 text-[17px] font-semibold text-rose-ink">
             <span className="mr-1 text-rose-accent">{i + 1}.</span>
             <Question text={q} keyword={QUESTION_KEYWORDS[i]} />
           </p>

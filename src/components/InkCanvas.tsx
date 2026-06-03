@@ -177,7 +177,7 @@ export default function InkCanvas({
     <div ref={wrapRef} className="w-full">
       <canvas
         ref={canvasRef}
-        className="ink-surface w-full rounded-xl bg-white"
+        className="ink-surface w-full rounded-xl bg-[#fffaf1]"
         style={{ height }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}

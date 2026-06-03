@@ -44,10 +44,10 @@ export default function EntryPage() {
   return (
     <div className="mx-auto flex min-h-full max-w-3xl flex-col">
       {/* 헤더 */}
-      <header className="sticky top-0 z-10 flex items-center justify-between border-b border-rose-line bg-rose-bg/90 px-4 py-3 backdrop-blur">
+      <header className="sticky top-0 z-10 flex items-center justify-between border-b border-rose-line bg-rose-card/90 px-4 py-3 shadow-sm shadow-rose-ink/10 backdrop-blur">
         <button
           onClick={() => navigate('/')}
-          className="text-sm text-zinc-500 hover:text-rose-accent"
+          className="text-sm font-medium text-rose-key/75 hover:text-rose-accent"
         >
           ← 목록
         </button>
@@ -57,7 +57,7 @@ export default function EntryPage() {
             <span className="ml-2 font-medium text-rose-key">· {entry.bibleRef}</span>
           )}
         </h1>
-        <span className="w-12 text-right text-xs text-zinc-400">
+        <span className="w-12 text-right text-xs text-rose-key/45">
           {saveState === 'saving' ? '저장 중…' : saveState === 'saved' ? '저장됨' : ''}
         </span>
       </header>
@@ -76,13 +76,13 @@ export default function EntryPage() {
       </main>
 
       {/* 하단 탭바 */}
-      <nav className="safe-pad sticky bottom-0 z-10 grid grid-cols-3 border-t border-rose-line bg-rose-card">
+      <nav className="safe-pad sticky bottom-0 z-10 grid grid-cols-3 border-t border-rose-line bg-rose-card shadow-[0_-8px_24px_rgba(47,38,29,0.10)]">
         {TABS.map((t) => (
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
             className={`flex flex-col items-center gap-0.5 py-2.5 text-sm font-medium transition ${
-              tab === t.key ? 'text-rose-accent' : 'text-zinc-400'
+              tab === t.key ? 'text-rose-accent' : 'text-rose-key/45'
             }`}
           >
             <span className="text-lg">{t.icon}</span>
