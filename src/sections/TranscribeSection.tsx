@@ -1,5 +1,6 @@
 import type { Entry, Field, FieldMode } from '../types'
 import ModeToggle from '../components/ModeToggle'
+import BiblePicker from '../components/BiblePicker'
 
 interface Props {
   entry: Entry
@@ -15,22 +16,11 @@ export default function TranscribeSection({ entry, update, FieldEditor }: Props)
 
   return (
     <div className="space-y-4">
-      {/* 본문 참조 입력 */}
-      <div className="rounded-2xl bg-rose-chip px-4 py-3">
-        <label className="mb-1 block text-sm font-semibold text-rose-ink">
-          오늘의 본문 (장·절)
-        </label>
-        <input
-          type="text"
-          value={entry.bibleRef}
-          onChange={(e) => update({ bibleRef: e.target.value })}
-          placeholder="예: 시편 3편"
-          className="w-full rounded-xl border border-rose-line bg-white px-3 py-2 text-lg font-medium text-rose-ink outline-none focus:border-rose-accent"
-        />
-        <p className="mt-2 text-sm text-rose-key/70">
-          📖 본문은 성경(앱·책)에서 직접 읽고, 아래에 필사하세요.
-        </p>
-      </div>
+      {/* 본문 선택 (성경·장) */}
+      <BiblePicker
+        value={entry.bibleRef}
+        onChange={(bibleRef) => update({ bibleRef })}
+      />
 
       {/* 필사 */}
       <div>
