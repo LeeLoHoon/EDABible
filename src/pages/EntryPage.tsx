@@ -51,7 +51,7 @@ export default function EntryPage() {
         >
           ← 목록
         </button>
-        <h1 className="text-lg font-bold text-rose-ink">
+        <h1 className="font-serif text-lg font-bold text-rose-ink">
           {formatDate(entry.date)}
           {entry.bibleRef && (
             <span className="ml-2 font-medium text-rose-key">· {entry.bibleRef}</span>

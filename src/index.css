@@ -1,15 +1,16 @@
 @import 'tailwindcss';
 
-/* 파스텔 핑크 디자인 토큰 */
+/* 리넨 페이퍼 + 클레이 디자인 토큰 (따뜻하고 차분한 묵상 톤) */
 @theme {
-  --color-rose-bg: #fdf2f8;
-  --color-rose-card: #ffffff;
-  --color-rose-chip: #fce7f3;
-  --color-rose-ink: #9d174d;
-  --color-rose-accent: #ec4899;
-  --color-rose-key: #be185d;
-  --color-rose-line: #fbcfe8;
-  --font-sans: 'Pretendard', system-ui, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+  --color-rose-bg: #f6f1e9;     /* 리넨 배경 */
+  --color-rose-card: #fffdf8;   /* 따뜻한 화이트 카드 */
+  --color-rose-chip: #ede3d3;   /* 소프트 샌드 (칩·섹션 라벨) */
+  --color-rose-ink: #2c2722;    /* 에스프레소 (제목) */
+  --color-rose-accent: #b25c30; /* 클레이/테라코타 (강조·버튼) */
+  --color-rose-key: #7a6b54;    /* 웜 토프 (보조 텍스트) */
+  --color-rose-line: #e4d9c6;   /* 샌드 보더 */
+  --font-sans: 'Pretendard Variable', 'Pretendard', system-ui, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+  --font-serif: 'Nanum Myeongjo', 'Apple SD Gothic Neo', serif;
 }
 
 html,
@@ -21,7 +22,7 @@ body,
 body {
   margin: 0;
   background: var(--color-rose-bg);
-  color: #3f3f46;
+  color: #3a342c;
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;

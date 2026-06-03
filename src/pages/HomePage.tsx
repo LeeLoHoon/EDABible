@@ -44,8 +44,8 @@ export default function HomePage() {
   return (
     <div className="mx-auto max-w-2xl px-4 pb-28 pt-6">
       <header className="mb-6">
-        <h1 className="text-3xl font-extrabold tracking-tight text-rose-ink">EDABible</h1>
-        <p className="mt-1 text-sm text-rose-key/70">매일의 말씀 묵상과 필사</p>
+        <h1 className="font-serif text-3xl font-extrabold tracking-tight text-rose-ink">EDABible</h1>
+        <p className="mt-1.5 text-sm text-rose-key">매일의 말씀 묵상과 필사</p>
       </header>
 
       {loading ? (
@@ -66,7 +66,7 @@ export default function HomePage() {
                 className="group flex cursor-pointer items-center justify-between rounded-2xl border border-rose-line bg-rose-card px-4 py-3.5 shadow-sm transition hover:border-rose-accent"
               >
                 <div className="min-w-0">
-                  <p className="font-bold text-rose-ink">{formatDate(e.date)}</p>
+                  <p className="font-serif text-[17px] font-bold text-rose-ink">{formatDate(e.date)}</p>
                   <p className="truncate text-sm text-rose-key">
                     {e.bibleRef || '본문 미입력'}
                   </p>

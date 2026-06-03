@@ -149,11 +149,11 @@ export default function BiblePicker({ value, onChange }: Props) {
       {/* 선택한 본문 표시 (읽으며 필사) */}
       {loading && <p className="mt-3 text-sm text-rose-key/70">본문 불러오는 중…</p>}
       {!loading && passage && (
-        <div className="mt-3 max-h-72 overflow-y-auto rounded-xl border border-rose-line bg-white px-4 py-3">
-          <p className="mb-1 text-sm font-bold text-rose-accent">
+        <div className="mt-3 max-h-72 overflow-y-auto rounded-xl border border-rose-line bg-rose-card px-4 py-3.5">
+          <p className="mb-1.5 font-serif text-sm font-bold tracking-wide text-rose-accent">
             {activeDoc?.book} {chapter}장
           </p>
-          <p className="whitespace-pre-wrap text-[15px] leading-7 text-zinc-700">
+          <p className="whitespace-pre-wrap font-serif text-[16px] leading-[1.85] text-zinc-700">
             {passage}
           </p>
         </div>

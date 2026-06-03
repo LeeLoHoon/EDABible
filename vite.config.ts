@@ -22,8 +22,8 @@ export default defineConfig({
         scope: '/EDABible/',
         display: 'standalone',
         orientation: 'any',
-        background_color: '#fdf2f8',
-        theme_color: '#ec4899',
+        background_color: '#f6f1e9',
+        theme_color: '#f6f1e9',
         icons: [
           { src: 'pwa-192.png', sizes: '192x192', type: 'image/png' },
           { src: 'pwa-512.png', sizes: '512x512', type: 'image/png' },
