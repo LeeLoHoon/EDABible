@@ -1,5 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
-import { loadIndex, makeRef, parseRef, type BookMeta } from '../bible'
+import {
+  loadBook,
+  loadIndex,
+  makeRef,
+  parseRef,
+  type BookDoc,
+  type BookMeta,
+} from '../bible'
 
 interface Props {
   /** 현재 bibleRef (예: '창세기 3장') */
@@ -12,6 +19,8 @@ export default function BiblePicker({ value, onChange }: Props) {
   const [index, setIndex] = useState<BookMeta[]>([])
   const [order, setOrder] = useState<number | ''>('')
   const [chapter, setChapter] = useState<number | ''>('')
+  const [bookDoc, setBookDoc] = useState<BookDoc | null>(null)
+  const [loadingBook, setLoadingBook] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [inited, setInited] = useState(false)
 
@@ -53,6 +62,37 @@ export default function BiblePicker({ value, onChange }: Props) {
     () => (meta ? Array.from({ length: meta.chapters }, (_, i) => i + 1) : []),
     [meta],
   )
+
+  const selectedChapter = useMemo(() => {
+    if (!bookDoc || chapter === '') return null
+    return bookDoc.chapters.find((c) => c.chapter === chapter) ?? null
+  }, [bookDoc, chapter])
+
+  useEffect(() => {
+    if (!meta) {
+      setBookDoc(null)
+      return
+    }
+
+    let alive = true
+    setLoadingBook(true)
+    setError(null)
+    loadBook(meta.file)
+      .then((doc) => {
+        if (!alive) return
+        setBookDoc(doc)
+      })
+      .catch((e) => {
+        if (!alive) return
+        setBookDoc(null)
+        setError(String(e.message ?? e))
+      })
+      .finally(() => alive && setLoadingBook(false))
+
+    return () => {
+      alive = false
+    }
+  }, [meta])
 
   // 선택이 바뀌면 bibleRef 갱신 (초기화 완료 후, 사용자 변경분)
   useEffect(() => {
@@ -109,11 +149,26 @@ export default function BiblePicker({ value, onChange }: Props) {
           <p className="mt-1 text-lg font-semibold text-rose-ink">
             {meta.book} {chapter}장
           </p>
+          <p className="mt-1 text-xs text-rose-key/70">
+            {bookDoc?.translation ?? meta.translation ?? '개역한글'}
+          </p>
+
+          {loadingBook && (
+            <p className="mt-3 text-sm text-rose-key/70">본문 불러오는 중...</p>
+          )}
+
+          {!loadingBook && selectedChapter && (
+            <div className="mt-3 max-h-72 overflow-y-auto rounded-xl border border-rose-line bg-rose-paper px-4 py-3">
+              <p className="whitespace-pre-wrap text-[15px] leading-7 text-zinc-700">
+                {selectedChapter.text}
+              </p>
+            </div>
+          )}
         </div>
       )}
 
       <p className="mt-2 text-xs text-rose-key/70">
-        📖 본문은 성경(앱·책)에서 직접 읽고, 아래에 필사하세요.
+        위 본문을 읽고 아래에 필사하세요.
       </p>
     </div>
   )

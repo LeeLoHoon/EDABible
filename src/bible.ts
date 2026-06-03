@@ -1,16 +1,39 @@
-/** 성경 권/장 메타데이터 로더. 본문은 저작권 문제로 저장하지 않는다. */
+/** 성경 권/장 메타데이터와 본문 로더. */
 
 export interface BookMeta {
   order: number
   book: string
   abbr: string
   chapters: number
+  file: string
+  translation?: string
+}
+
+export interface BibleVerse {
+  verse: number
+  text: string
+}
+
+export interface BibleChapter {
+  chapter: number
+  text: string
+  verses: BibleVerse[]
+}
+
+export interface BookDoc {
+  order: number
+  book: string
+  abbr: string
+  translation: string
+  source: string
+  chapters: BibleChapter[]
 }
 
 // Vite base('/EDABible/') 기준 — GitHub Pages 서브경로 대응
 const BASE = import.meta.env.BASE_URL
 
 let indexCache: Promise<BookMeta[]> | null = null
+const bookCache = new Map<string, Promise<BookDoc>>()
 
 export function loadIndex(): Promise<BookMeta[]> {
   if (!indexCache) {
@@ -20,6 +43,19 @@ export function loadIndex(): Promise<BookMeta[]> {
     })
   }
   return indexCache
+}
+
+export function loadBook(file: string): Promise<BookDoc> {
+  if (!bookCache.has(file)) {
+    bookCache.set(
+      file,
+      fetch(`${BASE}bible/${file}`).then((r) => {
+        if (!r.ok) throw new Error('성경 본문을 불러오지 못했습니다')
+        return r.json()
+      }),
+    )
+  }
+  return bookCache.get(file)!
 }
 
 /** 'YYYY' 형태가 아니라 '창세기 3장' 같은 참조 문자열을 만든다. */
