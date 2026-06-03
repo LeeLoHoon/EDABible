@@ -1,4 +1,5 @@
 import { toJpeg } from 'html-to-image'
+import html2canvas from 'html2canvas'
 import type { Entry } from './types'
 
 function filename(entry: Entry): string {
@@ -26,6 +27,22 @@ function downloadFile(file: File) {
   URL.revokeObjectURL(url)
 }
 
+function canvasToFile(canvas: HTMLCanvasElement, name: string, type: string): Promise<File> {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => {
+        if (!blob) {
+          reject(new Error('캔버스 이미지를 파일로 변환하지 못했습니다.'))
+          return
+        }
+        resolve(new File([blob], name, { type }))
+      },
+      type,
+      0.92,
+    )
+  })
+}
+
 export async function createEntryImageFile(
   node: HTMLElement,
   entry: Entry,
@@ -33,16 +50,30 @@ export async function createEntryImageFile(
   await document.fonts?.ready
   const name = filename(entry)
   const type = 'image/jpeg'
-  const dataUrl = await toJpeg(node, {
-    cacheBust: true,
-    pixelRatio: 2,
-    quality: 0.92,
+
+  try {
+    const dataUrl = await toJpeg(node, {
+      cacheBust: true,
+      pixelRatio: 2,
+      quality: 0.92,
+      backgroundColor: '#f6f1e9',
+      skipFonts: true,
+    })
+    return dataUrlToFile(dataUrl, name, type)
+  } catch (error) {
+    console.warn('html-to-image failed, falling back to html2canvas', error)
+  }
+
+  const canvas = await html2canvas(node, {
     backgroundColor: '#f6f1e9',
+    scale: Math.min(window.devicePixelRatio || 1, 2),
+    useCORS: true,
+    logging: false,
   })
-  return dataUrlToFile(dataUrl, name, type)
+  return canvasToFile(canvas, name, type)
 }
 
-export async function shareOrDownloadEntryImage(file: File, entry: Entry): Promise<'shared' | 'downloaded'> {
+export async function shareOrDownloadEntryImage(file: File, entry: Entry): Promise<'shared' | 'downloaded' | 'cancelled'> {
   const shareData = {
     title: `EDABible ${entry.date}`,
     text: entry.bibleRef ? `${entry.date} ${entry.bibleRef}` : entry.date,
@@ -50,8 +81,15 @@ export async function shareOrDownloadEntryImage(file: File, entry: Entry): Promi
   }
 
   if (navigator.canShare?.(shareData)) {
-    await navigator.share(shareData)
-    return 'shared'
+    try {
+      await navigator.share(shareData)
+      return 'shared'
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        return 'cancelled'
+      }
+      console.warn('Web Share failed, falling back to download', error)
+    }
   }
 
   downloadFile(file)

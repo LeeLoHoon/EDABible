@@ -53,7 +53,7 @@ export default function EntryPage() {
       await shareOrDownloadEntryImage(file, entry)
     } catch (error) {
       console.error(error)
-      alert('이미지 공유 파일을 만들지 못했습니다.')
+      alert('이미지 파일을 만들지 못했습니다. 공유할 탭을 줄여서 다시 시도해 주세요.')
     } finally {
       setShareState('idle')
     }
