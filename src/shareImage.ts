@@ -1,11 +1,8 @@
-import { toJpeg, toPng } from 'html-to-image'
+import { toJpeg } from 'html-to-image'
 import type { Entry } from './types'
 
-export type ShareImageFormat = 'png' | 'jpeg'
-
-function filename(entry: Entry, format: ShareImageFormat): string {
-  const ext = format === 'jpeg' ? 'jpg' : 'png'
-  return `edabible-${entry.date}.${ext}`
+function filename(entry: Entry): string {
+  return `edabible-${entry.date}.jpg`
 }
 
 function dataUrlToFile(dataUrl: string, name: string, type: string): File {
@@ -32,24 +29,16 @@ function downloadFile(file: File) {
 export async function createEntryImageFile(
   node: HTMLElement,
   entry: Entry,
-  format: ShareImageFormat,
 ): Promise<File> {
   await document.fonts?.ready
-  const name = filename(entry, format)
-  const type = format === 'jpeg' ? 'image/jpeg' : 'image/png'
-  const dataUrl =
-    format === 'jpeg'
-      ? await toJpeg(node, {
-          cacheBust: true,
-          pixelRatio: 2,
-          quality: 0.92,
-          backgroundColor: '#f6f1e9',
-        })
-      : await toPng(node, {
-          cacheBust: true,
-          pixelRatio: 2,
-          backgroundColor: '#f6f1e9',
-        })
+  const name = filename(entry)
+  const type = 'image/jpeg'
+  const dataUrl = await toJpeg(node, {
+    cacheBust: true,
+    pixelRatio: 2,
+    quality: 0.92,
+    backgroundColor: '#f6f1e9',
+  })
   return dataUrlToFile(dataUrl, name, type)
 }
 

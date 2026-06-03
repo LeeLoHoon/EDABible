@@ -10,7 +10,6 @@ import TemptationVictorySection from '../sections/TemptationVictorySection'
 import {
   createEntryImageFile,
   shareOrDownloadEntryImage,
-  type ShareImageFormat,
 } from '../shareImage'
 
 type Tab = 'transcribe' | 'questions' | 'prayer' | 'temptationVictory'
@@ -19,7 +18,7 @@ const TABS: { key: Tab; label: string; icon: string }[] = [
   { key: 'transcribe', label: '필사', icon: '📖' },
   { key: 'prayer', label: '기도', icon: '🙏' },
   { key: 'questions', label: '5가지 질문', icon: '❓' },
-  { key: 'temptationVictory', label: '유혹 승리', icon: '🛡️' },
+  { key: 'temptationVictory', label: '승리', icon: '🛡️' },
 ]
 
 function formatDate(date: string): string {
@@ -34,16 +33,14 @@ export default function EntryPage() {
   const navigate = useNavigate()
   const { entry, loading, saveState, update } = useEntry(id)
   const [tab, setTab] = useState<Tab>('transcribe')
-  const [shareOpen, setShareOpen] = useState(false)
   const [shareState, setShareState] = useState<'idle' | 'working'>('idle')
   const shareRef = useRef<HTMLDivElement>(null)
 
-  const shareEntry = async (format: ShareImageFormat) => {
+  const shareEntry = async () => {
     if (!entry || !shareRef.current || shareState === 'working') return
-    setShareOpen(false)
     setShareState('working')
     try {
-      const file = await createEntryImageFile(shareRef.current, entry, format)
+      const file = await createEntryImageFile(shareRef.current, entry)
       await shareOrDownloadEntryImage(file, entry)
     } catch (error) {
       console.error(error)
@@ -95,30 +92,12 @@ export default function EntryPage() {
           </span>
           <button
             type="button"
-            onClick={() => setShareOpen((v) => !v)}
+            onClick={shareEntry}
             disabled={shareState === 'working'}
             className="rounded-full bg-rose-chip px-2.5 py-1 text-sm font-medium text-rose-ink disabled:opacity-50"
           >
             공유
           </button>
-          {shareOpen && (
-            <div className="absolute right-0 top-9 z-20 w-32 overflow-hidden rounded-xl border border-rose-line bg-rose-card text-sm shadow-lg">
-              <button
-                type="button"
-                onClick={() => shareEntry('png')}
-                className="block w-full px-4 py-2 text-left text-zinc-700 hover:bg-rose-chip"
-              >
-                PNG 공유
-              </button>
-              <button
-                type="button"
-                onClick={() => shareEntry('jpeg')}
-                className="block w-full px-4 py-2 text-left text-zinc-700 hover:bg-rose-chip"
-              >
-                JPG 공유
-              </button>
-            </div>
-          )}
         </div>
       </header>
 

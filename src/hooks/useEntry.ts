@@ -64,8 +64,13 @@ export function useEntry(id: string | undefined) {
 }
 
 function normalizeEntry(entry: Entry): Entry {
+  const temptationVictory = {
+    ...emptyTemptationVictory(),
+    ...(entry.temptationVictory ?? {}),
+  }
+
   return {
     ...entry,
-    temptationVictory: entry.temptationVictory ?? emptyTemptationVictory(),
+    temptationVictory,
   }
 }

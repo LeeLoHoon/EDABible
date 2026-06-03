@@ -55,7 +55,10 @@ function LabeledField({
 }
 
 export default function EntryShareCard({ entry }: Props) {
-  const worksheet = entry.temptationVictory ?? emptyTemptationVictory()
+  const worksheet = {
+    ...emptyTemptationVictory(),
+    ...(entry.temptationVictory ?? {}),
+  }
 
   return (
     <article className="w-[920px] bg-rose-bg p-10 text-zinc-700">
@@ -99,7 +102,7 @@ export default function EntryShareCard({ entry }: Props) {
           </div>
         </Section>
 
-        <Section title="7가지 유혹">
+        <Section title="7가지 단계">
           <LabeledField
             label="나의 죄"
             description="승리하고 싶은 죄 한가지를 떠올려 자세히 적어주세요."
@@ -112,6 +115,12 @@ export default function EntryShareCard({ entry }: Props) {
               {worksheet.stage ? STAGE_TITLES[worksheet.stage - 1] : '선택된 단계가 없습니다.'}
             </p>
           </div>
+          <LabeledField
+            label="나의 상태 기록"
+            description="선택한 단계에서 내 상태가 어떤지 적은 내용"
+            field={worksheet.stageNote}
+            minHeight={120}
+          />
         </Section>
 
         <Section title="죄로부터 승리">

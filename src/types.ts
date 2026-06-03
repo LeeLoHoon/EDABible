@@ -24,7 +24,7 @@ export interface Entry {
   answers: Field[] // 5가지 질문 답변 (길이 5)
   spousePrayer: Field // 배우자 기도
   prayerTopics: Field[] // 기도제목 (가변)
-  temptationVictory: TemptationVictory // 7가지 유혹 / 죄로부터 승리
+  temptationVictory: TemptationVictory // 7가지 단계 / 죄로부터 승리
   createdAt: number
   updatedAt: number
 }
@@ -32,6 +32,7 @@ export interface Entry {
 export interface TemptationVictory {
   sin: Field
   stage: number | null
+  stageNote: Field
   help: Field
   pray: Field
   victory: Field
@@ -58,6 +59,7 @@ export function emptyTemptationVictory(): TemptationVictory {
   return {
     sin: emptyField(),
     stage: null,
+    stageNote: emptyField(),
     help: emptyField(),
     pray: emptyField(),
     victory: emptyField(),

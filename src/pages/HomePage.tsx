@@ -12,13 +12,17 @@ function formatDate(date: string): string {
 
 /** 작성 진행 칸 수 / 전체 칸 수 */
 function progress(e: Entry): { done: number; total: number } {
-  const worksheet = e.temptationVictory ?? emptyTemptationVictory()
+  const worksheet = {
+    ...emptyTemptationVictory(),
+    ...(e.temptationVictory ?? {}),
+  }
   const fields = [
     e.transcription,
     ...e.answers,
     e.spousePrayer,
     ...e.prayerTopics,
     worksheet.sin,
+    worksheet.stageNote,
     worksheet.help,
     worksheet.pray,
     worksheet.victory,

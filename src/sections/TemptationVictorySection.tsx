@@ -99,7 +99,10 @@ export default function TemptationVictorySection({ entry, update, FieldEditor }:
       },
     }))
 
-  const setField = (key: keyof Pick<TemptationVictory, 'sin' | 'help' | 'pray' | 'victory' | 'grow'>, value: Field) =>
+  const setField = (
+    key: keyof Pick<TemptationVictory, 'sin' | 'stageNote' | 'help' | 'pray' | 'victory' | 'grow'>,
+    value: Field,
+  ) =>
     setWorksheet({ [key]: value })
 
   const setMode = (nextMode: FieldMode) =>
@@ -110,6 +113,7 @@ export default function TemptationVictorySection({ entry, update, FieldEditor }:
         temptationVictory: {
           ...current,
           sin: { ...current.sin, mode: nextMode },
+          stageNote: { ...current.stageNote, mode: nextMode },
           help: { ...current.help, mode: nextMode },
           pray: { ...current.pray, mode: nextMode },
           victory: { ...current.victory, mode: nextMode },
@@ -122,7 +126,7 @@ export default function TemptationVictorySection({ entry, update, FieldEditor }:
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div className="rounded-2xl bg-rose-chip px-4 py-2">
-          <h3 className="font-bold text-rose-ink">7가지 유혹</h3>
+          <h3 className="font-bold text-rose-ink">7가지 단계</h3>
         </div>
         <ModeToggle mode={mode} onChange={setMode} />
       </div>
@@ -147,7 +151,7 @@ export default function TemptationVictorySection({ entry, update, FieldEditor }:
         <div>
           <p className="text-[17px] font-semibold text-zinc-700">나의 상태</p>
           <p className="text-sm text-zinc-500">
-            유혹에는 7가지 단계가 있습니다. 내가 해당하는 상태에 표시해주세요.
+            7가지 단계 중 내가 해당하는 상태를 선택하고, 현재 상태를 자세히 적어주세요.
           </p>
         </div>
         <div className="space-y-3">
@@ -182,6 +186,13 @@ export default function TemptationVictorySection({ entry, update, FieldEditor }:
             )
           })}
         </div>
+        <FieldEditor
+          field={worksheet.stageNote}
+          onChange={(v) => setField('stageNote', v)}
+          placeholder="선택한 단계에서 내 상태가 어떤지 구체적으로 적어보세요."
+          rows={4}
+          inkHeight={180}
+        />
       </section>
 
       <section className="space-y-5">
