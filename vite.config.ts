@@ -1,22 +1,17 @@
-import { execSync } from 'node:child_process'
+import { readFileSync } from 'node:fs'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
-// 현재 빌드를 식별할 수 있도록 git 커밋 해시를 주입(어떤 빌드가 기기에 떴는지 확인용)
-let buildId = 'dev'
-try {
-  buildId = execSync('git rev-parse --short HEAD').toString().trim()
-} catch {
-  // git 정보가 없으면 그대로 'dev'
-}
+// 어떤 빌드가 기기에 떴는지 확인용 — package.json 버전을 주입(예: 1.0.0)
+const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8'))
 
 // https://vite.dev/config/
 export default defineConfig({
   base: '/EDABible/',
   define: {
-    __BUILD__: JSON.stringify(buildId),
+    __BUILD__: JSON.stringify(pkg.version),
   },
   plugins: [
     react(),

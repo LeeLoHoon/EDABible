@@ -45,8 +45,11 @@ function distToStroke(stroke: Stroke, x: number, y: number): number {
 
 /**
  * Apple Pencil / S Pen 필압을 지원하는 손글씨 캔버스.
- * 포인트는 CSS 픽셀 좌표로 저장하고, devicePixelRatio로 선명하게 렌더한다.
- * 지우개는 '획 단위' — 닿은 획을 통째로 지운다.
+ * - 이벤트 처리는 단순·즉시 방식(매 이동마다 동기 렌더 — 지연 없음).
+ * - 단, 확정된 획은 오프스크린 버퍼에 캐싱해 한 번 그릴 때 비용을 일정하게 유지한다.
+ *   (글자가 많이 쌓여도 메인스레드가 막히지 않아 펜 입력이 버려지지 않음 = 끊김 방지)
+ * - 포인트는 CSS 픽셀 좌표로 저장하고, devicePixelRatio로 선명하게 렌더한다.
+ * - 지우개는 '획 단위' — 닿은 획을 통째로 지운다.
  */
 export default function InkCanvas({
   strokes,
@@ -58,6 +61,10 @@ export default function InkCanvas({
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
+  // 확정된 획을 캐싱하는 오프스크린 버퍼
+  const bufferRef = useRef<HTMLCanvasElement | null>(null)
+  // 현재 캔버스 CSS 크기 / dpr
+  const dimRef = useRef({ w: 0, h: height, dpr: 1 })
   const drawing = useRef<Stroke | null>(null)
   // 현재 그리는 중인 포인터 ID (손바닥 멀티터치 차단용 — 하나만 허용)
   const activePointer = useRef<number | null>(null)
@@ -73,21 +80,34 @@ export default function InkCanvas({
     propRef.current = { color, size, tool, onChange }
   }, [color, size, tool, onChange])
 
-  const redraw = useCallback(() => {
-    const canvas = canvasRef.current
-    if (!canvas) return
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
-    const dpr = window.devicePixelRatio || 1
-    ctx.save()
+  // 확정된 모든 획을 버퍼에 다시 렌더 (strokes가 바뀔 때만 호출)
+  const renderBuffer = useCallback(() => {
+    const buffer = bufferRef.current
+    const ctx = buffer?.getContext('2d')
+    if (!buffer || !ctx) return
+    const { w, h, dpr } = dimRef.current
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
-    ctx.clearRect(0, 0, canvas.width / dpr, canvas.height / dpr)
+    ctx.clearRect(0, 0, w, h)
     for (const s of strokesRef.current) fillStroke(ctx, s)
-    if (drawing.current) fillStroke(ctx, drawing.current)
-    ctx.restore()
   }, [])
 
-  // 캔버스 크기를 컨테이너에 맞추고 DPR 적용
+  // 화면 = 버퍼(확정 획) + 진행 중인 획. 즉시(동기) 합성 — 지연 없음, 비용 일정.
+  const redraw = useCallback(() => {
+    const canvas = canvasRef.current
+    const buffer = bufferRef.current
+    const ctx = canvas?.getContext('2d')
+    if (!canvas || !buffer || !ctx) return
+    const { w, h, dpr } = dimRef.current
+    ctx.setTransform(1, 0, 0, 1, 0, 0)
+    ctx.clearRect(0, 0, w * dpr, h * dpr)
+    ctx.drawImage(buffer, 0, 0)
+    if (drawing.current) {
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+      fillStroke(ctx, drawing.current)
+    }
+  }, [])
+
+  // 캔버스/버퍼 크기를 컨테이너에 맞추고 DPR 적용
   const resize = useCallback(() => {
     const canvas = canvasRef.current
     const wrap = wrapRef.current
@@ -95,12 +115,17 @@ export default function InkCanvas({
     const dpr = window.devicePixelRatio || 1
     const w = wrap.clientWidth
     const h = height
+    dimRef.current = { w, h, dpr }
     canvas.width = Math.round(w * dpr)
     canvas.height = Math.round(h * dpr)
     canvas.style.width = `${w}px`
     canvas.style.height = `${h}px`
+    if (!bufferRef.current) bufferRef.current = document.createElement('canvas')
+    bufferRef.current.width = canvas.width
+    bufferRef.current.height = canvas.height
+    renderBuffer()
     redraw()
-  }, [height, redraw])
+  }, [height, renderBuffer, redraw])
 
   useEffect(() => {
     resize()
@@ -135,10 +160,11 @@ export default function InkCanvas({
     }
   }, [])
 
-  // strokes가 외부에서 바뀌면 다시 그림
+  // strokes가 외부에서 바뀌면(취소·전체지우기·로드) 버퍼 갱신 후 다시 그림
   useEffect(() => {
+    renderBuffer()
     redraw()
-  }, [strokes, redraw])
+  }, [strokes, renderBuffer, redraw])
 
   const getPoint = (e: React.PointerEvent): [number, number, number] => {
     const rect = canvasRef.current!.getBoundingClientRect()
@@ -195,6 +221,15 @@ export default function InkCanvas({
     const finished = drawing.current
     drawing.current = null
     if (finished.points.length > 0) {
+      // 버퍼에 즉시 합성해 깜빡임 없이 확정한 뒤 저장
+      const buffer = bufferRef.current
+      const bctx = buffer?.getContext('2d')
+      if (buffer && bctx) {
+        const { dpr } = dimRef.current
+        bctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+        fillStroke(bctx, finished)
+      }
+      redraw()
       propRef.current.onChange([...strokesRef.current, finished])
     }
   }

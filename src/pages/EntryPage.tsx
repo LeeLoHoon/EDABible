@@ -98,7 +98,7 @@ export default function EntryPage() {
                 : saveState === 'saved'
                   ? '저장됨'
                   : ''}
-            <span className="ml-1 text-[10px] text-zinc-300">#{__BUILD__}</span>
+            <span className="ml-1 text-[10px] text-zinc-300">v{__BUILD__}</span>
           </span>
           <button
             type="button"
