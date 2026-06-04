@@ -7,14 +7,21 @@ interface Props {
 }
 
 const FREEHAND_OPTS = {
-  thinning: 0.6,
+  thinning: 0.4,
   smoothing: 0.5,
   streamline: 0.3,
 }
 
 function strokePath(stroke: Stroke): string {
-  const outline = getStroke(stroke.points, { ...FREEHAND_OPTS, size: stroke.size })
-  if (outline.length < 2) return ''
+  const outline = getStroke(stroke.points, { ...FREEHAND_OPTS, size: stroke.size, last: true })
+  if (outline.length < 2) {
+    // 점/아주 짧은 획은 작은 원으로
+    const p0 = stroke.points[0]
+    if (!p0) return ''
+    const r = Math.max(stroke.size / 2, 1)
+    const [x, y] = p0
+    return `M ${x - r} ${y} a ${r} ${r} 0 1 0 ${r * 2} 0 a ${r} ${r} 0 1 0 ${-r * 2} 0 Z`
+  }
   return `${outline.map(([x, y], i) => `${i === 0 ? 'M' : 'L'} ${x} ${y}`).join(' ')} Z`
 }
 

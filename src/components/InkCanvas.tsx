@@ -15,17 +15,34 @@ interface Props {
 }
 
 const FREEHAND_OPTS = {
-  thinning: 0.6,
+  // 낮을수록 속도에 따른 굵기 변화가 적어 빠른 획도 또렷(흐려짐 방지)
+  thinning: 0.4,
   smoothing: 0.5,
   // 낮을수록 선이 펜 끝을 빨리 따라온다(체감 입력 지연 감소)
   streamline: 0.3,
 }
 
-/** perfect-freehand 외곽선을 캔버스에 채워 그린다 */
-function fillStroke(ctx: CanvasRenderingContext2D, stroke: Stroke) {
-  const outline = getStroke(stroke.points, { ...FREEHAND_OPTS, size: stroke.size })
-  if (outline.length < 2) return
+/**
+ * perfect-freehand 외곽선을 캔버스에 채워 그린다.
+ * - isLast=true: 획이 끝났으니 끝점까지 채워 그림(끝부분 잘림 방지). 그리는 중엔 false.
+ * - 점/아주 짧은 획은 외곽선이 비므로 점(원)으로 찍어 표시(한글 짧은 획·점 인식).
+ */
+function fillStroke(ctx: CanvasRenderingContext2D, stroke: Stroke, isLast = true) {
+  const outline = getStroke(stroke.points, {
+    ...FREEHAND_OPTS,
+    size: stroke.size,
+    last: isLast,
+  })
   ctx.fillStyle = stroke.color
+  if (outline.length < 2) {
+    const p0 = stroke.points[0]
+    if (p0) {
+      ctx.beginPath()
+      ctx.arc(p0[0], p0[1], Math.max(stroke.size / 2, 1), 0, Math.PI * 2)
+      ctx.fill()
+    }
+    return
+  }
   ctx.beginPath()
   ctx.moveTo(outline[0][0], outline[0][1])
   for (let i = 1; i < outline.length; i++) {
@@ -100,7 +117,7 @@ export default function InkCanvas({
     ctx.clearRect(0, 0, w * dpr, h * dpr)
     if (drawing.current) {
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
-      fillStroke(ctx, drawing.current)
+      fillStroke(ctx, drawing.current, false)
     }
   }, [])
 
