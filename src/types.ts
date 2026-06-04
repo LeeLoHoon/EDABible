@@ -7,8 +7,6 @@ export interface Stroke {
   points: [number, number, number][]
   color: string
   size: number
-  /** true면 속도 기반 필압 시뮬레이트(마우스), false면 실제 필압 사용(펜). 미지정 시 시뮬레이트. */
-  simulate?: boolean
 }
 
 /** 입력 칸 하나 — 타이핑/손글씨 공용 */

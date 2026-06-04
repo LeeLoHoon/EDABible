@@ -15,9 +15,10 @@ interface Props {
 }
 
 const FREEHAND_OPTS = {
-  thinning: 0.6,
-  smoothing: 0.5,
-  streamline: 0.5,
+  thinning: 0.5,
+  smoothing: 0.42,
+  // 낮을수록 실제 펜 궤적을 충실히 따라간다(코너 잘림 방지 → 동그라미가 잘 닫힘)
+  streamline: 0.32,
 }
 
 /** perfect-freehand 외곽선을 캔버스에 채워 그린다. isLast=false면 아직 그리는 중(끝 캡 미완성) */
@@ -25,8 +26,6 @@ function fillStroke(ctx: CanvasRenderingContext2D, stroke: Stroke, isLast = true
   const outline = getStroke(stroke.points, {
     ...FREEHAND_OPTS,
     size: stroke.size,
-    // 펜(필압 디바이스)은 실제 필압을, 마우스 등은 속도 기반 시뮬레이트를 사용
-    simulatePressure: stroke.simulate ?? true,
     last: isLast,
   })
   if (outline.length < 2) return
@@ -230,13 +229,7 @@ export default function InkCanvas({
       erase(x, y)
       return
     }
-    drawing.current = {
-      points: [[x, y, p]],
-      color,
-      size,
-      // 펜은 실제 필압, 그 외(마우스)는 시뮬레이트
-      simulate: e.pointerType !== 'pen',
-    }
+    drawing.current = { points: [[x, y, p]], color, size }
     schedulePaint()
   }
 

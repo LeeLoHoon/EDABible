@@ -7,18 +7,13 @@ interface Props {
 }
 
 const FREEHAND_OPTS = {
-  thinning: 0.6,
-  smoothing: 0.5,
-  streamline: 0.5,
+  thinning: 0.5,
+  smoothing: 0.42,
+  streamline: 0.32,
 }
 
 function strokePath(stroke: Stroke): string {
-  const outline = getStroke(stroke.points, {
-    ...FREEHAND_OPTS,
-    size: stroke.size,
-    simulatePressure: stroke.simulate ?? true,
-    last: true,
-  })
+  const outline = getStroke(stroke.points, { ...FREEHAND_OPTS, size: stroke.size })
   if (outline.length < 2) return ''
   return `${outline.map(([x, y], i) => `${i === 0 ? 'M' : 'L'} ${x} ${y}`).join(' ')} Z`
 }
