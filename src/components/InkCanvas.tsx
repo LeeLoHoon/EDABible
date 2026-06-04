@@ -193,7 +193,10 @@ export default function InkCanvas({
     const { size, onChange } = propRef.current
     const threshold = Math.max(size, 12)
     const kept = strokesRef.current.filter((s) => distToStroke(s, x, y) > threshold)
-    if (kept.length !== strokesRef.current.length) onChange(kept)
+    if (kept.length !== strokesRef.current.length) {
+      strokesRef.current = kept // 연속 지우기에도 직전 결과가 즉시 반영되도록 동기 갱신
+      onChange(kept)
+    }
   }
 
   const onPointerDown = (e: React.PointerEvent) => {
@@ -268,7 +271,10 @@ export default function InkCanvas({
         fillStroke(bctx, finished)
       }
       renderLive() // drawing.current가 null이라 위 캔버스가 비워짐
-      propRef.current.onChange([...strokesRef.current, finished])
+      // 다음 획이 리렌더 전에 곧바로 들어와도 직전 획이 누락되지 않도록 동기 반영
+      const next = [...strokesRef.current, finished]
+      strokesRef.current = next
+      propRef.current.onChange(next)
     } else {
       renderLive()
     }
