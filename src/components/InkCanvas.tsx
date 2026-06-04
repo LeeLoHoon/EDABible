@@ -17,7 +17,8 @@ interface Props {
 const FREEHAND_OPTS = {
   thinning: 0.6,
   smoothing: 0.5,
-  streamline: 0.5,
+  // 낮을수록 선이 펜 끝을 빨리 따라온다(체감 입력 지연 감소). 0.5는 눈에 띄게 뒤처짐.
+  streamline: 0.3,
 }
 
 /** perfect-freehand 외곽선을 캔버스에 채워 그린다 */
@@ -45,11 +46,11 @@ function distToStroke(stroke: Stroke, x: number, y: number): number {
 
 /**
  * Apple Pencil / S Pen 필압을 지원하는 손글씨 캔버스.
- * - 이벤트 처리는 단순·즉시 방식(매 이동마다 동기 렌더 — 지연 없음).
- * - 단, 확정된 획은 오프스크린 버퍼에 캐싱해 한 번 그릴 때 비용을 일정하게 유지한다.
- *   (글자가 많이 쌓여도 메인스레드가 막히지 않아 펜 입력이 버려지지 않음 = 끊김 방지)
- * - 포인트는 CSS 픽셀 좌표로 저장하고, devicePixelRatio로 선명하게 렌더한다.
- * - 지우개는 '획 단위' — 닿은 획을 통째로 지운다.
+ * 저지연을 위해:
+ * - desynchronized 캔버스(저지연 합성) 사용
+ * - 확정 획은 오프스크린 버퍼에 캐싱(매 입력마다 전체 재그리기 방지)
+ * - 좌표 변환용 rect를 획 시작 시 1회만 측정(매 입력마다 레이아웃 재계산 방지)
+ * - streamline을 낮춰 선이 펜 끝을 빨리 따라오게 함
  */
 export default function InkCanvas({
   strokes,
@@ -63,6 +64,11 @@ export default function InkCanvas({
   const wrapRef = useRef<HTMLDivElement>(null)
   // 확정된 획을 캐싱하는 오프스크린 버퍼
   const bufferRef = useRef<HTMLCanvasElement | null>(null)
+  // 캐싱된 2D 컨텍스트 (화면 / 버퍼)
+  const ctxRef = useRef<CanvasRenderingContext2D | null>(null)
+  const bctxRef = useRef<CanvasRenderingContext2D | null>(null)
+  // 획 시작 시 측정한 캔버스 위치(좌표 변환용)
+  const rectRef = useRef<DOMRect | null>(null)
   // 현재 캔버스 CSS 크기 / dpr
   const dimRef = useRef({ w: 0, h: height, dpr: 1 })
   const drawing = useRef<Stroke | null>(null)
@@ -82,21 +88,19 @@ export default function InkCanvas({
 
   // 확정된 모든 획을 버퍼에 다시 렌더 (strokes가 바뀔 때만 호출)
   const renderBuffer = useCallback(() => {
-    const buffer = bufferRef.current
-    const ctx = buffer?.getContext('2d')
-    if (!buffer || !ctx) return
+    const ctx = bctxRef.current
+    if (!ctx) return
     const { w, h, dpr } = dimRef.current
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
     ctx.clearRect(0, 0, w, h)
     for (const s of strokesRef.current) fillStroke(ctx, s)
   }, [])
 
-  // 화면 = 버퍼(확정 획) + 진행 중인 획. 즉시(동기) 합성 — 지연 없음, 비용 일정.
+  // 화면 = 버퍼(확정 획) + 진행 중인 획. 즉시(동기) 합성.
   const redraw = useCallback(() => {
-    const canvas = canvasRef.current
+    const ctx = ctxRef.current
     const buffer = bufferRef.current
-    const ctx = canvas?.getContext('2d')
-    if (!canvas || !buffer || !ctx) return
+    if (!ctx || !buffer) return
     const { w, h, dpr } = dimRef.current
     ctx.setTransform(1, 0, 0, 1, 0, 0)
     ctx.clearRect(0, 0, w * dpr, h * dpr)
@@ -123,6 +127,9 @@ export default function InkCanvas({
     if (!bufferRef.current) bufferRef.current = document.createElement('canvas')
     bufferRef.current.width = canvas.width
     bufferRef.current.height = canvas.height
+    // 저지연 합성 컨텍스트
+    ctxRef.current = canvas.getContext('2d', { desynchronized: true })
+    bctxRef.current = bufferRef.current.getContext('2d')
     renderBuffer()
     redraw()
   }, [height, renderBuffer, redraw])
@@ -167,7 +174,7 @@ export default function InkCanvas({
   }, [strokes, renderBuffer, redraw])
 
   const getPoint = (e: React.PointerEvent): [number, number, number] => {
-    const rect = canvasRef.current!.getBoundingClientRect()
+    const rect = rectRef.current ?? canvasRef.current!.getBoundingClientRect()
     const pressure = e.pressure && e.pressure > 0 ? e.pressure : 0.5
     return [e.clientX - rect.left, e.clientY - rect.top, pressure]
   }
@@ -189,6 +196,8 @@ export default function InkCanvas({
     e.preventDefault()
     activePointer.current = e.pointerId
     canvasRef.current?.setPointerCapture(e.pointerId)
+    // 획 동안 캔버스 위치는 고정 — 시작 시 1회만 측정
+    rectRef.current = canvasRef.current!.getBoundingClientRect()
     const [x, y, p] = getPoint(e)
 
     if (tool === 'eraser') {
@@ -222,9 +231,8 @@ export default function InkCanvas({
     drawing.current = null
     if (finished.points.length > 0) {
       // 버퍼에 즉시 합성해 깜빡임 없이 확정한 뒤 저장
-      const buffer = bufferRef.current
-      const bctx = buffer?.getContext('2d')
-      if (buffer && bctx) {
+      const bctx = bctxRef.current
+      if (bctx) {
         const { dpr } = dimRef.current
         bctx.setTransform(dpr, 0, 0, dpr, 0, 0)
         fillStroke(bctx, finished)

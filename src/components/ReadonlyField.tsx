@@ -9,7 +9,7 @@ interface Props {
 const FREEHAND_OPTS = {
   thinning: 0.6,
   smoothing: 0.5,
-  streamline: 0.5,
+  streamline: 0.3,
 }
 
 function strokePath(stroke: Stroke): string {
