@@ -249,15 +249,9 @@ export default function InkCanvas({
       drawing.current = null
       renderLive()
     }
-    if (activePointer.current !== null && activePointer.current !== e.pointerId) {
-      try {
-        liveRef.current?.releasePointerCapture(activePointer.current)
-      } catch {
-        // 이미 사라진 포인터면 무시
-      }
-    }
+    // setPointerCapture는 iOS Safari에서 캡처가 안 풀리면 이후 입력이 통째로 죽는
+    // 버그가 있어 사용하지 않는다. (touch 기반 펜은 암묵적 캡처로 추적엔 충분)
     activePointer.current = e.pointerId
-    liveRef.current?.setPointerCapture(e.pointerId)
     rectRef.current = liveRef.current!.getBoundingClientRect()
     const [x, y, p] = getPoint(e.clientX, e.clientY, e.pressure)
 
