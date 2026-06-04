@@ -42,13 +42,20 @@ export default function EntryPage() {
     victory: true,
   })
   const shareRef = useRef<HTMLDivElement>(null)
+  // 공유 카드는 평소엔 렌더하지 않는다(매 획마다 모든 획을 SVG로 다시 그려 메인스레드를
+  // 막던 문제) — 공유를 누를 때만 잠깐 DOM에 올려 캡처한다.
+  const [showShareCard, setShowShareCard] = useState(false)
   const canShare = Object.values(shareSections).some(Boolean)
 
   const shareEntry = async () => {
-    if (!entry || !shareRef.current || shareState === 'working' || !canShare) return
+    if (!entry || shareState === 'working' || !canShare) return
     setShareOpen(false)
     setShareState('working')
+    setShowShareCard(true)
     try {
+      // 공유 카드가 DOM에 그려질 때까지 한두 프레임 대기
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r(null))))
+      if (!shareRef.current) throw new Error('share card not ready')
       const file = await createEntryImageFile(shareRef.current, entry)
       await shareOrDownloadEntryImage(file, entry)
     } catch (error) {
@@ -56,6 +63,7 @@ export default function EntryPage() {
       alert('이미지 파일을 만들지 못했습니다. 공유할 탭을 줄여서 다시 시도해 주세요.')
     } finally {
       setShareState('idle')
+      setShowShareCard(false)
     }
   }
 
@@ -179,11 +187,13 @@ export default function EntryPage() {
         ))}
       </nav>
 
-      <div className="pointer-events-none fixed -left-[10000px] top-0">
-        <div ref={shareRef}>
-          <EntryShareCard entry={entry} sections={shareSections} />
+      {showShareCard && (
+        <div className="pointer-events-none fixed -left-[10000px] top-0">
+          <div ref={shareRef}>
+            <EntryShareCard entry={entry} sections={shareSections} />
+          </div>
         </div>
-      </div>
+      )}
     </div>
   )
 }
