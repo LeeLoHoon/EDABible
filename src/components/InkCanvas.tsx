@@ -50,9 +50,10 @@ function distToStroke(stroke: Stroke, x: number, y: number): number {
 }
 
 /**
- * 가장 단순·견고한 손글씨 캔버스(단일 캔버스, 기본 Pointer 처리만).
- * setPointerCapture / desynchronized / coalesced / 네이티브 터치 차단 등
- * iOS에서 입력을 멈추게 할 수 있는 요소를 전부 제거했다.
+ * 손글씨 캔버스.
+ * - 확정된 획은 오프스크린 버퍼에 캐싱 → 이동마다 비용 O(1)(전체 재그리기 없음).
+ * - 확정 시 버퍼에 그 획만 추가 → 획당 비용도 O(1). (전체 재렌더는 외부 변경 때만)
+ * - setPointerCapture / desynchronized / 네이티브 터치 차단은 사용하지 않음(iOS 먹통 회피).
  */
 export default function InkCanvas({
   strokes,
@@ -64,14 +65,16 @@ export default function InkCanvas({
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
+  const bufferRef = useRef<HTMLCanvasElement | null>(null)
   const drawing = useRef<Stroke | null>(null)
   const activePointer = useRef<number | null>(null)
   const strokesRef = useRef(strokes)
+  const syncedRef = useRef(strokes) // 버퍼에 반영된 마지막 strokes 참조
   const propRef = useRef({ color, size, tool, onChange })
   const dimRef = useRef({ w: 0, h: height, dpr: 1 })
   const rectRef = useRef<DOMRect | null>(null)
 
-  // 디버그 HUD (React 상태 — 죽어도 사라지지 않고, 리마운트되면 '대기'로 리셋)
+  // 디버그 HUD (React 상태)
   const cnt = useRef({ dn: 0, tch: 0, mv: 0, up: 0, cx: 0 })
   const [dbg, setDbg] = useState('대기')
   const hud = () => {
@@ -82,22 +85,34 @@ export default function InkCanvas({
   }
 
   useEffect(() => {
-    strokesRef.current = strokes
-  }, [strokes])
-
-  useEffect(() => {
     propRef.current = { color, size, tool, onChange }
   }, [color, size, tool, onChange])
 
-  const redraw = useCallback(() => {
-    const canvas = canvasRef.current
-    const ctx = canvas?.getContext('2d')
-    if (!canvas || !ctx) return
+  // 확정된 모든 획을 버퍼에 다시 렌더 (외부 변경 때만 — O(n))
+  const renderBuffer = useCallback(() => {
+    const buffer = bufferRef.current
+    const ctx = buffer?.getContext('2d')
+    if (!buffer || !ctx) return
     const { w, h, dpr } = dimRef.current
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
     ctx.clearRect(0, 0, w, h)
     for (const s of strokesRef.current) fillStroke(ctx, s)
-    if (drawing.current) fillStroke(ctx, drawing.current, false)
+  }, [])
+
+  // 화면 = 버퍼 + 진행 중인 획 (이동마다 — O(1))
+  const redraw = useCallback(() => {
+    const canvas = canvasRef.current
+    const buffer = bufferRef.current
+    const ctx = canvas?.getContext('2d')
+    if (!canvas || !buffer || !ctx) return
+    const { w, h, dpr } = dimRef.current
+    ctx.setTransform(1, 0, 0, 1, 0, 0)
+    ctx.clearRect(0, 0, w * dpr, h * dpr)
+    ctx.drawImage(buffer, 0, 0)
+    if (drawing.current) {
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+      fillStroke(ctx, drawing.current, false)
+    }
   }, [])
 
   const resize = useCallback(() => {
@@ -112,8 +127,12 @@ export default function InkCanvas({
     canvas.height = Math.round(h * dpr)
     canvas.style.width = `${w}px`
     canvas.style.height = `${h}px`
+    if (!bufferRef.current) bufferRef.current = document.createElement('canvas')
+    bufferRef.current.width = canvas.width
+    bufferRef.current.height = canvas.height
+    renderBuffer()
     redraw()
-  }, [height, redraw])
+  }, [height, renderBuffer, redraw])
 
   useEffect(() => {
     resize()
@@ -122,9 +141,15 @@ export default function InkCanvas({
     return () => ro.disconnect()
   }, [resize])
 
+  // strokes 변경 반영: 우리가 그린 것이면 버퍼 이미 최신 → 스킵, 외부 변경이면 전체 재렌더
   useEffect(() => {
-    redraw()
-  }, [strokes, redraw])
+    strokesRef.current = strokes
+    if (strokes !== syncedRef.current) {
+      syncedRef.current = strokes
+      renderBuffer()
+      redraw()
+    }
+  }, [strokes, renderBuffer, redraw])
 
   const getPoint = (
     clientX: number,
@@ -142,6 +167,9 @@ export default function InkCanvas({
     const kept = strokesRef.current.filter((s) => distToStroke(s, x, y) > threshold)
     if (kept.length !== strokesRef.current.length) {
       strokesRef.current = kept
+      syncedRef.current = kept
+      renderBuffer()
+      redraw()
       onChange(kept)
     }
   }
@@ -196,8 +224,16 @@ export default function InkCanvas({
     const finished = drawing.current
     drawing.current = null
     if (finished.points.length > 0) {
+      // 확정 획만 버퍼에 추가(O(1)) — 전체 재렌더 안 함
+      const bctx = bufferRef.current?.getContext('2d')
+      if (bctx) {
+        const { dpr } = dimRef.current
+        bctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+        fillStroke(bctx, finished)
+      }
       const next = [...strokesRef.current, finished]
       strokesRef.current = next
+      syncedRef.current = next // 버퍼 직접 갱신함 → strokes effect에서 전체 재렌더 스킵
       redraw()
       propRef.current.onChange(next)
     } else {
