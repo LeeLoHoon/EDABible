@@ -200,9 +200,21 @@ export default function InkCanvas({
     const { tool, color, size } = propRef.current
     // 손글씨는 펜(과 마우스)으로만 — 손가락/손바닥 터치는 항상 거부
     if (e.pointerType === 'touch') return
-    if (activePointer.current !== null) return
 
     e.preventDefault()
+    // 이전 포인터의 up/cancel을 놓쳐 상태가 남아 있어도, 새 펜 다운이면 항상 새로 시작한다.
+    // (한 번 안 써지면 계속 안 써지던 '포인터 잠금 고착' 방지) — 남은 미완 획은 정리.
+    if (drawing.current) {
+      drawing.current = null
+      renderLive()
+    }
+    if (activePointer.current !== null && activePointer.current !== e.pointerId) {
+      try {
+        liveRef.current?.releasePointerCapture(activePointer.current)
+      } catch {
+        // 이미 사라진 포인터면 무시
+      }
+    }
     activePointer.current = e.pointerId
     liveRef.current?.setPointerCapture(e.pointerId)
     // 획 동안 캔버스 위치는 고정 — 시작 시 1회만 측정
