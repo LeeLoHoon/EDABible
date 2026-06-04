@@ -13,7 +13,12 @@ const FREEHAND_OPTS = {
 }
 
 function strokePath(stroke: Stroke): string {
-  const outline = getStroke(stroke.points, { ...FREEHAND_OPTS, size: stroke.size })
+  const outline = getStroke(stroke.points, {
+    ...FREEHAND_OPTS,
+    size: stroke.size,
+    simulatePressure: stroke.simulate ?? true,
+    last: true,
+  })
   if (outline.length < 2) return ''
   return `${outline.map(([x, y], i) => `${i === 0 ? 'M' : 'L'} ${x} ${y}`).join(' ')} Z`
 }
