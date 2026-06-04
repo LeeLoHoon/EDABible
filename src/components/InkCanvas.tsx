@@ -17,7 +17,7 @@ interface Props {
 const FREEHAND_OPTS = {
   thinning: 0.6,
   smoothing: 0.5,
-  // 낮을수록 선이 펜 끝을 빨리 따라온다(체감 입력 지연 감소). 0.5는 눈에 띄게 뒤처짐.
+  // 낮을수록 선이 펜 끝을 빨리 따라온다(체감 입력 지연 감소)
   streamline: 0.3,
 }
 
@@ -45,12 +45,12 @@ function distToStroke(stroke: Stroke, x: number, y: number): number {
 }
 
 /**
- * Apple Pencil / S Pen 필압을 지원하는 손글씨 캔버스.
- * 저지연을 위해:
- * - desynchronized 캔버스(저지연 합성) 사용
- * - 확정 획은 오프스크린 버퍼에 캐싱(매 입력마다 전체 재그리기 방지)
- * - 좌표 변환용 rect를 획 시작 시 1회만 측정(매 입력마다 레이아웃 재계산 방지)
- * - streamline을 낮춰 선이 펜 끝을 빨리 따라오게 함
+ * 웹에서 가능한 최저지연 손글씨 캔버스.
+ * - 2겹 캔버스: 아래(base)는 확정된 획, 위(live, 저지연)는 '지금 긋는 획'만.
+ *   필기 중엔 위 캔버스에 현재 한 획만 다시 그리므로 매 입력 비용이 최소다.
+ * - coalesced 이벤트로 펜의 고주파 입력을 빠짐없이 수집해 선이 자연스럽다.
+ * - 좌표 변환용 rect는 획 시작 시 1회만 측정.
+ * - 손가락/손바닥 터치는 거부(펜·마우스 전용), 지우개는 닿은 획을 통째로 지운다.
  */
 export default function InkCanvas({
   strokes,
@@ -60,21 +60,16 @@ export default function InkCanvas({
   tool,
   height = 240,
 }: Props) {
-  const canvasRef = useRef<HTMLCanvasElement>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
-  // 확정된 획을 캐싱하는 오프스크린 버퍼
-  const bufferRef = useRef<HTMLCanvasElement | null>(null)
-  // 캐싱된 2D 컨텍스트 (화면 / 버퍼)
-  const ctxRef = useRef<CanvasRenderingContext2D | null>(null)
-  const bctxRef = useRef<CanvasRenderingContext2D | null>(null)
-  // 획 시작 시 측정한 캔버스 위치(좌표 변환용)
+  const baseRef = useRef<HTMLCanvasElement>(null) // 확정된 획
+  const liveRef = useRef<HTMLCanvasElement>(null) // 진행 중인 획(저지연)
+  const baseCtxRef = useRef<CanvasRenderingContext2D | null>(null)
+  const liveCtxRef = useRef<CanvasRenderingContext2D | null>(null)
   const rectRef = useRef<DOMRect | null>(null)
-  // 현재 캔버스 CSS 크기 / dpr
   const dimRef = useRef({ w: 0, h: height, dpr: 1 })
   const drawing = useRef<Stroke | null>(null)
   // 현재 그리는 중인 포인터 ID (손바닥 멀티터치 차단용 — 하나만 허용)
   const activePointer = useRef<number | null>(null)
-  // 최신 props를 이벤트 핸들러에서 참조하기 위한 ref
   const strokesRef = useRef(strokes)
   const propRef = useRef({ color, size, tool, onChange })
 
@@ -86,9 +81,9 @@ export default function InkCanvas({
     propRef.current = { color, size, tool, onChange }
   }, [color, size, tool, onChange])
 
-  // 확정된 모든 획을 버퍼에 다시 렌더 (strokes가 바뀔 때만 호출)
-  const renderBuffer = useCallback(() => {
-    const ctx = bctxRef.current
+  // 확정된 모든 획을 아래 캔버스에 렌더 (strokes가 바뀔 때만)
+  const renderBase = useCallback(() => {
+    const ctx = baseCtxRef.current
     if (!ctx) return
     const { w, h, dpr } = dimRef.current
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
@@ -96,43 +91,40 @@ export default function InkCanvas({
     for (const s of strokesRef.current) fillStroke(ctx, s)
   }, [])
 
-  // 화면 = 버퍼(확정 획) + 진행 중인 획. 즉시(동기) 합성.
-  const redraw = useCallback(() => {
-    const ctx = ctxRef.current
-    const buffer = bufferRef.current
-    if (!ctx || !buffer) return
+  // 진행 중인 획만 위 캔버스에 렌더 (매 입력마다 — 가장 가벼움)
+  const renderLive = useCallback(() => {
+    const ctx = liveCtxRef.current
+    if (!ctx) return
     const { w, h, dpr } = dimRef.current
     ctx.setTransform(1, 0, 0, 1, 0, 0)
     ctx.clearRect(0, 0, w * dpr, h * dpr)
-    ctx.drawImage(buffer, 0, 0)
     if (drawing.current) {
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
       fillStroke(ctx, drawing.current)
     }
   }, [])
 
-  // 캔버스/버퍼 크기를 컨테이너에 맞추고 DPR 적용
   const resize = useCallback(() => {
-    const canvas = canvasRef.current
+    const base = baseRef.current
+    const live = liveRef.current
     const wrap = wrapRef.current
-    if (!canvas || !wrap) return
+    if (!base || !live || !wrap) return
     const dpr = window.devicePixelRatio || 1
     const w = wrap.clientWidth
     const h = height
     dimRef.current = { w, h, dpr }
-    canvas.width = Math.round(w * dpr)
-    canvas.height = Math.round(h * dpr)
-    canvas.style.width = `${w}px`
-    canvas.style.height = `${h}px`
-    if (!bufferRef.current) bufferRef.current = document.createElement('canvas')
-    bufferRef.current.width = canvas.width
-    bufferRef.current.height = canvas.height
-    // 저지연 합성 컨텍스트
-    ctxRef.current = canvas.getContext('2d', { desynchronized: true })
-    bctxRef.current = bufferRef.current.getContext('2d')
-    renderBuffer()
-    redraw()
-  }, [height, renderBuffer, redraw])
+    for (const c of [base, live]) {
+      c.width = Math.round(w * dpr)
+      c.height = Math.round(h * dpr)
+      c.style.width = `${w}px`
+      c.style.height = `${h}px`
+    }
+    baseCtxRef.current = base.getContext('2d')
+    // 위 캔버스는 저지연 합성
+    liveCtxRef.current = live.getContext('2d', { desynchronized: true })
+    renderBase()
+    renderLive()
+  }, [height, renderBase, renderLive])
 
   useEffect(() => {
     resize()
@@ -143,12 +135,10 @@ export default function InkCanvas({
 
   // iOS: 필기 중 손바닥/손가락이 캔버스에 닿으면 롱프레스로 인식돼
   // 선택·콜아웃 메뉴("링크 만들기" 등)가 뜬다. 터치 기본 동작을 막아 차단.
-  // (펜은 pointer 이벤트로 처리하므로 필기에는 영향 없음)
   useEffect(() => {
-    const canvas = canvasRef.current
+    const canvas = liveRef.current
     if (!canvas) return
     const prevent = (e: TouchEvent) => {
-      // 펜(stylus)이 아닌 터치(손바닥·손가락)만 차단 — 펜 필기는 그대로 통과
       for (let i = 0; i < e.changedTouches.length; i++) {
         const t = e.changedTouches[i] as Touch & { touchType?: string }
         if (t.touchType !== 'stylus') {
@@ -167,16 +157,19 @@ export default function InkCanvas({
     }
   }, [])
 
-  // strokes가 외부에서 바뀌면(취소·전체지우기·로드) 버퍼 갱신 후 다시 그림
+  // strokes가 외부에서 바뀌면(취소·전체지우기·로드) 아래 캔버스 갱신
   useEffect(() => {
-    renderBuffer()
-    redraw()
-  }, [strokes, renderBuffer, redraw])
+    renderBase()
+  }, [strokes, renderBase])
 
-  const getPoint = (e: React.PointerEvent): [number, number, number] => {
-    const rect = rectRef.current ?? canvasRef.current!.getBoundingClientRect()
-    const pressure = e.pressure && e.pressure > 0 ? e.pressure : 0.5
-    return [e.clientX - rect.left, e.clientY - rect.top, pressure]
+  const getPoint = (
+    clientX: number,
+    clientY: number,
+    pressure: number,
+  ): [number, number, number] => {
+    const rect = rectRef.current ?? liveRef.current!.getBoundingClientRect()
+    const p = pressure && pressure > 0 ? pressure : 0.5
+    return [clientX - rect.left, clientY - rect.top, p]
   }
 
   const erase = (x: number, y: number) => {
@@ -190,36 +183,44 @@ export default function InkCanvas({
     const { tool, color, size } = propRef.current
     // 손글씨는 펜(과 마우스)으로만 — 손가락/손바닥 터치는 항상 거부
     if (e.pointerType === 'touch') return
-    // 이미 다른 포인터가 그리는 중이면 무시 (필기 중 손바닥 닿음)
     if (activePointer.current !== null) return
 
     e.preventDefault()
     activePointer.current = e.pointerId
-    canvasRef.current?.setPointerCapture(e.pointerId)
+    liveRef.current?.setPointerCapture(e.pointerId)
     // 획 동안 캔버스 위치는 고정 — 시작 시 1회만 측정
-    rectRef.current = canvasRef.current!.getBoundingClientRect()
-    const [x, y, p] = getPoint(e)
+    rectRef.current = liveRef.current!.getBoundingClientRect()
+    const [x, y, p] = getPoint(e.clientX, e.clientY, e.pressure)
 
     if (tool === 'eraser') {
       erase(x, y)
       return
     }
     drawing.current = { points: [[x, y, p]], color, size }
-    redraw()
+    renderLive()
   }
 
   const onPointerMove = (e: React.PointerEvent) => {
     if (activePointer.current !== e.pointerId) return
     const { tool } = propRef.current
-    const [x, y] = getPoint(e)
 
     if (tool === 'eraser') {
+      const [x, y] = getPoint(e.clientX, e.clientY, e.pressure)
       erase(x, y)
       return
     }
     if (!drawing.current) return
-    drawing.current.points.push([x, y, e.pressure && e.pressure > 0 ? e.pressure : 0.5])
-    redraw()
+
+    // 펜은 한 프레임에 여러 입력이 합쳐 들어온다(coalesced). 모두 반영해야 선이 매끄럽다.
+    const native = e.nativeEvent
+    const batch =
+      typeof native.getCoalescedEvents === 'function' && native.getCoalescedEvents().length
+        ? native.getCoalescedEvents()
+        : [native]
+    for (const ev of batch) {
+      drawing.current.points.push(getPoint(ev.clientX, ev.clientY, ev.pressure))
+    }
+    renderLive()
   }
 
   const onPointerUp = (e: React.PointerEvent) => {
@@ -230,24 +231,26 @@ export default function InkCanvas({
     const finished = drawing.current
     drawing.current = null
     if (finished.points.length > 0) {
-      // 버퍼에 즉시 합성해 깜빡임 없이 확정한 뒤 저장
-      const bctx = bctxRef.current
+      // 확정: 아래 캔버스에 즉시 그리고 위 캔버스를 비운 뒤 영구 저장
+      const bctx = baseCtxRef.current
       if (bctx) {
         const { dpr } = dimRef.current
         bctx.setTransform(dpr, 0, 0, dpr, 0, 0)
         fillStroke(bctx, finished)
       }
-      redraw()
+      renderLive() // drawing.current가 null이라 위 캔버스가 비워짐
       propRef.current.onChange([...strokesRef.current, finished])
+    } else {
+      renderLive()
     }
   }
 
   return (
-    <div ref={wrapRef} className="w-full">
+    <div ref={wrapRef} className="relative w-full" style={{ height }}>
+      <canvas ref={baseRef} className="absolute inset-0 rounded-xl bg-white" />
       <canvas
-        ref={canvasRef}
-        className="ink-surface w-full rounded-xl bg-white"
-        style={{ height }}
+        ref={liveRef}
+        className="ink-surface absolute inset-0 rounded-xl"
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
