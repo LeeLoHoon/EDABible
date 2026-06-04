@@ -15,17 +15,15 @@ interface Props {
 }
 
 const FREEHAND_OPTS = {
-  // 낮을수록 속도에 따른 굵기 변화가 적어 빠른 획도 또렷(흐려짐 방지)
   thinning: 0.4,
   smoothing: 0.5,
-  // 낮을수록 선이 펜 끝을 빨리 따라온다(체감 입력 지연 감소)
   streamline: 0.3,
 }
 
 /**
  * perfect-freehand 외곽선을 캔버스에 채워 그린다.
- * - isLast=true: 획이 끝났으니 끝점까지 채워 그림(끝부분 잘림 방지). 그리는 중엔 false.
- * - 점/아주 짧은 획은 외곽선이 비므로 점(원)으로 찍어 표시(한글 짧은 획·점 인식).
+ * - isLast=true: 끝점까지 채워 그림(끝 잘림 방지). 그리는 중엔 false.
+ * - 점/아주 짧은 획은 점(원)으로 표시.
  */
 function fillStroke(ctx: CanvasRenderingContext2D, stroke: Stroke, isLast = true) {
   const outline = getStroke(stroke.points, {
@@ -62,12 +60,8 @@ function distToStroke(stroke: Stroke, x: number, y: number): number {
 }
 
 /**
- * 웹에서 가능한 최저지연 손글씨 캔버스.
- * - 2겹 캔버스: 아래(base)는 확정된 획, 위(live, 저지연)는 '지금 긋는 획'만.
- *   필기 중엔 위 캔버스에 현재 한 획만 다시 그리므로 매 입력 비용이 최소다.
- * - coalesced 이벤트로 펜의 고주파 입력을 빠짐없이 수집해 선이 자연스럽다.
- * - 좌표 변환용 rect는 획 시작 시 1회만 측정.
- * - 손가락/손바닥 터치는 거부(펜·마우스 전용), 지우개는 닿은 획을 통째로 지운다.
+ * 손글씨 캔버스 (2겹: base=확정 획, live=진행 중·저지연).
+ * ※ 현재 디버그 HUD가 켜져 있음 — 펜 입력 추적용(좌상단 표시).
  */
 export default function InkCanvas({
   strokes,
@@ -78,17 +72,43 @@ export default function InkCanvas({
   height = 240,
 }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null)
-  const baseRef = useRef<HTMLCanvasElement>(null) // 확정된 획
-  const liveRef = useRef<HTMLCanvasElement>(null) // 진행 중인 획(저지연)
+  const baseRef = useRef<HTMLCanvasElement>(null)
+  const liveRef = useRef<HTMLCanvasElement>(null)
   const baseCtxRef = useRef<CanvasRenderingContext2D | null>(null)
   const liveCtxRef = useRef<CanvasRenderingContext2D | null>(null)
   const rectRef = useRef<DOMRect | null>(null)
   const dimRef = useRef({ w: 0, h: height, dpr: 1 })
   const drawing = useRef<Stroke | null>(null)
-  // 현재 그리는 중인 포인터 ID (손바닥 멀티터치 차단용 — 하나만 허용)
   const activePointer = useRef<number | null>(null)
   const strokesRef = useRef(strokes)
   const propRef = useRef({ color, size, tool, onChange })
+
+  // --- 디버그 계측(펜 입력 추적) ---
+  const dbgRef = useRef({
+    dn: 0, // pen/mouse 다운
+    tch: 0, // touch(손가락/손바닥) 다운 — 거부됨
+    mv: 0, // 반영된 이동
+    rej: 0, // 무시된 이동(활성 포인터 불일치)
+    up: 0,
+    cx: 0, // pointercancel
+    lost: 0, // lostpointercapture
+    got: 0, // gotpointercapture
+    lt: '', // 마지막 다운 포인터 종류
+  })
+  const hudRef = useRef<HTMLDivElement>(null)
+  const hudRafRef = useRef<number | null>(null)
+  const scheduleHud = useCallback(() => {
+    if (hudRafRef.current != null) return
+    hudRafRef.current = requestAnimationFrame(() => {
+      hudRafRef.current = null
+      const d = dbgRef.current
+      const el = hudRef.current
+      if (el)
+        el.textContent =
+          `dn${d.dn} tch${d.tch} mv${d.mv} rej${d.rej} up${d.up} cx${d.cx} lost${d.lost} got${d.got}\n` +
+          `last:${d.lt} act:${activePointer.current} pts:${drawing.current?.points.length ?? 0} str:${strokesRef.current.length}`
+    })
+  }, [])
 
   useEffect(() => {
     strokesRef.current = strokes
@@ -98,7 +118,6 @@ export default function InkCanvas({
     propRef.current = { color, size, tool, onChange }
   }, [color, size, tool, onChange])
 
-  // 확정된 모든 획을 아래 캔버스에 렌더 (strokes가 바뀔 때만)
   const renderBase = useCallback(() => {
     const ctx = baseCtxRef.current
     if (!ctx) return
@@ -108,7 +127,6 @@ export default function InkCanvas({
     for (const s of strokesRef.current) fillStroke(ctx, s)
   }, [])
 
-  // 진행 중인 획만 위 캔버스에 렌더 (매 입력마다 — 가장 가벼움)
   const renderLive = useCallback(() => {
     const ctx = liveCtxRef.current
     if (!ctx) return
@@ -137,7 +155,6 @@ export default function InkCanvas({
       c.style.height = `${h}px`
     }
     baseCtxRef.current = base.getContext('2d')
-    // 위 캔버스는 저지연 합성
     liveCtxRef.current = live.getContext('2d', { desynchronized: true })
     renderBase()
     renderLive()
@@ -150,8 +167,7 @@ export default function InkCanvas({
     return () => ro.disconnect()
   }, [resize])
 
-  // iOS: 필기 중 손바닥/손가락이 캔버스에 닿으면 롱프레스로 인식돼
-  // 선택·콜아웃 메뉴("링크 만들기" 등)가 뜬다. 터치 기본 동작을 막아 차단.
+  // iOS: 손바닥/손가락 터치의 기본 동작(선택·콜아웃) 차단
   useEffect(() => {
     const canvas = liveRef.current
     if (!canvas) return
@@ -174,7 +190,26 @@ export default function InkCanvas({
     }
   }, [])
 
-  // strokes가 외부에서 바뀌면(취소·전체지우기·로드) 아래 캔버스 갱신
+  // 디버그: 포인터 캡처 상실/획득 추적
+  useEffect(() => {
+    const c = liveRef.current
+    if (!c) return
+    const onLost = () => {
+      dbgRef.current.lost++
+      scheduleHud()
+    }
+    const onGot = () => {
+      dbgRef.current.got++
+      scheduleHud()
+    }
+    c.addEventListener('lostpointercapture', onLost)
+    c.addEventListener('gotpointercapture', onGot)
+    return () => {
+      c.removeEventListener('lostpointercapture', onLost)
+      c.removeEventListener('gotpointercapture', onGot)
+    }
+  }, [scheduleHud])
+
   useEffect(() => {
     renderBase()
   }, [strokes, renderBase])
@@ -194,19 +229,22 @@ export default function InkCanvas({
     const threshold = Math.max(size, 12)
     const kept = strokesRef.current.filter((s) => distToStroke(s, x, y) > threshold)
     if (kept.length !== strokesRef.current.length) {
-      strokesRef.current = kept // 연속 지우기에도 직전 결과가 즉시 반영되도록 동기 갱신
+      strokesRef.current = kept
       onChange(kept)
     }
   }
 
   const onPointerDown = (e: React.PointerEvent) => {
     const { tool, color, size } = propRef.current
-    // 손글씨는 펜(과 마우스)으로만 — 손가락/손바닥 터치는 항상 거부
-    if (e.pointerType === 'touch') return
+    dbgRef.current.lt = e.pointerType
+    if (e.pointerType === 'touch') {
+      dbgRef.current.tch++
+      scheduleHud()
+      return
+    }
+    dbgRef.current.dn++
 
     e.preventDefault()
-    // 이전 포인터의 up/cancel을 놓쳐 상태가 남아 있어도, 새 펜 다운이면 항상 새로 시작한다.
-    // (한 번 안 써지면 계속 안 써지던 '포인터 잠금 고착' 방지) — 남은 미완 획은 정리.
     if (drawing.current) {
       drawing.current = null
       renderLive()
@@ -220,20 +258,25 @@ export default function InkCanvas({
     }
     activePointer.current = e.pointerId
     liveRef.current?.setPointerCapture(e.pointerId)
-    // 획 동안 캔버스 위치는 고정 — 시작 시 1회만 측정
     rectRef.current = liveRef.current!.getBoundingClientRect()
     const [x, y, p] = getPoint(e.clientX, e.clientY, e.pressure)
 
     if (tool === 'eraser') {
       erase(x, y)
+      scheduleHud()
       return
     }
     drawing.current = { points: [[x, y, p]], color, size }
     renderLive()
+    scheduleHud()
   }
 
   const onPointerMove = (e: React.PointerEvent) => {
-    if (activePointer.current !== e.pointerId) return
+    if (activePointer.current !== e.pointerId) {
+      dbgRef.current.rej++
+      scheduleHud()
+      return
+    }
     const { tool } = propRef.current
 
     if (tool === 'eraser') {
@@ -243,7 +286,6 @@ export default function InkCanvas({
     }
     if (!drawing.current) return
 
-    // 펜은 한 프레임에 여러 입력이 합쳐 들어온다(coalesced). 모두 반영해야 선이 매끄럽다.
     const native = e.nativeEvent
     const batch =
       typeof native.getCoalescedEvents === 'function' && native.getCoalescedEvents().length
@@ -252,10 +294,12 @@ export default function InkCanvas({
     for (const ev of batch) {
       drawing.current.points.push(getPoint(ev.clientX, ev.clientY, ev.pressure))
     }
+    dbgRef.current.mv++
     renderLive()
+    scheduleHud()
   }
 
-  const onPointerUp = (e: React.PointerEvent) => {
+  const finishStroke = (e: React.PointerEvent) => {
     if (activePointer.current !== e.pointerId) return
     activePointer.current = null
     if (propRef.current.tool === 'eraser') return
@@ -263,21 +307,31 @@ export default function InkCanvas({
     const finished = drawing.current
     drawing.current = null
     if (finished.points.length > 0) {
-      // 확정: 아래 캔버스에 즉시 그리고 위 캔버스를 비운 뒤 영구 저장
       const bctx = baseCtxRef.current
       if (bctx) {
         const { dpr } = dimRef.current
         bctx.setTransform(dpr, 0, 0, dpr, 0, 0)
         fillStroke(bctx, finished)
       }
-      renderLive() // drawing.current가 null이라 위 캔버스가 비워짐
-      // 다음 획이 리렌더 전에 곧바로 들어와도 직전 획이 누락되지 않도록 동기 반영
+      renderLive()
       const next = [...strokesRef.current, finished]
       strokesRef.current = next
       propRef.current.onChange(next)
     } else {
       renderLive()
     }
+  }
+
+  const onPointerUp = (e: React.PointerEvent) => {
+    dbgRef.current.up++
+    scheduleHud()
+    finishStroke(e)
+  }
+
+  const onPointerCancel = (e: React.PointerEvent) => {
+    dbgRef.current.cx++
+    scheduleHud()
+    finishStroke(e)
   }
 
   return (
@@ -289,8 +343,14 @@ export default function InkCanvas({
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
-        onPointerCancel={onPointerUp}
+        onPointerCancel={onPointerCancel}
       />
+      <div
+        ref={hudRef}
+        className="pointer-events-none absolute left-1 top-1 z-10 whitespace-pre rounded bg-black/55 px-1.5 py-1 font-mono text-[10px] leading-tight text-lime-300"
+      >
+        펜 계측 대기…
+      </div>
     </div>
   )
 }
