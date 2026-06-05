@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useEntry } from '../hooks/useEntry'
 import FieldEditor from '../components/FieldEditor'
+import GuideButton from '../components/GuideButton'
 import EntryShareCard, { type ShareSections } from '../components/EntryShareCard'
 import TranscribeSection from '../sections/TranscribeSection'
 import QuestionsSection from '../sections/QuestionsSection'
@@ -98,6 +99,7 @@ export default function EntryPage() {
           )}
         </h1>
         <div className="relative flex items-center gap-2">
+          <GuideButton />
           <span className="rounded-md bg-rose-chip/60 px-1.5 py-0.5 font-mono text-[11px] font-medium text-rose-key">
             v{__BUILD__}
           </span>
