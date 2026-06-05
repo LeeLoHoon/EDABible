@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import GuideButton from '../components/GuideButton'
-import { listEntries, putEntry, deleteEntry } from '../db'
+import { listEntries, putEntry, deleteEntry, clearAllEntries } from '../db'
 import { createEntry, emptyTemptationVictory, isFieldEmpty, type Entry } from '../types'
 
 function formatDate(date: string): string {
@@ -57,6 +57,17 @@ export default function HomePage() {
     setEntries((prev) => prev.filter((x) => x.id !== id))
   }
 
+  const removeAll = async () => {
+    if (
+      !confirm(
+        `모든 묵상 ${entries.length}편을 삭제할까요?\n되돌릴 수 없으며, 필사·기도·기록이 모두 사라집니다.`,
+      )
+    )
+      return
+    await clearAllEntries()
+    setEntries([])
+  }
+
   return (
     <div className="relative mx-auto max-w-2xl">
       <GuideButton className="absolute right-4 top-4 z-10" />
@@ -101,6 +112,15 @@ export default function HomePage() {
             <span className="text-sm text-rose-key">총 {entries.length}편</span>
           )}
           <span className="h-px flex-1 bg-rose-line" />
+          {!loading && entries.length > 0 && (
+            <button
+              type="button"
+              onClick={removeAll}
+              className="shrink-0 rounded-lg px-2 py-1 text-xs font-medium text-zinc-400 hover:bg-rose-chip hover:text-rose-accent"
+            >
+              전체 삭제
+            </button>
+          )}
         </header>
 
         {loading ? (

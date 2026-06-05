@@ -28,6 +28,11 @@ export async function deleteEntry(id: string): Promise<void> {
   await db.entries.delete(id)
 }
 
+/** 모든 묵상 삭제 */
+export async function clearAllEntries(): Promise<void> {
+  await db.entries.clear()
+}
+
 /** 최신순 전체 목록 */
 export async function listEntries(): Promise<Entry[]> {
   return db.entries.orderBy('updatedAt').reverse().toArray()
