@@ -100,9 +100,6 @@ export default function EntryPage() {
         </h1>
         <div className="relative flex shrink-0 items-center gap-2">
           <GuideButton />
-          <span className="hidden rounded-md bg-rose-chip/60 px-1.5 py-0.5 font-mono text-[11px] font-medium text-rose-key sm:inline">
-            v{__BUILD__}
-          </span>
           <button
             type="button"
             onClick={() => setShareOpen((v) => !v)}

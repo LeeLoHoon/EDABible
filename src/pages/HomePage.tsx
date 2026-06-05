@@ -143,6 +143,11 @@ export default function HomePage() {
           })}
         </ul>
         )}
+
+        <footer className="mt-10 text-center text-[11px] leading-relaxed text-rose-key/60">
+          <p>© {new Date().getFullYear()} EDABible</p>
+          <p className="mt-0.5 font-mono">v{__BUILD__}</p>
+        </footer>
       </div>
 
       {/* 새 묵상 시작 (플로팅) */}
