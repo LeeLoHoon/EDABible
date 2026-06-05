@@ -42,16 +42,11 @@ function GuideModal({ onClose }: { onClose: () => void }) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
-      // 상/하 안전영역(노치·홈바·툴바) 여백 — 헤더(X)가 화면 밖으로 밀리지 않게
-      style={{
-        paddingTop: 'max(1.25rem, env(safe-area-inset-top))',
-        paddingBottom: 'max(1.25rem, env(safe-area-inset-bottom))',
-      }}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
       onClick={onClose}
     >
       <div
-        className="flex max-h-full w-full max-w-md flex-col overflow-hidden rounded-3xl bg-rose-card shadow-2xl"
+        className="flex max-h-[85vh] w-full max-w-md flex-col overflow-hidden rounded-3xl bg-rose-card shadow-2xl"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
@@ -74,7 +69,7 @@ function GuideModal({ onClose }: { onClose: () => void }) {
         </div>
 
         {/* 내용 (스크롤) */}
-        <div className="min-h-0 space-y-3.5 overflow-y-auto px-5 py-4">
+        <div className="min-h-0 flex-1 space-y-3.5 overflow-y-auto overscroll-contain px-5 py-4">
           <p className="rounded-xl bg-rose-chip/50 px-3.5 py-2.5 text-[13px] leading-relaxed text-rose-ink">
             매일 성경 본문을 <b>읽고 · 필사하고 · 묵상</b>하는 노트예요. 작성한 내용은 자동으로
             저장됩니다.
