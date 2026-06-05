@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import GuideButton from '../components/GuideButton'
 import { listEntries, putEntry, deleteEntry, clearAllEntries } from '../db'
@@ -36,6 +36,7 @@ export default function HomePage() {
   const navigate = useNavigate()
   const [entries, setEntries] = useState<Entry[]>([])
   const [loading, setLoading] = useState(true)
+  const recordsRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     listEntries().then((e) => {
@@ -98,14 +99,18 @@ export default function HomePage() {
           <footer className="mt-2.5 text-sm text-rose-key">— 시편 119:105</footer>
         </blockquote>
 
-        <div className="absolute inset-x-0 bottom-7 flex flex-col items-center gap-1 text-rose-key/70">
-          <span className="font-serif text-xs tracking-[0.25em]">펼쳐보기</span>
+        <button
+          type="button"
+          onClick={() => recordsRef.current?.scrollIntoView({ behavior: 'smooth' })}
+          className="absolute inset-x-0 bottom-7 mx-auto flex flex-col items-center gap-1 text-rose-key/70 transition active:scale-95"
+        >
+          <span className="font-serif text-xs tracking-[0.25em]">묵상 기록 보기</span>
           <span className="animate-bounce text-base leading-none">⌄</span>
-        </div>
+        </button>
       </section>
 
       {/* 묵상 기록 — 목차 */}
-      <div className="px-4 pb-28 pt-2">
+      <div ref={recordsRef} className="scroll-mt-4 px-4 pb-28 pt-2">
         <header className="mb-5 flex items-center gap-3">
           <h2 className="font-serif text-xl font-bold text-rose-ink">묵상 기록</h2>
           {!loading && entries.length > 0 && (
