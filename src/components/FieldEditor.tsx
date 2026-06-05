@@ -22,7 +22,7 @@ export default function FieldEditor({
 }: Props) {
   const [tool, setTool] = useState<InkTool>('pen')
   const [color, setColor] = useState(PEN_COLORS[0])
-  const [size, setSize] = useState(6)
+  const [size, setSize] = useState(3)
 
   const setStrokes = (strokes: Stroke[]) => onChange({ ...field, strokes })
 
@@ -75,8 +75,8 @@ export default function FieldEditor({
 
             <input
               type="range"
-              min={2}
-              max={16}
+              min={1}
+              max={14}
               value={size}
               onChange={(e) => setSize(Number(e.target.value))}
               className="w-20 accent-rose-accent"

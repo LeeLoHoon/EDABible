@@ -15,7 +15,7 @@ interface Props {
 }
 
 function minWidthFor(size: number) {
-  return Math.max(size * 0.45, 0.5)
+  return Math.max(size * 0.6, 0.3)
 }
 
 /** 내부 Stroke ↔ signature_pad PointGroup 변환 (기존 스키마/공유카드 호환 유지) */
@@ -87,6 +87,8 @@ export default function InkCanvas({
       minWidth: minWidthFor(propRef.current.size),
       maxWidth: propRef.current.size,
       velocityFilterWeight: 0.7,
+      throttle: 0, // 이동마다 즉시 그림(반응 지연 감소)
+      minDistance: 1, // 더 촘촘히 점을 받음(반응·정밀도 향상)
     })
     padRef.current = pad
     pad.fromData(strokesRef.current.map(strokeToGroup))
