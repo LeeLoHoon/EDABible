@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 
 function HelpIcon({ className = 'h-4 w-4' }: { className?: string }) {
   return (
@@ -40,7 +41,8 @@ function GuideModal({ onClose }: { onClose: () => void }) {
     }
   }, [onClose])
 
-  return (
+  // Portal로 body에 직접 렌더 — 헤더의 backdrop-filter 등에 fixed가 갇혀 잘리는 것 방지
+  return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
       onClick={onClose}
@@ -120,7 +122,8 @@ function GuideModal({ onClose }: { onClose: () => void }) {
           </Section>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
 
