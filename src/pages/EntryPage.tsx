@@ -31,7 +31,7 @@ function formatDate(date: string): string {
 export default function EntryPage() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { entry, loading, saveState, update } = useEntry(id)
+  const { entry, loading, update } = useEntry(id)
   const [tab, setTab] = useState<Tab>('transcribe')
   const [shareOpen, setShareOpen] = useState(false)
   const [shareState, setShareState] = useState<'idle' | 'working'>('idle')
@@ -97,24 +97,18 @@ export default function EntryPage() {
             <span className="ml-2 font-medium text-rose-key">· {entry.bibleRef}</span>
           )}
         </h1>
-        <div className="relative flex w-20 items-center justify-end gap-2">
-          <span className="text-right text-xs text-zinc-400">
-            {shareState === 'working'
-              ? '생성 중…'
-              : saveState === 'saving'
-                ? '저장 중…'
-                : saveState === 'saved'
-                  ? '저장됨'
-                  : ''}
-            <span className="ml-1 text-[10px] text-zinc-300">v{__BUILD__}</span>
+        <div className="relative flex items-center gap-2">
+          <span className="rounded-md bg-rose-chip/60 px-1.5 py-0.5 font-mono text-[11px] font-medium text-rose-key">
+            v{__BUILD__}
           </span>
           <button
             type="button"
             onClick={() => setShareOpen((v) => !v)}
             disabled={shareState === 'working'}
-            className="rounded-full bg-rose-chip px-2.5 py-1 text-sm font-medium text-rose-ink disabled:opacity-50"
+            className="flex items-center gap-1.5 rounded-full bg-rose-accent px-3.5 py-1.5 text-sm font-semibold text-white shadow-sm shadow-rose-accent/30 transition active:scale-95 disabled:opacity-60"
           >
-            공유
+            <span aria-hidden>📤</span>
+            {shareState === 'working' ? '생성 중…' : '공유'}
           </button>
           {shareOpen && (
             <div className="absolute right-0 top-9 z-20 w-44 rounded-xl border border-rose-line bg-rose-card p-3 text-sm shadow-lg">
