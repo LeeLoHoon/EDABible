@@ -88,19 +88,19 @@ export default function EntryPage() {
       <header className="sticky top-0 z-10 flex items-center justify-between border-b border-rose-line bg-rose-bg/90 px-4 py-3 backdrop-blur">
         <button
           onClick={() => navigate('/')}
-          className="text-sm text-zinc-500 hover:text-rose-accent"
+          className="shrink-0 text-sm text-zinc-500 hover:text-rose-accent"
         >
           ← 목록
         </button>
-        <h1 className="font-serif text-lg font-bold text-rose-ink">
+        <h1 className="min-w-0 flex-1 truncate px-2 text-center font-serif text-lg font-bold text-rose-ink">
           {formatDate(entry.date)}
           {entry.bibleRef && (
             <span className="ml-2 font-medium text-rose-key">· {entry.bibleRef}</span>
           )}
         </h1>
-        <div className="relative flex items-center gap-2">
+        <div className="relative flex shrink-0 items-center gap-2">
           <GuideButton />
-          <span className="rounded-md bg-rose-chip/60 px-1.5 py-0.5 font-mono text-[11px] font-medium text-rose-key">
+          <span className="hidden rounded-md bg-rose-chip/60 px-1.5 py-0.5 font-mono text-[11px] font-medium text-rose-key sm:inline">
             v{__BUILD__}
           </span>
           <button
