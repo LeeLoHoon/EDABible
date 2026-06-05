@@ -59,7 +59,7 @@ export default function HomePage() {
 
   return (
     <div className="relative mx-auto max-w-2xl">
-      <GuideButton className="absolute right-4 top-4 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-rose-card font-bold text-rose-key shadow-sm active:scale-95" />
+      <GuideButton className="absolute right-4 top-4 z-10" />
       {/* 책 표지 — 첫 페이지 */}
       <section className="relative flex min-h-[86vh] flex-col items-center justify-center px-6 text-center">
         {/* 표지 프레임 (책 테두리) */}

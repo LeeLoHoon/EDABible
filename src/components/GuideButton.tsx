@@ -1,5 +1,17 @@
 import { useEffect, useState, type ReactNode } from 'react'
 
+function HelpIcon({ className = 'h-4 w-4' }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} aria-hidden>
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 5.25h.008v.008H12v-.008Z"
+      />
+    </svg>
+  )
+}
+
 /** 가이드 한 단락 */
 function Section({ icon, title, children }: { icon: string; title: string; children: ReactNode }) {
   return (
@@ -30,19 +42,27 @@ function GuideModal({ onClose }: { onClose: () => void }) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+      // 상/하 안전영역(노치·홈바·툴바) 여백 — 헤더(X)가 화면 밖으로 밀리지 않게
+      style={{
+        paddingTop: 'max(1.25rem, env(safe-area-inset-top))',
+        paddingBottom: 'max(1.25rem, env(safe-area-inset-bottom))',
+      }}
       onClick={onClose}
     >
       <div
-        className="safe-pad flex max-h-[88vh] w-full max-w-md flex-col overflow-hidden rounded-t-3xl bg-rose-card shadow-2xl sm:rounded-3xl"
+        className="flex max-h-full w-full max-w-md flex-col overflow-hidden rounded-3xl bg-rose-card shadow-2xl"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
         aria-label="사용 가이드"
       >
         {/* 헤더 */}
-        <div className="flex items-center justify-between border-b border-rose-line bg-rose-card/95 px-5 py-3.5 backdrop-blur">
-          <h2 className="font-serif text-lg font-extrabold text-rose-ink">사용 가이드</h2>
+        <div className="flex shrink-0 items-center justify-between border-b border-rose-line px-5 py-3.5">
+          <h2 className="flex items-center gap-2 font-serif text-lg font-extrabold text-rose-ink">
+            <HelpIcon className="h-5 w-5 text-rose-accent" />
+            사용 가이드
+          </h2>
           <button
             type="button"
             onClick={onClose}
@@ -53,8 +73,8 @@ function GuideModal({ onClose }: { onClose: () => void }) {
           </button>
         </div>
 
-        {/* 내용 */}
-        <div className="space-y-3.5 overflow-y-auto px-5 py-4">
+        {/* 내용 (스크롤) */}
+        <div className="min-h-0 space-y-3.5 overflow-y-auto px-5 py-4">
           <p className="rounded-xl bg-rose-chip/50 px-3.5 py-2.5 text-[13px] leading-relaxed text-rose-ink">
             매일 성경 본문을 <b>읽고 · 필사하고 · 묵상</b>하는 노트예요. 작성한 내용은 자동으로
             저장됩니다.
@@ -110,9 +130,10 @@ function GuideModal({ onClose }: { onClose: () => void }) {
 }
 
 /**
- * 어디서든 놓을 수 있는 가이드 버튼 + 팝업. className으로 위치/모양 커스텀 가능.
+ * 어디서든 놓을 수 있는 가이드 버튼 + 팝업.
+ * className으로 위치(예: absolute ...)만 덧붙이고, 모양은 공통(아이콘+사용법 pill)으로 유지.
  */
-export default function GuideButton({ className }: { className?: string }) {
+export default function GuideButton({ className = '' }: { className?: string }) {
   const [open, setOpen] = useState(false)
   return (
     <>
@@ -120,12 +141,10 @@ export default function GuideButton({ className }: { className?: string }) {
         type="button"
         aria-label="사용 가이드 열기"
         onClick={() => setOpen(true)}
-        className={
-          className ??
-          'flex h-8 w-8 items-center justify-center rounded-full bg-rose-chip font-bold text-rose-ink shadow-sm active:scale-95'
-        }
+        className={`flex items-center gap-1 rounded-full bg-rose-chip/80 px-2.5 py-1 text-[13px] font-semibold text-rose-key shadow-sm transition active:scale-95 ${className}`}
       >
-        ?
+        <HelpIcon />
+        사용법
       </button>
       {open && <GuideModal onClose={() => setOpen(false)} />}
     </>
