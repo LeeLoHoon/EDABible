@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import type { Field, Stroke } from '../types'
 import InkCanvas, { type InkTool } from './InkCanvas'
 
@@ -23,8 +23,21 @@ export default function FieldEditor({
   const [tool, setTool] = useState<InkTool>('pen')
   const [color, setColor] = useState(PEN_COLORS[0])
   const [size, setSize] = useState(3)
+  // 사용자가 '공간 늘리기'로 추가한 높이(px)
+  const [extra, setExtra] = useState(0)
 
   const setStrokes = (strokes: Stroke[]) => onChange({ ...field, strokes })
+
+  // 기존 필기가 잘리지 않도록 내용의 최하단을 계산 → 캔버스 높이 자동 확보
+  const contentBottom = useMemo(() => {
+    let maxY = 0
+    for (const s of field.strokes) {
+      for (const [, y] of s.points) if (y + s.size > maxY) maxY = y + s.size
+    }
+    return maxY
+  }, [field.strokes])
+
+  const canvasHeight = Math.max(inkHeight, Math.ceil(contentBottom) + 80, inkHeight + extra)
 
   return (
     <div className="rounded-2xl border border-rose-line bg-rose-card p-2 shadow-sm">
@@ -107,8 +120,17 @@ export default function FieldEditor({
             color={color}
             size={size}
             tool={tool}
-            height={inkHeight}
+            height={canvasHeight}
           />
+
+          {/* 칸이 부족할 때 아래로 공간을 더 확보 */}
+          <button
+            type="button"
+            onClick={() => setExtra((e) => e + 240)}
+            className="mt-2 w-full rounded-xl border border-dashed border-rose-line py-2.5 text-sm font-medium text-rose-key active:bg-rose-chip/50"
+          >
+            + 공간 늘리기
+          </button>
         </div>
       )}
     </div>

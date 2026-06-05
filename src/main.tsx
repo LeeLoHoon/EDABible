@@ -19,15 +19,19 @@ const isEditable = (el: EventTarget | null): boolean =>
   el instanceof HTMLElement &&
   (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)
 
+// 대상이 입력칸이거나, 입력칸이 포커스된 상태면 차단하지 않는다
+// (입력칸 포커스 중 selectstart를 막으면 iOS에서 키보드/편집이 깨짐)
+const allowSelect = (e: Event) => isEditable(e.target) || isEditable(document.activeElement)
+
 document.addEventListener(
   'selectstart',
   (e) => {
-    if (!isEditable(e.target)) e.preventDefault()
+    if (!allowSelect(e)) e.preventDefault()
   },
   { passive: false },
 )
 document.addEventListener('contextmenu', (e) => {
-  if (!isEditable(e.target)) e.preventDefault()
+  if (!allowSelect(e)) e.preventDefault()
 })
 
 createRoot(document.getElementById('root')!).render(

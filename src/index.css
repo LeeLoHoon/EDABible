@@ -27,25 +27,19 @@ body {
   -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;
   overscroll-behavior: none;
-}
-
-/* 롱프레스/펜슬로 인한 텍스트 선택·콜아웃("링크 만들기" 등) 전역 차단.
-   body 상속만으로는 중간 요소가 user-select를 풀면 깨지므로 모든 요소에 강제. */
-*,
-*::before,
-*::after {
+  /* 롱프레스/펜슬 텍스트 선택·콜아웃 차단(상속). 입력칸은 아래에서 예외 처리.
+     ※ 모든 요소(*) 강제는 iOS에서 입력칸 키보드를 막는 버그가 있어 body 상속만 사용. */
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
 }
 
-/* 입력칸은 편집·선택·붙여넣기는 가능하게 두되,
-   롱프레스 콜아웃("링크 만들기" 등)은 끈다 (펜 필기 중 방해 방지) */
+/* 입력칸은 편집·선택·붙여넣기·키보드가 정상 동작하도록 예외 */
 input,
 textarea {
   user-select: text;
   -webkit-user-select: text;
-  -webkit-touch-callout: none;
+  -webkit-touch-callout: default;
 }
 
 /* 손글씨 캔버스: 펜 입력 중 스크롤/제스처/선택/콜아웃 방지 */
