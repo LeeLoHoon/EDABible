@@ -8,14 +8,23 @@ import {
   type BookDoc,
 } from '../bible'
 
+export interface PassageInfo {
+  book: string
+  chapter: number
+  text: string
+  loading: boolean
+}
+
 interface Props {
   /** 현재 bibleRef (예: '창세기 3장') */
   value: string
   /** 책·장 선택 시 bibleRef 갱신 */
   onChange: (ref: string) => void
+  /** 현재 본문(책·장·텍스트·로딩) 변화를 상위로 보고 — 없으면 null */
+  onPassage?: (info: PassageInfo | null) => void
 }
 
-export default function BiblePicker({ value, onChange }: Props) {
+export default function BiblePicker({ value, onChange, onPassage }: Props) {
   const [index, setIndex] = useState<BookMeta[]>([])
   const [order, setOrder] = useState<number | ''>('')
   const [doc, setDoc] = useState<BookDoc | null>(null)
@@ -109,6 +118,23 @@ export default function BiblePicker({ value, onChange }: Props) {
   // 로딩 상태는 파생: 책은 골랐지만 해당 본문이 아직 안 옴
   const loading = !!meta && !activeDoc && !error
 
+  // 본문 데이터를 상위(TranscribeSection)로 보고 → 거기서 sticky 카드로 표시
+  useEffect(() => {
+    if (!onPassage) return
+    if (!meta || error || (!loading && !passage)) {
+      onPassage(null)
+      return
+    }
+    onPassage({
+      book: activeDoc?.book ?? meta.book,
+      chapter: typeof chapter === 'number' ? chapter : 0,
+      text: passage,
+      loading,
+    })
+    // onPassage는 안정적인 setter 가정
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [meta, activeDoc, chapter, passage, loading, error])
+
   return (
     <div className="rounded-2xl bg-rose-chip px-4 py-3">
       <label className="mb-2 block text-sm font-semibold text-rose-ink">
@@ -146,37 +172,8 @@ export default function BiblePicker({ value, onChange }: Props) {
 
       {error && <p className="mt-2 text-sm text-red-500">{error}</p>}
 
-      {/* 선택한 본문 표시 (읽으며 필사) — 로딩 중엔 스켈레톤, 완료되면 페이드 인 */}
-      {meta && !error && (loading || passage) && (
-        <div className="mt-3 rounded-xl border border-rose-line bg-rose-card px-4 py-3.5">
-          {loading ? (
-            <div className="animate-pulse space-y-2.5 py-0.5" aria-label="본문 불러오는 중">
-              <div className="mb-3 h-4 w-20 rounded bg-rose-line/70" />
-              <div className="h-3 w-full rounded bg-rose-line/50" />
-              <div className="h-3 w-[94%] rounded bg-rose-line/50" />
-              <div className="h-3 w-[98%] rounded bg-rose-line/50" />
-              <div className="h-3 w-[88%] rounded bg-rose-line/50" />
-              <div className="h-3 w-[72%] rounded bg-rose-line/50" />
-            </div>
-          ) : (
-            <div
-              key={`${activeDoc?.book}-${chapter}`}
-              className="max-h-72 overflow-y-auto"
-              style={{ animation: 'fadeIn 0.35s ease' }}
-            >
-              <p className="mb-1.5 font-serif text-sm font-bold tracking-wide text-rose-accent">
-                {activeDoc?.book} {chapter}장
-              </p>
-              <p className="whitespace-pre-wrap font-serif text-[16px] leading-[1.85] text-zinc-700">
-                {passage}
-              </p>
-            </div>
-          )}
-        </div>
-      )}
-
       <p className="mt-2 text-xs text-rose-key/70">
-        📖 메시지 성경 본문입니다. 위 본문을 읽고 아래에 필사하세요.
+        📖 메시지 성경 본문입니다. 아래 고정된 본문을 읽고 필사하세요.
       </p>
     </div>
   )
