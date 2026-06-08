@@ -65,7 +65,7 @@ export default function TranscribeSection({ entry, update, FieldEditor }: Props)
                 }
                 style={{ animation: 'fadeIn 0.3s ease' }}
               >
-                <p className="whitespace-pre-wrap font-serif text-[15px] leading-[1.7] text-zinc-700">
+                <p className="selectable-text whitespace-pre-wrap font-serif text-[15px] leading-[1.7] text-zinc-700">
                   {passage!.text}
                 </p>
                 {/* 접힘 상태일 때 아래쪽 페이드로 '더 있음' 암시 */}

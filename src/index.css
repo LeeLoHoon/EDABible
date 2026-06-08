@@ -42,6 +42,14 @@ textarea {
   -webkit-touch-callout: default;
 }
 
+/* 성경 본문 등 읽기 전용 텍스트는 드래그 선택·복사 허용 */
+.selectable-text {
+  user-select: text;
+  -webkit-user-select: text;
+  -webkit-touch-callout: default;
+  cursor: text;
+}
+
 /* 손글씨 캔버스: 펜 입력 중 스크롤/제스처/선택/콜아웃 방지 */
 .ink-surface {
   touch-action: none;
