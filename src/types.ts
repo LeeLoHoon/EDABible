@@ -25,6 +25,8 @@ export interface Entry {
   answers: Field[] // 5가지 질문 답변 (길이 5) — 세트끼리 같은 칸을 공유
   spousePrayer: Field // 배우자 기도
   prayerTopics: Field[] // 기도제목 (가변)
+  prayerTopics2?: Field[] // 두 번째 기도 세트 — 기도제목 (옵션, 세트 추가 시에만 존재)
+  spousePrayer2?: Field // 두 번째 기도 세트 — 배우자 기도 (옵션)
   temptationVictory: TemptationVictory // 7가지 단계 / 죄로부터 승리
   createdAt: number
   updatedAt: number

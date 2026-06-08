@@ -106,6 +106,25 @@ export default function EntryShareCard({
               ))}
             </div>
             <LabeledField label="배우자 기도" field={entry.spousePrayer} minHeight={120} />
+
+            {entry.prayerTopics2 && (
+              <div className="break-inside-avoid space-y-3 border-t border-rose-line pt-4">
+                <p className="text-[15px] font-bold text-rose-key">기도 세트 2</p>
+                <div className="grid grid-cols-2 gap-4">
+                  {entry.prayerTopics2.map((topic, index) => (
+                    <LabeledField
+                      key={index}
+                      label={`기도제목 ${index + 1}`}
+                      field={topic}
+                      minHeight={96}
+                    />
+                  ))}
+                </div>
+                {entry.spousePrayer2 && (
+                  <LabeledField label="배우자 기도" field={entry.spousePrayer2} minHeight={120} />
+                )}
+              </div>
+            )}
           </Section>
         )}
 

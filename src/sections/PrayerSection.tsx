@@ -1,4 +1,4 @@
-import { emptyField, type Entry, type Field, type FieldMode } from '../types'
+import { emptyField, isFieldEmpty, type Entry, type Field, type FieldMode } from '../types'
 import ModeToggle from '../components/ModeToggle'
 
 interface Props {
@@ -7,39 +7,44 @@ interface Props {
   FieldEditor: typeof import('../components/FieldEditor').default
 }
 
-export default function PrayerSection({ entry, update, FieldEditor }: Props) {
-  const setSpouse = (spousePrayer: Field) => update({ spousePrayer })
-
-  const setTopic = (i: number, value: Field) =>
-    update((e) => {
-      const prayerTopics = e.prayerTopics.slice()
-      prayerTopics[i] = value
-      return { ...e, prayerTopics }
-    })
-
-  const mode = entry.spousePrayer.mode
-  const setMode = (m: FieldMode) =>
-    update((e) => ({
-      ...e,
-      spousePrayer: { ...e.spousePrayer, mode: m },
-      prayerTopics: e.prayerTopics.map((t) => ({ ...t, mode: m })),
-    }))
-
-  const addTopic = () =>
-    update((e) => ({ ...e, prayerTopics: [...e.prayerTopics, { ...emptyField(), mode }] }))
-
-  const removeTopic = (i: number) =>
-    update((e) => ({
-      ...e,
-      prayerTopics: e.prayerTopics.filter((_, idx) => idx !== i),
-    }))
-
+/** 기도제목 묶음 + 배우자 기도로 이루어진 한 세트 */
+function PrayerSet({
+  label,
+  topics,
+  spouse,
+  onTopicChange,
+  onAddTopic,
+  onRemoveTopic,
+  onSpouseChange,
+  onRemoveSet,
+  FieldEditor,
+}: {
+  label?: string
+  topics: Field[]
+  spouse: Field
+  onTopicChange: (i: number, value: Field) => void
+  onAddTopic: () => void
+  onRemoveTopic: (i: number) => void
+  onSpouseChange: (value: Field) => void
+  onRemoveSet?: () => void
+  FieldEditor: typeof import('../components/FieldEditor').default
+}) {
   return (
     <div className="space-y-6">
-      {/* 입력 방식 토글 (배우자 기도 + 기도제목 전체에 적용) */}
-      <div className="flex items-center justify-end">
-        <ModeToggle mode={mode} onChange={setMode} />
-      </div>
+      {label && (
+        <div className="flex items-center justify-between border-t border-rose-line pt-6">
+          <span className="text-sm font-bold text-rose-key">{label}</span>
+          {onRemoveSet && (
+            <button
+              type="button"
+              onClick={onRemoveSet}
+              className="text-sm text-zinc-400 hover:text-rose-accent"
+            >
+              세트 삭제
+            </button>
+          )}
+        </div>
+      )}
 
       {/* 기도제목 */}
       <div>
@@ -47,23 +52,21 @@ export default function PrayerSection({ entry, update, FieldEditor }: Props) {
           <h3 className="font-bold text-rose-ink">기도 제목</h3>
           <button
             type="button"
-            onClick={addTopic}
+            onClick={onAddTopic}
             className="rounded-full bg-rose-accent px-3 py-1 text-sm font-medium text-white"
           >
             + 추가
           </button>
         </div>
         <div className="space-y-4">
-          {entry.prayerTopics.map((t, i) => (
+          {topics.map((t, i) => (
             <div key={i}>
               <div className="mb-1 flex items-center justify-between">
-                <span className="text-sm font-semibold text-rose-key">
-                  기도제목 {i + 1}
-                </span>
-                {entry.prayerTopics.length > 1 && (
+                <span className="text-sm font-semibold text-rose-key">기도제목 {i + 1}</span>
+                {topics.length > 1 && (
                   <button
                     type="button"
-                    onClick={() => removeTopic(i)}
+                    onClick={() => onRemoveTopic(i)}
                     className="text-sm text-zinc-400 hover:text-rose-accent"
                   >
                     삭제
@@ -72,7 +75,7 @@ export default function PrayerSection({ entry, update, FieldEditor }: Props) {
               </div>
               <FieldEditor
                 field={t}
-                onChange={(v) => setTopic(i, v)}
+                onChange={(v) => onTopicChange(i, v)}
                 placeholder="→ 기도제목을 적어보세요."
                 rows={2}
                 inkHeight={140}
@@ -88,13 +91,106 @@ export default function PrayerSection({ entry, update, FieldEditor }: Props) {
           <h3 className="font-bold text-rose-ink">배우자 기도</h3>
         </div>
         <FieldEditor
-          field={entry.spousePrayer}
-          onChange={setSpouse}
+          field={spouse}
+          onChange={onSpouseChange}
           placeholder="배우자(또는 미래의 배우자)를 위한 기도를 적어보세요."
           rows={3}
           inkHeight={160}
         />
       </div>
+    </div>
+  )
+}
+
+export default function PrayerSection({ entry, update, FieldEditor }: Props) {
+  const mode = entry.spousePrayer.mode
+  const setMode = (m: FieldMode) =>
+    update((e) => ({
+      ...e,
+      spousePrayer: { ...e.spousePrayer, mode: m },
+      prayerTopics: e.prayerTopics.map((t) => ({ ...t, mode: m })),
+      spousePrayer2: e.spousePrayer2 ? { ...e.spousePrayer2, mode: m } : e.spousePrayer2,
+      prayerTopics2: e.prayerTopics2 ? e.prayerTopics2.map((t) => ({ ...t, mode: m })) : e.prayerTopics2,
+    }))
+
+  // 세트 1 (기본)
+  const setTopic = (i: number, value: Field) =>
+    update((e) => {
+      const prayerTopics = e.prayerTopics.slice()
+      prayerTopics[i] = value
+      return { ...e, prayerTopics }
+    })
+  const addTopic = () =>
+    update((e) => ({ ...e, prayerTopics: [...e.prayerTopics, { ...emptyField(), mode }] }))
+  const removeTopic = (i: number) =>
+    update((e) => ({ ...e, prayerTopics: e.prayerTopics.filter((_, idx) => idx !== i) }))
+  const setSpouse = (spousePrayer: Field) => update({ spousePrayer })
+
+  // 세트 2 (옵션)
+  const hasSet2 = entry.prayerTopics2 != null
+  const addSet = () =>
+    update((e) => ({
+      ...e,
+      prayerTopics2: [{ ...emptyField(), mode }],
+      spousePrayer2: { ...emptyField(), mode },
+    }))
+  const removeSet = () => {
+    const dirty =
+      (entry.prayerTopics2 ?? []).some((t) => !isFieldEmpty(t)) ||
+      (entry.spousePrayer2 != null && !isFieldEmpty(entry.spousePrayer2))
+    if (dirty && !window.confirm('두 번째 기도 세트를 삭제할까요? 입력한 내용이 사라집니다.')) return
+    update((e) => ({ ...e, prayerTopics2: undefined, spousePrayer2: undefined }))
+  }
+  const setTopic2 = (i: number, value: Field) =>
+    update((e) => {
+      const prayerTopics2 = (e.prayerTopics2 ?? []).slice()
+      prayerTopics2[i] = value
+      return { ...e, prayerTopics2 }
+    })
+  const addTopic2 = () =>
+    update((e) => ({ ...e, prayerTopics2: [...(e.prayerTopics2 ?? []), { ...emptyField(), mode }] }))
+  const removeTopic2 = (i: number) =>
+    update((e) => ({ ...e, prayerTopics2: (e.prayerTopics2 ?? []).filter((_, idx) => idx !== i) }))
+  const setSpouse2 = (spousePrayer2: Field) => update({ spousePrayer2 })
+
+  return (
+    <div className="space-y-6">
+      {/* 입력 방식 토글 (모든 기도 칸에 적용) */}
+      <div className="flex items-center justify-end">
+        <ModeToggle mode={mode} onChange={setMode} />
+      </div>
+
+      <PrayerSet
+        topics={entry.prayerTopics}
+        spouse={entry.spousePrayer}
+        onTopicChange={setTopic}
+        onAddTopic={addTopic}
+        onRemoveTopic={removeTopic}
+        onSpouseChange={setSpouse}
+        FieldEditor={FieldEditor}
+      />
+
+      {hasSet2 ? (
+        <PrayerSet
+          label="기도 세트 2"
+          topics={entry.prayerTopics2!}
+          spouse={entry.spousePrayer2!}
+          onTopicChange={setTopic2}
+          onAddTopic={addTopic2}
+          onRemoveTopic={removeTopic2}
+          onSpouseChange={setSpouse2}
+          onRemoveSet={removeSet}
+          FieldEditor={FieldEditor}
+        />
+      ) : (
+        <button
+          type="button"
+          onClick={addSet}
+          className="w-full rounded-xl border border-dashed border-rose-line py-3 text-sm font-medium text-rose-key transition hover:border-rose-accent hover:text-rose-accent"
+        >
+          + 기도 세트 추가
+        </button>
+      )}
     </div>
   )
 }
