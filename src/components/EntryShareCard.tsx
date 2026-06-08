@@ -1,5 +1,5 @@
 import type React from 'react'
-import { QUESTIONS, emptyTemptationVictory, type Entry, type Field } from '../types'
+import { getQuestionSet, emptyTemptationVictory, type Entry, type Field } from '../types'
 import ReadonlyField from './ReadonlyField'
 
 interface Props {
@@ -112,10 +112,11 @@ export default function EntryShareCard({
         {sections.questions && (
           <Section title="5가지 질문">
             <div className="space-y-4">
-              {QUESTIONS.map((question, index) => (
+              {getQuestionSet(entry.questionSet).questions.map((question, index) => (
                 <LabeledField
-                  key={question}
-                  label={`${index + 1}. ${question}`}
+                  key={index}
+                  label={`${index + 1}. ${question.text}`}
+                  description={question.hint}
                   field={entry.answers[index]}
                   minHeight={112}
                 />

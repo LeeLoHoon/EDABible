@@ -21,7 +21,8 @@ export interface Entry {
   date: string // 'YYYY-MM-DD'
   bibleRef: string // 장절 참조만 (예: '시편 3편') — 본문 텍스트는 저장하지 않음
   transcription: Field // 필사
-  answers: Field[] // 5가지 질문 답변 (길이 5)
+  questionSet?: QuestionSetId // 사용할 5가지 질문 세트 (없으면 기본값)
+  answers: Field[] // 5가지 질문 답변 (길이 5) — 세트끼리 같은 칸을 공유
   spousePrayer: Field // 배우자 기도
   prayerTopics: Field[] // 기도제목 (가변)
   temptationVictory: TemptationVictory // 7가지 단계 / 죄로부터 승리
@@ -39,17 +40,57 @@ export interface TemptationVictory {
   grow: Field
 }
 
-/** 이미지 기준 고정 5가지 질문 (시편 2편 묵상 틀) */
-export const QUESTIONS = [
-  '나는 오늘 어떤 말을 했는가?',
-  '나는 오늘 어떤 시간을 보냈는가?',
-  '나는 오늘 어떤 만남을 가졌는가?',
-  '나는 오늘 어떤 일을 바로 실천했는가?',
-  '나는 오늘 어떤 자기 관리를 했는가?',
-] as const
+/** 질문 한 개 — 문장 + 강조 키워드 + (선택)괄호 부가설명 */
+export interface QuestionItem {
+  text: string
+  keyword: string
+  hint?: string
+}
 
-/** 질문에서 색으로 강조할 키워드 */
-export const QUESTION_KEYWORDS = ['말', '시간', '만남', '일', '자기 관리'] as const
+export type QuestionSetId = 'meditation' | 'review'
+
+export interface QuestionSet {
+  id: QuestionSetId
+  label: string
+  questions: QuestionItem[] // 길이 5 고정
+}
+
+/** 선택 가능한 5가지 질문 세트들 (첫 번째가 기본값) */
+export const QUESTION_SETS: QuestionSet[] = [
+  {
+    id: 'meditation',
+    label: '묵상 5질문',
+    questions: [
+      { text: '나는 오늘 어떤 말을 했는가?', keyword: '말' },
+      { text: '나는 오늘 어떤 시간을 보냈는가?', keyword: '시간' },
+      { text: '나는 오늘 어떤 만남을 가졌는가?', keyword: '만남' },
+      { text: '나는 오늘 어떤 일을 바로 실천했는가?', keyword: '일' },
+      { text: '나는 오늘 어떤 자기 관리를 했는가?', keyword: '자기 관리' },
+    ],
+  },
+  {
+    id: 'review',
+    label: '하루 돌아보기',
+    questions: [
+      { text: '오늘 내가 발견한 것은 무엇입니까?', keyword: '발견한', hint: '깨달은 것' },
+      { text: '오늘 내가 다른 사람에게 나누어 준 것은 무엇입니까?', keyword: '나누어 준' },
+      { text: '오늘 내가 받은 것은 무엇입니까?', keyword: '받은' },
+      {
+        text: '오늘 내가 발전시킨 것은 무엇입니까?',
+        keyword: '발전시킨',
+        hint: '아침 말씀묵상을 삶에 적용/기도응답/열매',
+      },
+      { text: '오늘 내가 용서하거나 놓아주어야 하는 것은 무엇입니까?', keyword: '용서하거나 놓아주어야 하는' },
+    ],
+  },
+]
+
+export const DEFAULT_QUESTION_SET_ID: QuestionSetId = 'meditation'
+
+/** id로 질문 세트 조회 — 없거나 모르는 id면 기본 세트 */
+export function getQuestionSet(id: QuestionSetId | undefined): QuestionSet {
+  return QUESTION_SETS.find((s) => s.id === id) ?? QUESTION_SETS[0]
+}
 
 export function emptyField(): Field {
   return { mode: 'text', text: '', strokes: [] }
@@ -86,7 +127,8 @@ export function createEntry(now: Date): Entry {
     date: todayKey(now),
     bibleRef: '',
     transcription: emptyField(),
-    answers: QUESTIONS.map(() => emptyField()),
+    questionSet: DEFAULT_QUESTION_SET_ID,
+    answers: getQuestionSet(DEFAULT_QUESTION_SET_ID).questions.map(() => emptyField()),
     spousePrayer: emptyField(),
     prayerTopics: [emptyField()],
     temptationVictory: emptyTemptationVictory(),

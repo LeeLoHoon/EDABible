@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { emptyTemptationVictory, type Entry } from '../types'
+import { DEFAULT_QUESTION_SET_ID, emptyTemptationVictory, type Entry } from '../types'
 import { getEntry, putEntry } from '../db'
 
 type SaveState = 'idle' | 'saving' | 'saved'
@@ -71,6 +71,7 @@ function normalizeEntry(entry: Entry): Entry {
 
   return {
     ...entry,
+    questionSet: entry.questionSet ?? DEFAULT_QUESTION_SET_ID,
     temptationVictory,
   }
 }
