@@ -9,7 +9,7 @@ const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 
 
 // https://vite.dev/config/
 export default defineConfig({
-  base: '/EDABible/',
+  base: '/',
   define: {
     __BUILD__: JSON.stringify(pkg.version),
   },
@@ -24,9 +24,9 @@ export default defineConfig({
         short_name: 'EDABible',
         description: '매일 성경 본문을 필사하고 5가지 질문과 기도로 묵상하는 노트',
         lang: 'ko',
-        id: '/EDABible/',
-        start_url: '/EDABible/',
-        scope: '/EDABible/',
+        id: '/',
+        start_url: '/',
+        scope: '/',
         display: 'standalone',
         orientation: 'any',
         background_color: '#f6f1e9',
@@ -42,7 +42,7 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
         runtimeCaching: [
           {
-            urlPattern: /^https:\/\/leelohoon\.github\.io\/EDABible\/bible\/.*\.json$/,
+            urlPattern: /\/bible\/.*\.json$/,
             handler: 'CacheFirst',
             options: {
               cacheName: 'bible-json',
