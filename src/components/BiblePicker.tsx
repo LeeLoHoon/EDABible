@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   loadIndex,
   loadBook,
   makeRef,
-  parseRef,
+  parseRefs,
   type BookMeta,
   type BookDoc,
 } from '../bible'
@@ -11,12 +11,14 @@ import {
 export interface PassageInfo {
   book: string
   chapter: number
+  endChapter: number
+  ref: string
   text: string
   loading: boolean
 }
 
 interface Props {
-  /** 현재 bibleRef (예: '창세기 3장') */
+  /** 현재 bibleRef (예: '잠언 1~2장, 전도서 1~2장') */
   value: string
   /** 책·장 선택 시 bibleRef 갱신 */
   onChange: (ref: string) => void
@@ -24,25 +26,62 @@ interface Props {
   onPassage?: (info: PassageInfo | null) => void
 }
 
+interface Selection {
+  id: string
+  order: number | ''
+  chapter: number | ''
+  endChapter: number | ''
+}
+
+const emptySelection = (): Selection => ({
+  id: crypto.randomUUID(),
+  order: '',
+  chapter: '',
+  endChapter: '',
+})
+
+function chapterText(doc: BookDoc, chapter: number): string {
+  const direct = doc.chapters.find((c) => c.chapter === chapter)?.text
+  if (direct) return direct
+
+  if (doc.book === '창세기' && chapter === 28) {
+    return (
+      doc.chapters.find((c) =>
+        c.text.includes('야곱은 브엘세바를 떠나 하란을 향해 갔다'),
+      )?.text ?? ''
+    )
+  }
+
+  return ''
+}
+
 export default function BiblePicker({ value, onChange, onPassage }: Props) {
   const [index, setIndex] = useState<BookMeta[]>([])
-  const [order, setOrder] = useState<number | ''>('')
-  const [doc, setDoc] = useState<BookDoc | null>(null)
-  const [chapter, setChapter] = useState<number | ''>('')
+  const [selections, setSelections] = useState<Selection[]>([emptySelection()])
+  const [docs, setDocs] = useState<Map<number, BookDoc>>(new Map())
   const [error, setError] = useState<string | null>(null)
   const [inited, setInited] = useState(false)
+  const loadingOrdersRef = useRef<Set<number>>(new Set())
 
-  // 목록 로드 + 기존 bibleRef로 초기 선택
   useEffect(() => {
     let alive = true
     loadIndex()
       .then((idx) => {
         if (!alive) return
         setIndex(idx)
-        const parsed = parseRef(value)
-        if (parsed) {
-          const meta = idx.find((b) => b.book === parsed.book)
-          if (meta) setOrder(meta.order)
+        const parsed = parseRefs(value)
+        if (parsed.length > 0) {
+          setSelections(
+            parsed.map((ref) => {
+              const meta = idx.find((b) => b.book === ref.book)
+              return {
+                id: crypto.randomUUID(),
+                order: meta?.order ?? '',
+                chapter: ref.chapter,
+                endChapter: ref.endChapter,
+              }
+            }),
+          )
         }
         setInited(true)
       })
@@ -54,126 +93,270 @@ export default function BiblePicker({ value, onChange, onPassage }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const meta = useMemo(
-    () => index.find((b) => b.order === order) ?? null,
-    [index, order],
+  const metaByOrder = useMemo(() => new Map(index.map((meta) => [meta.order, meta])), [index])
+
+  const selectedOrders = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          selections
+            .map((selection) => selection.order)
+            .filter((order): order is number => typeof order === 'number'),
+        ),
+      ),
+    [selections],
   )
 
-  const chapterOptions = useMemo(() => {
-    const count = meta?.standardChapters ?? meta?.chapters ?? 0
-    return Array.from({ length: count }, (_, i) => i + 1)
-  }, [meta])
-
-  // 책 선택 → 본문 로드
   useEffect(() => {
-    if (!meta) return
     let alive = true
-    loadBook(meta.file)
-      .then((d) => {
+    const missing = selectedOrders.filter(
+      (order) => !docs.has(order) && !loadingOrdersRef.current.has(order),
+    )
+    if (missing.length === 0) return
+
+    missing.forEach((order) => loadingOrdersRef.current.add(order))
+    Promise.all(
+      missing.map(async (order) => {
+        const meta = metaByOrder.get(order)
+        if (!meta) return null
+        const doc = await loadBook(meta.file)
+        return [order, doc] as const
+      }),
+    )
+      .then((entries) => {
         if (!alive) return
         setError(null)
-        setDoc(d)
-        const parsed = parseRef(value)
-        const wanted =
-          parsed && parsed.book === d.book ? parsed.chapter : undefined
-        const maxChapter = meta.standardChapters ?? meta.chapters
-        const has = wanted && wanted >= 1 && wanted <= maxChapter
-        setChapter(has ? (wanted as number) : 1)
+        setDocs((prev) => {
+          const next = new Map(prev)
+          for (const entry of entries) {
+            if (entry) next.set(entry[0], entry[1])
+          }
+          return next
+        })
       })
       .catch((e) => alive && setError(String(e.message ?? e)))
+      .finally(() => {
+        missing.forEach((order) => loadingOrdersRef.current.delete(order))
+      })
+
     return () => {
       alive = false
     }
-    // meta 변경시에만
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [meta])
+  }, [docs, metaByOrder, selectedOrders])
 
-  // 선택한 책과 실제 로드된 본문이 일치할 때만 사용 (전환 중 옛 데이터 방지)
-  const activeDoc = meta && doc?.order === meta.order ? doc : null
+  const updateSelection = (id: string, patch: Partial<Selection>) => {
+    setSelections((prev) =>
+      prev.map((selection) => {
+        if (selection.id !== id) return selection
+        const next = { ...selection, ...patch }
+        const meta = typeof next.order === 'number' ? metaByOrder.get(next.order) : null
+        const maxChapter = meta ? meta.standardChapters ?? meta.chapters : 0
 
-  // 선택이 바뀌면 bibleRef 갱신 (초기화 완료 후, 사용자 변경분)
+        if (patch.order !== undefined) {
+          next.chapter = next.order === '' ? '' : 1
+          next.endChapter = next.order === '' ? '' : 1
+        }
+
+        if (typeof next.chapter === 'number' && maxChapter > 0) {
+          next.chapter = Math.min(Math.max(next.chapter, 1), maxChapter)
+        }
+
+        if (typeof next.chapter === 'number' && typeof next.endChapter === 'number') {
+          next.endChapter = Math.min(Math.max(next.endChapter, next.chapter), maxChapter)
+        }
+
+        return next
+      }),
+    )
+  }
+
+  const selectedPassages = useMemo(() => {
+    return selections
+      .map((selection) => {
+        if (
+          typeof selection.order !== 'number' ||
+          typeof selection.chapter !== 'number' ||
+          typeof selection.endChapter !== 'number'
+        ) {
+          return null
+        }
+
+        const doc = docs.get(selection.order)
+        const meta = metaByOrder.get(selection.order)
+        const book = doc?.book ?? meta?.book
+        if (!book) return null
+
+        const ref = makeRef(book, selection.chapter, selection.endChapter)
+        const texts: string[] = []
+        if (doc) {
+          for (let current = selection.chapter; current <= selection.endChapter; current += 1) {
+            const text = chapterText(doc, current)
+            if (text) texts.push(text)
+          }
+        }
+
+        return {
+          ref,
+          book,
+          chapter: selection.chapter,
+          endChapter: selection.endChapter,
+          text: texts.join('\n\n'),
+          loading: !doc,
+        }
+      })
+      .filter((passage): passage is NonNullable<typeof passage> => !!passage)
+  }, [docs, metaByOrder, selections])
+
+  const nextValue = useMemo(
+    () => selectedPassages.map((passage) => passage.ref).join(', '),
+    [selectedPassages],
+  )
+
+  const passageText = useMemo(
+    () =>
+      selectedPassages
+        .map((passage) => [selectedPassages.length > 1 ? passage.ref : '', passage.text].filter(Boolean).join('\n'))
+        .filter(Boolean)
+        .join('\n\n'),
+    [selectedPassages],
+  )
+
+  const loading = selectedPassages.some((passage) => passage.loading)
+
   useEffect(() => {
-    if (!inited || !activeDoc || chapter === '') return
-    const ref = makeRef(activeDoc.book, chapter as number)
-    if (ref !== value) onChange(ref)
+    if (!inited || loading || !nextValue) return
+    if (nextValue !== value) onChange(nextValue)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeDoc, chapter])
+  }, [inited, loading, nextValue])
 
-  const passage = useMemo(() => {
-    if (!activeDoc || chapter === '') return ''
-    const direct = activeDoc.chapters.find((c) => c.chapter === chapter)?.text
-    if (direct) return direct
-
-    if (activeDoc.book === '창세기' && chapter === 28) {
-      return (
-        activeDoc.chapters.find((c) =>
-          c.text.includes('야곱은 브엘세바를 떠나 하란을 향해 갔다'),
-        )?.text ?? ''
-      )
-    }
-
-    return ''
-  }, [activeDoc, chapter])
-
-  // 로딩 상태는 파생: 책은 골랐지만 해당 본문이 아직 안 옴
-  const loading = !!meta && !activeDoc && !error
-
-  // 본문 데이터를 상위(TranscribeSection)로 보고 → 거기서 sticky 카드로 표시
   useEffect(() => {
     if (!onPassage) return
-    if (!meta || error || (!loading && !passage)) {
+    if (error || selectedPassages.length === 0 || (!loading && !passageText)) {
       onPassage(null)
       return
     }
+
+    const first = selectedPassages[0]
     onPassage({
-      book: activeDoc?.book ?? meta.book,
-      chapter: typeof chapter === 'number' ? chapter : 0,
-      text: passage,
+      book: first.book,
+      chapter: first.chapter,
+      endChapter: first.endChapter,
+      ref: nextValue,
+      text: passageText,
       loading,
     })
     // onPassage는 안정적인 setter 가정
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [meta, activeDoc, chapter, passage, loading, error])
+  }, [error, loading, nextValue, passageText, selectedPassages])
 
   return (
     <div className="rounded-2xl bg-rose-chip px-4 py-3">
-      <label className="mb-2 block text-sm font-semibold text-rose-ink">
-        오늘의 본문 (성경·장 선택)
-      </label>
-
-      <div className="flex gap-2">
-        <select
-          value={order}
-          onChange={(e) => setOrder(e.target.value ? Number(e.target.value) : '')}
-          className="min-w-0 flex-1 rounded-xl border border-rose-line bg-white px-3 py-2 text-base font-medium text-rose-ink outline-none focus:border-rose-accent"
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <label className="block text-sm font-semibold text-rose-ink">
+          오늘의 본문 (성경·장 선택)
+        </label>
+        <button
+          type="button"
+          onClick={() => setSelections((prev) => [...prev, emptySelection()])}
+          className="shrink-0 rounded-lg bg-white px-2.5 py-1 text-xs font-bold text-rose-accent shadow-sm"
         >
-          <option value="">성경 선택</option>
-          {index.map((b) => (
-            <option key={b.order} value={b.order}>
-              {b.book}
-            </option>
-          ))}
-        </select>
+          + 본문 추가
+        </button>
+      </div>
 
-        <select
-          value={chapter}
-          onChange={(e) => setChapter(e.target.value ? Number(e.target.value) : '')}
-          disabled={!activeDoc}
-          className="w-28 rounded-xl border border-rose-line bg-white px-3 py-2 text-base font-medium text-rose-ink outline-none focus:border-rose-accent disabled:opacity-50"
-        >
-          <option value="">장</option>
-          {chapterOptions.map((n) => (
-            <option key={n} value={n}>
-              {n}장
-            </option>
-          ))}
-        </select>
+      <div className="space-y-2">
+        {selections.map((selection, rowIndex) => {
+          const meta = typeof selection.order === 'number' ? metaByOrder.get(selection.order) : null
+          const count = meta?.standardChapters ?? meta?.chapters ?? 0
+          const chapterOptions = Array.from({ length: count }, (_, i) => i + 1)
+          const activeDoc = typeof selection.order === 'number' ? docs.get(selection.order) : null
+
+          return (
+            <div
+              key={selection.id}
+              className="grid grid-cols-[minmax(0,1fr)_5.75rem_auto_5.75rem_auto] items-center gap-2"
+            >
+              <select
+                value={selection.order}
+                onChange={(e) =>
+                  updateSelection(selection.id, {
+                    order: e.target.value ? Number(e.target.value) : '',
+                  })
+                }
+                className="min-w-0 rounded-xl border border-rose-line bg-white px-3 py-2 text-base font-medium text-rose-ink outline-none focus:border-rose-accent"
+                aria-label={`본문 ${rowIndex + 1} 성경`}
+              >
+                <option value="">성경 선택</option>
+                {index.map((book) => (
+                  <option key={book.order} value={book.order}>
+                    {book.book}
+                  </option>
+                ))}
+              </select>
+
+              <select
+                value={selection.chapter}
+                onChange={(e) =>
+                  updateSelection(selection.id, {
+                    chapter: e.target.value ? Number(e.target.value) : '',
+                  })
+                }
+                disabled={!activeDoc}
+                className="min-w-0 rounded-xl border border-rose-line bg-white px-3 py-2 text-base font-medium text-rose-ink outline-none focus:border-rose-accent disabled:opacity-50"
+                aria-label={`본문 ${rowIndex + 1} 시작 장`}
+              >
+                <option value="">시작</option>
+                {chapterOptions.map((n) => (
+                  <option key={n} value={n}>
+                    {n}장
+                  </option>
+                ))}
+              </select>
+
+              <span className="text-center text-sm font-semibold text-rose-key">~</span>
+
+              <select
+                value={selection.endChapter}
+                onChange={(e) =>
+                  updateSelection(selection.id, {
+                    endChapter: e.target.value ? Number(e.target.value) : '',
+                  })
+                }
+                disabled={!activeDoc || selection.chapter === ''}
+                className="min-w-0 rounded-xl border border-rose-line bg-white px-3 py-2 text-base font-medium text-rose-ink outline-none focus:border-rose-accent disabled:opacity-50"
+                aria-label={`본문 ${rowIndex + 1} 끝 장`}
+              >
+                <option value="">끝</option>
+                {chapterOptions
+                  .filter((n) => selection.chapter === '' || n >= selection.chapter)
+                  .map((n) => (
+                    <option key={n} value={n}>
+                      {n}장
+                    </option>
+                  ))}
+              </select>
+
+              <button
+                type="button"
+                onClick={() =>
+                  setSelections((prev) =>
+                    prev.length === 1 ? [emptySelection()] : prev.filter((item) => item.id !== selection.id),
+                  )
+                }
+                className="flex h-10 w-10 items-center justify-center rounded-full text-xl font-bold text-rose-key transition hover:bg-white hover:text-rose-accent"
+                aria-label={`본문 ${rowIndex + 1} 삭제`}
+              >
+                ×
+              </button>
+            </div>
+          )
+        })}
       </div>
 
       {error && <p className="mt-2 text-sm text-red-500">{error}</p>}
 
       <p className="mt-2 text-xs text-rose-key/70">
-        📖 메시지 성경 본문입니다. 아래 고정된 본문을 읽고 필사하세요.
+        📖 여러 본문을 추가해 함께 읽고 필사할 수 있습니다.
       </p>
     </div>
   )

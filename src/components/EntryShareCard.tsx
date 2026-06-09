@@ -33,7 +33,7 @@ function formatDate(date: string): string {
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="break-inside-avoid space-y-3">
+    <section className="break-inside-avoid space-y-4">
       <h2 className="rounded-xl bg-rose-chip px-4 py-2 text-[18px] font-bold text-rose-ink">
         {title}
       </h2>
@@ -55,7 +55,7 @@ function LabeledField({
 }) {
   return (
     <div className="break-inside-avoid">
-      <p className="mb-1 text-[16px] font-bold text-zinc-700">{label}</p>
+      <p className="mb-2 text-[16px] font-bold text-zinc-700">{label}</p>
       {description && <p className="mb-2 text-[13px] leading-relaxed text-zinc-500">{description}</p>}
       <ReadonlyField field={field} minHeight={minHeight} />
     </div>
@@ -82,11 +82,13 @@ export default function EntryShareCard({
         <p className="font-serif text-[34px] font-extrabold text-rose-ink">EDABible</p>
         <div className="mt-2 flex items-end justify-between gap-6">
           <h1 className="font-serif text-[28px] font-bold text-rose-ink">{formatDate(entry.date)}</h1>
-          <p className="text-[18px] font-semibold text-rose-key">{entry.bibleRef || '본문 미입력'}</p>
+          <p className="shrink-0 whitespace-nowrap text-right text-[18px] font-semibold text-rose-key">
+            {entry.bibleRef || '본문 미입력'}
+          </p>
         </div>
       </header>
 
-      <div className="space-y-8">
+      <div className="space-y-9">
         {sections.transcribe && (
           <Section title="필사">
             <ReadonlyField field={entry.transcription} minHeight={240} />

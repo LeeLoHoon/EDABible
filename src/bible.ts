@@ -21,6 +21,12 @@ export interface BookDoc {
   chapters: Chapter[]
 }
 
+export interface PassageRef {
+  book: string
+  chapter: number
+  endChapter: number
+}
+
 // Vite base('/EDABible/') 기준 — GitHub Pages 서브경로 대응
 const BASE = import.meta.env.BASE_URL
 
@@ -49,15 +55,27 @@ export function loadBook(file: string): Promise<BookDoc> {
   return p
 }
 
-/** 'YYYY' 형태가 아니라 '창세기 3장' 같은 참조 문자열을 만든다. */
-export function makeRef(book: string, chapter: number): string {
+/** '창세기 3장', '잠언 1~2장' 같은 참조 문자열을 만든다. */
+export function makeRef(book: string, chapter: number, endChapter?: number): string {
+  if (endChapter && endChapter !== chapter) {
+    return `${book} ${chapter}~${endChapter}장`
+  }
   return `${book} ${chapter}장`
 }
 
-/** 'creation 3장' 같은 bibleRef에서 책 이름과 장을 best-effort로 파싱. */
-export function parseRef(ref: string): { book: string; chapter: number } | null {
+/** bibleRef 한 조각에서 책 이름과 장 범위를 best-effort로 파싱. */
+export function parseRef(ref: string): PassageRef | null {
   if (!ref) return null
-  const m = ref.match(/^(.+?)\s*(\d+)\s*장?$/)
+  const m = ref.match(/^(.+?)\s*(\d+)(?:\s*[~-]\s*(\d+))?\s*장?$/)
   if (!m) return null
-  return { book: m[1].trim(), chapter: Number(m[2]) }
+  const chapter = Number(m[2])
+  return { book: m[1].trim(), chapter, endChapter: Number(m[3] ?? chapter) }
+}
+
+/** '잠언 1~2장, 전도서 1~2장' 같은 여러 본문 참조를 파싱한다. */
+export function parseRefs(refs: string): PassageRef[] {
+  return refs
+    .split(/[,，、]/)
+    .map((ref) => parseRef(ref.trim()))
+    .filter((ref): ref is PassageRef => !!ref)
 }

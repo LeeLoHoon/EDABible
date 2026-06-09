@@ -40,7 +40,7 @@ export default function TranscribeSection({ entry, update, FieldEditor }: Props)
               className="flex w-full items-center justify-between gap-2 disabled:opacity-100"
             >
               <span className="font-serif text-sm font-bold tracking-wide text-rose-accent">
-                {passage!.book} {passage!.chapter}장
+                {passage!.ref}
               </span>
               {!passage!.loading && (
                 <span className="shrink-0 text-xs font-medium text-rose-key">
