@@ -4,7 +4,7 @@
   "book": "창세기",
   "abbr": "창",
   "file": "01_창.json",
-  "chapters": 49,
+  "chapters": 50,
   "standardChapters": 50
  },
  {
@@ -148,7 +148,7 @@
   "book": "시편",
   "abbr": "시",
   "file": "19_시.json",
-  "chapters": 145,
+  "chapters": 150,
   "standardChapters": 150
  },
  {

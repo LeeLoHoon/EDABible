@@ -43,9 +43,10 @@ export default defineConfig({
         runtimeCaching: [
           {
             urlPattern: /\/bible\/.*\.json$/,
-            handler: 'CacheFirst',
+            handler: 'NetworkFirst',
             options: {
               cacheName: 'bible-json',
+              networkTimeoutSeconds: 5,
               expiration: {
                 maxEntries: 70,
                 maxAgeSeconds: 60 * 60 * 24 * 30,
