@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { Entry, Field, FieldMode } from '../types'
 import ModeToggle from '../components/ModeToggle'
 import BiblePicker, { type PassageInfo } from '../components/BiblePicker'
+import PassageText from '../components/PassageText'
 
 interface Props {
   entry: Entry
@@ -65,9 +66,7 @@ export default function TranscribeSection({ entry, update, FieldEditor }: Props)
                 }
                 style={{ animation: 'fadeIn 0.3s ease' }}
               >
-                <p className="selectable-text whitespace-pre-wrap font-serif text-[15px] leading-[1.7] text-zinc-700">
-                  {passage!.text}
-                </p>
+                <PassageText text={passage!.text} />
                 {/* 접힘 상태일 때 아래쪽 페이드로 '더 있음' 암시 */}
                 {!open && (
                   <div className="pointer-events-none absolute inset-x-0 bottom-0 h-6 bg-gradient-to-t from-rose-card to-transparent" />

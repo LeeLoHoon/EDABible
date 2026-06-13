@@ -51,6 +51,35 @@ textarea {
   cursor: text;
 }
 
+.passage-text {
+  white-space: normal;
+}
+
+.passage-segment {
+  margin: 0.42rem 0 0;
+}
+
+.passage-segment:first-child {
+  margin-top: 0;
+}
+
+.passage-verse {
+  display: inline-flex;
+  min-width: 1.85rem;
+  margin-right: 0.45rem;
+  transform: translateY(-0.08rem);
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--color-rose-accent) 36%, transparent);
+  background: color-mix(in srgb, var(--color-rose-chip) 58%, white);
+  color: var(--color-rose-accent);
+  font-family: var(--font-sans);
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1.35rem;
+  vertical-align: baseline;
+}
+
 /* 손글씨 캔버스: 펜 입력 중 스크롤/제스처/선택/콜아웃 방지 */
 .ink-surface {
   touch-action: none;
