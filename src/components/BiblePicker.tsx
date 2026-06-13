@@ -222,6 +222,7 @@ export default function BiblePicker({ value, onChange, onPassage }: Props) {
   )
 
   const loading = selectedPassages.some((passage) => passage.loading)
+  const rebuilding = inited && index.length === 0 && !error
 
   useEffect(() => {
     if (!inited || loading || !nextValue) return
@@ -258,12 +259,18 @@ export default function BiblePicker({ value, onChange, onPassage }: Props) {
         <button
           type="button"
           onClick={() => setSelections((prev) => [...prev, emptySelection()])}
+          disabled={rebuilding}
           className="shrink-0 rounded-lg bg-white px-2.5 py-1 text-xs font-bold text-rose-accent shadow-sm"
         >
           + 본문 추가
         </button>
       </div>
 
+      {rebuilding ? (
+        <div className="rounded-xl border border-rose-line bg-white/70 px-3 py-3 text-sm leading-6 text-rose-key">
+          성경 본문을 원본 스캔 기준으로 다시 만드는 중입니다.
+        </div>
+      ) : (
       <div className="space-y-2">
         {selections.map((selection, rowIndex) => {
           const meta = typeof selection.order === 'number' ? metaByOrder.get(selection.order) : null
@@ -352,12 +359,13 @@ export default function BiblePicker({ value, onChange, onPassage }: Props) {
           )
         })}
       </div>
+      )}
 
       {error && <p className="mt-2 text-sm text-red-500">{error}</p>}
 
-      <p className="mt-2 text-xs text-rose-key/70">
+      {!rebuilding && <p className="mt-2 text-xs text-rose-key/70">
         📖 여러 본문을 추가해 함께 읽고 필사할 수 있습니다.
-      </p>
+      </p>}
     </div>
   )
 }
