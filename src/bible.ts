@@ -35,7 +35,7 @@ const bookCache = new Map<string, Promise<BookDoc>>()
 
 export function loadIndex(): Promise<BookMeta[]> {
   if (!indexCache) {
-    indexCache = fetch(`${BASE}bible/index.json`).then((r) => {
+    indexCache = fetch(`${BASE}bible/index.json?v=${__BUILD__}`).then((r) => {
       if (!r.ok) throw new Error('성경 목록을 불러오지 못했습니다')
       return r.json()
     })
@@ -46,7 +46,7 @@ export function loadIndex(): Promise<BookMeta[]> {
 export function loadBook(file: string): Promise<BookDoc> {
   let p = bookCache.get(file)
   if (!p) {
-    p = fetch(`${BASE}bible/${file}`).then((r) => {
+    p = fetch(`${BASE}bible/${file}?v=${__BUILD__}`).then((r) => {
       if (!r.ok) throw new Error('본문을 불러오지 못했습니다')
       return r.json()
     })
