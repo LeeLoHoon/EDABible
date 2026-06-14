@@ -6,10 +6,11 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 // 어떤 빌드가 기기에 떴는지 확인용 — package.json 버전을 주입(예: 1.0.0)
 const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8'))
+const base = process.env.VERCEL === '1' ? '/' : '/EDABible/'
 
 // https://vite.dev/config/
 export default defineConfig({
-  base: '/EDABible/',
+  base,
   define: {
     __BUILD__: JSON.stringify(pkg.version),
   },
