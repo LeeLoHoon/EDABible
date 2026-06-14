@@ -142,15 +142,17 @@ def build_page(pdf: str, page: int) -> dict:
     }
 
 
-def write_markdown(pdf: str, pages: list[dict], limit: int = 80) -> Path:
-    path = REPORT_DIR / f"{pdf}-review-batch-001.md"
-    rows = []
+def write_markdown(pdf: str, pages: list[dict], limit: int = 80) -> list[Path]:
+    for old in REPORT_DIR.glob(f"{pdf}-review-batch-*.md"):
+        old.unlink()
+
+    batches: list[Path] = []
+    rows: list[str] = []
     count = 0
+    batch = 1
     for page in pages:
         for item in page["review"]:
             count += 1
-            if count > limit:
-                break
             rows.append(
                 "\n".join(
                     [
@@ -164,10 +166,17 @@ def write_markdown(pdf: str, pages: list[dict], limit: int = 80) -> Path:
                     ]
                 )
             )
-        if count > limit:
-            break
-    path.write_text("# OCR Review Batch 001\n\n" + "\n\n".join(rows) + "\n", encoding="utf-8")
-    return path
+            if len(rows) == limit:
+                path = REPORT_DIR / f"{pdf}-review-batch-{batch:03d}.md"
+                path.write_text(f"# OCR Review Batch {batch:03d}\n\n" + "\n\n".join(rows) + "\n", encoding="utf-8")
+                batches.append(path)
+                rows = []
+                batch += 1
+    if rows or not batches:
+        path = REPORT_DIR / f"{pdf}-review-batch-{batch:03d}.md"
+        path.write_text(f"# OCR Review Batch {batch:03d}\n\n" + "\n\n".join(rows) + "\n", encoding="utf-8")
+        batches.append(path)
+    return batches
 
 
 def main() -> int:
@@ -192,10 +201,10 @@ def main() -> int:
     }
     json_path = REPORT_DIR / f"{pdf}-review.json"
     json_path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    md_path = write_markdown(pdf, pages)
+    md_paths = write_markdown(pdf, pages)
 
     print(f"Wrote {json_path}")
-    print(f"Wrote {md_path}")
+    print(f"Wrote {len(md_paths)} markdown batch file(s)")
     print(json.dumps({"acceptedCount": accepted_count, "reviewCount": review_count}, ensure_ascii=False))
     worst = sorted(pages, key=lambda page: len(page["review"]), reverse=True)[:10]
     for page in worst:
