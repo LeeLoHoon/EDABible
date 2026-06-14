@@ -1,11 +1,12 @@
 {
   "name": "edabible",
   "private": true,
-  "version": "1.5.10",
+  "version": "1.5.11",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "rebuild:genesis-ocr": "node scripts/rebuild-genesis-from-ocr.mjs",
     "validate:bible": "node scripts/validate-bible.mjs",
     "lint": "eslint .",
     "preview": "vite preview"

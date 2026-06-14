@@ -4,7 +4,7 @@
   "book": "창세기",
   "abbr": "창",
   "file": "01_창.json",
-  "chapters": 49,
+  "chapters": 50,
   "standardChapters": 50
  },
  {
@@ -148,7 +148,7 @@
   "book": "시편",
   "abbr": "시",
   "file": "19_시.json",
-  "chapters": 145,
+  "chapters": 150,
   "standardChapters": 150
  },
  {
@@ -204,7 +204,7 @@
   "book": "에스겔",
   "abbr": "겔",
   "file": "26_겔.json",
-  "chapters": 46,
+  "chapters": 48,
   "standardChapters": 48
  },
  {
@@ -300,7 +300,7 @@
   "book": "스가랴",
   "abbr": "슥",
   "file": "38_슥.json",
-  "chapters": 13,
+  "chapters": 14,
   "standardChapters": 14
  },
  {
