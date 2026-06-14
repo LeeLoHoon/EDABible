@@ -1,11 +1,12 @@
 {
   "name": "edabible",
   "private": true,
-  "version": "1.5.7",
+  "version": "1.5.8",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "validate:bible": "node scripts/validate-bible.mjs",
     "lint": "eslint .",
     "preview": "vite preview"
   },
