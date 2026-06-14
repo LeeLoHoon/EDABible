@@ -12,6 +12,22 @@ const issues = [];
 
 const leadingVerse = /^\s*\(?\d{1,3}(?:-\d{1,3})?\)?(?:\s|$)/;
 const boxNoteHeading = /^\s*\([^)]*\d{1,3}:\d{1,3}(?:-\d{1,3})?[^)]*\)/;
+const editorialHeadings = new Set([
+  '하늘과 땅의 창조',
+  '사람의 불순종',
+  '가인과 아벨',
+  '인류의 족보',
+  '홍수가 땅을 덮다',
+  '하나님께서 아브람을 부르시다',
+  '하나님께서 아브람과 언약을 맺으시다',
+  '소돔과 고모라의 심판',
+  '솔로몬이 왕이 되다',
+  '유다 왕 므낫세',
+  '유다 왕 요시야',
+  '심판의 메시지',
+  '떨감으로나 쓰일 예루살렘',
+  '넷째 환상: 하나님의 천사 앞에 선 여호수아',
+]);
 
 for (const entry of index) {
   if (!fileSet.has(entry.file)) {
@@ -78,6 +94,15 @@ for (const entry of index) {
         file: entry.file,
         chapter: chapter.chapter,
         firstLine: firstLine.slice(0, 160),
+      });
+    }
+    if (editorialHeadings.has(firstLine)) {
+      issues.push({
+        type: 'editorial-heading-at-start',
+        book: entry.book,
+        file: entry.file,
+        chapter: chapter.chapter,
+        firstLine,
       });
     }
   }
