@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { Entry, Field, FieldMode } from '../types'
 import ModeToggle from '../components/ModeToggle'
 import BiblePicker, { type PassageInfo } from '../components/BiblePicker'
@@ -23,13 +23,35 @@ export default function TranscribeSection({ entry, update, FieldEditor }: Props)
   const [passageDraft, setPassageDraft] = useState('')
   const [savingPassage, setSavingPassage] = useState(false)
   const [passageSaveError, setPassageSaveError] = useState<string | null>(null)
+  const previousPassageKeyRef = useRef('')
   const hasPassage = !!passage && (passage.loading || !!passage.text)
+  const passageKey = passage
+    ? `${passage.book}:${passage.chapter}:${passage.endChapter}:${passage.ref}`
+    : ''
 
   useEffect(() => {
-    if (!passage || editingPassage) return
+    const previousKey = previousPassageKeyRef.current
+    previousPassageKeyRef.current = passageKey
+
+    if (!passage) {
+      setPassageDraft('')
+      setPassageSaveError(null)
+      setEditingPassage(false)
+      return
+    }
+
+    if (previousKey && previousKey !== passageKey && editingPassage) {
+      setEditingPassage(false)
+      setSavingPassage(false)
+      setPassageDraft(passage.text)
+      setPassageSaveError(null)
+      return
+    }
+
+    if (editingPassage) return
     setPassageDraft(passage.text)
     setPassageSaveError(null)
-  }, [editingPassage, passage])
+  }, [editingPassage, passage, passageKey])
 
   const startPassageEdit = () => {
     if (!passage?.canEdit) return
