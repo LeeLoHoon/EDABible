@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   loadIndex,
   loadBook,
+  finalizeBibleChapter,
   makeRef,
   parseRefs,
   saveBibleChapterText,
@@ -17,7 +18,10 @@ export interface PassageInfo {
   text: string
   loading: boolean
   canEdit: boolean
+  canFinalize: boolean
+  isFinalized: boolean
   saveText: (text: string) => Promise<void>
+  finalize: () => Promise<void>
 }
 
 interface Props {
@@ -191,10 +195,13 @@ export default function BiblePicker({ value, onChange, onPassage }: Props) {
 
         const ref = makeRef(book, selection.chapter, selection.endChapter)
         const texts: string[] = []
+        let isFinalized = false
         if (doc) {
           for (let current = selection.chapter; current <= selection.endChapter; current += 1) {
-            const text = chapterText(doc, current)
+            const chapter = doc.chapters.find((c) => c.chapter === current)
+            const text = chapter?.text ?? chapterText(doc, current)
             if (text) texts.push(text)
+            if (chapter?.isFinalized) isFinalized = true
           }
         }
 
@@ -207,6 +214,7 @@ export default function BiblePicker({ value, onChange, onPassage }: Props) {
           endChapter: selection.endChapter,
           text: texts.join('\n\n'),
           loading: !doc,
+          isFinalized,
         }
       })
       .filter((passage): passage is NonNullable<typeof passage> => !!passage)
@@ -248,7 +256,10 @@ export default function BiblePicker({ value, onChange, onPassage }: Props) {
       !loading &&
       typeof first.order === 'number' &&
       !!first.file &&
-      first.chapter === first.endChapter
+      first.chapter === first.endChapter &&
+      !first.isFinalized
+    const activeDoc = typeof first.order === 'number' ? docs.get(first.order) : null
+    const canFinalize = canEdit && !!activeDoc?.supportsFinalize
 
     onPassage({
       book: first.book,
@@ -258,9 +269,20 @@ export default function BiblePicker({ value, onChange, onPassage }: Props) {
       text: passageText,
       loading,
       canEdit,
+      canFinalize,
+      isFinalized: first.isFinalized,
       saveText: async (text: string) => {
         if (!canEdit || typeof first.order !== 'number') return
         const nextDoc = await saveBibleChapterText(first.file, first.chapter, text)
+        setDocs((prev) => {
+          const next = new Map(prev)
+          next.set(first.order, nextDoc)
+          return next
+        })
+      },
+      finalize: async () => {
+        if (!canFinalize || typeof first.order !== 'number') return
+        const nextDoc = await finalizeBibleChapter(first.file, first.chapter)
         setDocs((prev) => {
           const next = new Map(prev)
           next.set(first.order, nextDoc)

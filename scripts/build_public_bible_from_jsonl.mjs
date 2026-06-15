@@ -49,6 +49,7 @@ for (const book of books) {
     chapters: rows.map((row) => ({
       chapter: row.chapter,
       text: row.text,
+      ...(row.is_finalized ? { isFinalized: true } : {}),
     })),
   }
 

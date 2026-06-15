@@ -10,10 +10,18 @@ create table if not exists public.bible_chapters (
   file text not null,
   chapter integer not null,
   text text not null,
+  is_finalized boolean not null default false,
+  finalized_at timestamptz,
   source_build text,
   updated_at timestamptz not null default now(),
   primary key (book_order, chapter)
 );
+
+alter table public.bible_chapters
+  add column if not exists is_finalized boolean not null default false;
+
+alter table public.bible_chapters
+  add column if not exists finalized_at timestamptz;
 
 create table if not exists public.bible_chapter_edits (
   id uuid primary key default gen_random_uuid(),
@@ -68,7 +76,7 @@ drop policy if exists "public update bible chapters" on public.bible_chapters;
 create policy "public update bible chapters"
 on public.bible_chapters for update
 to anon, authenticated
-using (true)
+using (not is_finalized)
 with check (true);
 
 drop policy if exists "public read bible edits" on public.bible_chapter_edits;

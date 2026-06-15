@@ -60,6 +60,7 @@ async function main() {
     file: row.file,
     chapter: row.chapter,
     text: row.text,
+    ...(row.is_finalized === true ? { is_finalized: true } : {}),
     source_build: BUILD,
   }))
 

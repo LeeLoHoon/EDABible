@@ -29,6 +29,7 @@ npm run validate:bible
 ## Supabase
 
 1. Supabase SQL Editor에서 `supabase/schema.sql`을 실행합니다.
+   기존 프로젝트도 같은 파일을 다시 실행하면 `is_finalized` 완료 컬럼과 완료된 장 수정 차단 policy가 추가됩니다.
 2. 환경변수를 설정합니다.
 
 ```bash
@@ -54,3 +55,7 @@ npm run validate:bible
 npm run seed:supabase-bible
 npm run pull:supabase-bible
 ```
+
+## 디비에 있는 성경 내려 받기
+
+npm run pull:supabase-bible

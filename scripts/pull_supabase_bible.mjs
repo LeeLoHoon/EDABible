@@ -45,12 +45,23 @@ async function fetchAllChapters() {
 
   for (let from = 0; ; from += 1000) {
     const to = from + 999
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from('bible_chapters')
-      .select('book_order, book, abbr, file, chapter, text')
+      .select('book_order, book, abbr, file, chapter, text, is_finalized')
       .order('book_order', { ascending: true })
       .order('chapter', { ascending: true })
       .range(from, to)
+
+    if (error && /is_finalized|schema cache/i.test(error.message)) {
+      const fallback = await supabase
+        .from('bible_chapters')
+        .select('book_order, book, abbr, file, chapter, text')
+        .order('book_order', { ascending: true })
+        .order('chapter', { ascending: true })
+        .range(from, to)
+      data = fallback.data
+      error = fallback.error
+    }
 
     if (error) throw error
     rows.push(...(data ?? []))
@@ -92,6 +103,7 @@ for (const book of books) {
       file: book.file,
       chapter: row.chapter,
       text: row.text,
+      ...(row.is_finalized ? { is_finalized: true } : {}),
     })
   }
 }

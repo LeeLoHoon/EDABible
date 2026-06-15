@@ -1,7 +1,7 @@
 /** 메시지 성경 로더. IndexedDB 캐시를 우선 사용하고, 없으면 public/bible/ 에서 가져온다. */
 
 import { db } from './db'
-import { loadRemoteBook, saveRemoteChapterText } from './remoteBible'
+import { finalizeRemoteChapter, loadRemoteBook, saveRemoteChapterText } from './remoteBible'
 
 export interface BookMeta {
   order: number
@@ -15,6 +15,7 @@ export interface BookMeta {
 export interface Chapter {
   chapter: number
   text: string
+  isFinalized?: boolean
 }
 
 export interface BookDoc {
@@ -22,6 +23,7 @@ export interface BookDoc {
   book: string
   abbr: string
   chapters: Chapter[]
+  supportsFinalize?: boolean
 }
 
 export interface PassageRef {
@@ -107,7 +109,12 @@ export function loadBook(file: string): Promise<BookDoc> {
 
 export async function saveBibleChapterText(file: string, chapter: number, text: string): Promise<BookDoc> {
   const doc = await loadBook(file)
-  const previousText = doc.chapters.find((item) => item.chapter === chapter)?.text ?? ''
+  const existing = doc.chapters.find((item) => item.chapter === chapter)
+  const previousText = existing?.text ?? ''
+
+  if (existing?.isFinalized) {
+    throw new Error('완료된 장은 수정할 수 없습니다')
+  }
 
   await saveRemoteChapterText({
     file,
@@ -128,6 +135,36 @@ export async function saveBibleChapterText(file: string, chapter: number, text: 
     chapters.sort((a, b) => a.chapter - b.chapter)
   }
 
+  const nextDoc: BookDoc = { ...doc, chapters }
+  await db.bibleBooks.put({
+    file,
+    build: BUILD,
+    doc: nextDoc,
+    updatedAt: new Date().toISOString(),
+  })
+  bookCache.set(file, Promise.resolve(nextDoc))
+  return nextDoc
+}
+
+export async function finalizeBibleChapter(file: string, chapter: number): Promise<BookDoc> {
+  const doc = await loadBook(file)
+  const existing = doc.chapters.find((item) => item.chapter === chapter)
+
+  if (!existing) {
+    throw new Error('완료할 본문을 찾지 못했습니다')
+  }
+
+  if (!existing.isFinalized) {
+    await finalizeRemoteChapter({
+      file,
+      doc,
+      chapter,
+    })
+  }
+
+  const chapters = doc.chapters.map((item) =>
+    item.chapter === chapter ? { ...item, isFinalized: true } : item,
+  )
   const nextDoc: BookDoc = { ...doc, chapters }
   await db.bibleBooks.put({
     file,

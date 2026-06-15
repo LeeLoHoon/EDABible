@@ -22,6 +22,7 @@ export default function TranscribeSection({ entry, update, FieldEditor }: Props)
   const [editingPassage, setEditingPassage] = useState(false)
   const [passageDraft, setPassageDraft] = useState('')
   const [savingPassage, setSavingPassage] = useState(false)
+  const [finalizingPassage, setFinalizingPassage] = useState(false)
   const [passageSaveError, setPassageSaveError] = useState<string | null>(null)
   const previousPassageKeyRef = useRef('')
   const hasPassage = !!passage && (passage.loading || !!passage.text)
@@ -37,12 +38,14 @@ export default function TranscribeSection({ entry, update, FieldEditor }: Props)
       setPassageDraft('')
       setPassageSaveError(null)
       setEditingPassage(false)
+      setFinalizingPassage(false)
       return
     }
 
     if (previousKey && previousKey !== passageKey && editingPassage) {
       setEditingPassage(false)
       setSavingPassage(false)
+      setFinalizingPassage(false)
       setPassageDraft(passage.text)
       setPassageSaveError(null)
       return
@@ -54,7 +57,7 @@ export default function TranscribeSection({ entry, update, FieldEditor }: Props)
   }, [editingPassage, passage, passageKey])
 
   const startPassageEdit = () => {
-    if (!passage?.canEdit) return
+    if (!passage?.canFinalize) return
     setOpen(true)
     setPassageDraft(passage.text)
     setPassageSaveError(null)
@@ -79,6 +82,25 @@ export default function TranscribeSection({ entry, update, FieldEditor }: Props)
       setPassageSaveError(String(e instanceof Error ? e.message : e))
     } finally {
       setSavingPassage(false)
+    }
+  }
+
+  const completePassageEdit = async () => {
+    if (!passage?.canEdit) return
+    if (!confirm(`${passage.ref} 본문을 완료 처리할까요?\n완료 후에는 이 화면에서 더 이상 수정할 수 없습니다.`)) {
+      return
+    }
+
+    setFinalizingPassage(true)
+    setPassageSaveError(null)
+    try {
+      await passage.finalize()
+      setPassage((prev) => (prev ? { ...prev, isFinalized: true, canEdit: false } : prev))
+      setEditingPassage(false)
+    } catch (e) {
+      setPassageSaveError(String(e instanceof Error ? e.message : e))
+    } finally {
+      setFinalizingPassage(false)
     }
   }
 
@@ -120,6 +142,11 @@ export default function TranscribeSection({ entry, update, FieldEditor }: Props)
                   본문 수정
                 </button>
               )}
+              {!passage!.loading && passage!.isFinalized && (
+                <span className="shrink-0 rounded-lg bg-rose-chip px-2.5 py-1 text-xs font-bold text-rose-key">
+                  완료됨
+                </span>
+              )}
             </div>
 
             {passage!.loading ? (
@@ -138,10 +165,20 @@ export default function TranscribeSection({ entry, update, FieldEditor }: Props)
                 />
                 {passageSaveError && <p className="text-xs text-red-500">{passageSaveError}</p>}
                 <div className="flex justify-end gap-2">
+                  {passage!.canFinalize && (
+                    <button
+                      type="button"
+                      onClick={completePassageEdit}
+                      disabled={savingPassage || finalizingPassage}
+                      className="rounded-lg border border-rose-accent bg-white px-3 py-2 text-xs font-bold text-rose-accent disabled:opacity-50"
+                    >
+                      {finalizingPassage ? '완료 중' : '완료'}
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={cancelPassageEdit}
-                    disabled={savingPassage}
+                    disabled={savingPassage || finalizingPassage}
                     className="rounded-lg border border-rose-line bg-white px-3 py-2 text-xs font-bold text-rose-key disabled:opacity-50"
                   >
                     취소
@@ -149,7 +186,7 @@ export default function TranscribeSection({ entry, update, FieldEditor }: Props)
                   <button
                     type="button"
                     onClick={savePassageEdit}
-                    disabled={savingPassage}
+                    disabled={savingPassage || finalizingPassage}
                     className="rounded-lg bg-rose-accent px-3 py-2 text-xs font-bold text-white disabled:opacity-50"
                   >
                     {savingPassage ? '저장 중' : '저장'}
