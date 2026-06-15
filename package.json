@@ -5,10 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "npm run build:bible && tsc -b && vite build",
+    "build:bible": "node scripts/build_public_bible_from_jsonl.mjs",
     "seed:supabase-bible": "node scripts/seed_supabase_bible.mjs",
-    "rebuild:genesis-ocr": "node scripts/rebuild-genesis-from-ocr.mjs",
-    "strip:ocr-headings": "node scripts/strip-ocr-editorial-headings.mjs",
     "validate:bible": "node scripts/validate-bible.mjs",
     "lint": "eslint .",
     "preview": "vite preview"

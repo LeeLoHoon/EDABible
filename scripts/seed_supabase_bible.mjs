@@ -42,24 +42,26 @@ async function readJson(path) {
   return JSON.parse(await readFile(path, 'utf8'))
 }
 
-async function main() {
-  const index = await readJson('public/bible/index.json')
-  let rows = []
+async function readJsonl(path) {
+  const text = await readFile(path, 'utf8')
+  return text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => JSON.parse(line))
+}
 
-  for (const meta of index) {
-    const doc = await readJson(`public/bible/${meta.file}`)
-    rows.push(
-      ...doc.chapters.map((chapter) => ({
-        book_order: meta.order,
-        book: meta.book,
-        abbr: meta.abbr,
-        file: meta.file,
-        chapter: chapter.chapter,
-        text: chapter.text,
-        source_build: BUILD,
-      })),
-    )
-  }
+async function main() {
+  await readJson('data/bible-books.json')
+  const rows = (await readJsonl('data/bible-chapters.jsonl')).map((row) => ({
+    book_order: row.book_order,
+    book: row.book,
+    abbr: row.abbr,
+    file: row.file,
+    chapter: row.chapter,
+    text: row.text,
+    source_build: BUILD,
+  }))
 
   for (let offset = 0; offset < rows.length; offset += 100) {
     const chunk = rows.slice(offset, offset + 100)

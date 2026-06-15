@@ -1,8 +1,8 @@
-import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 
 const bibleDir = new URL('../public/bible/', import.meta.url);
-const reportPath = new URL('../reports/bible-validation.json', import.meta.url);
+const reportPath = new URL('../.tmp/bible-validation.json', import.meta.url);
 
 const index = JSON.parse(readFileSync(new URL('index.json', bibleDir), 'utf8'));
 const files = readdirSync(bibleDir).filter((name) => name.endsWith('.json') && name !== 'index.json');
@@ -132,6 +132,7 @@ const summary = issues.reduce((acc, issue) => {
   return acc;
 }, {});
 
+mkdirSync(dirname(reportPath.pathname), { recursive: true });
 writeFileSync(reportPath, JSON.stringify({ summary, issues }, null, 2) + '\n');
 
 if (issues.length > 0) {
