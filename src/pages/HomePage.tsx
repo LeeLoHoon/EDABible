@@ -71,6 +71,13 @@ export default function HomePage() {
 
   return (
     <div className="relative mx-auto max-w-2xl">
+      <button
+        type="button"
+        onClick={() => navigate('/review')}
+        className="absolute left-4 top-4 z-10 rounded-full border border-rose-line bg-rose-card/90 px-3 py-2 text-xs font-bold text-rose-ink shadow-sm backdrop-blur transition hover:border-rose-accent"
+      >
+        본문 검수
+      </button>
       <GuideButton className="absolute right-4 top-4 z-10" />
       {/* 책 표지 — 첫 페이지 */}
       <section className="relative flex min-h-[86vh] flex-col items-center justify-center px-6 text-center">
