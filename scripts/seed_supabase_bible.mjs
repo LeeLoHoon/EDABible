@@ -1,7 +1,29 @@
-import { readFile } from 'node:fs/promises'
+import { readFile, stat } from 'node:fs/promises'
 import { createClient } from '@supabase/supabase-js'
 
 const BUILD = process.env.npm_package_version ?? 'manual'
+
+async function loadLocalEnv(path) {
+  try {
+    await stat(path)
+  } catch {
+    return
+  }
+
+  const text = await readFile(path, 'utf8')
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.trim()
+    if (!line || line.startsWith('#')) continue
+    const index = line.indexOf('=')
+    if (index < 1) continue
+    const key = line.slice(0, index).trim()
+    const value = line.slice(index + 1).trim().replace(/^['"]|['"]$/g, '')
+    process.env[key] ??= value
+  }
+}
+
+await loadLocalEnv('.env.local')
+
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL
 const SUPABASE_KEY =
   process.env.SUPABASE_SERVICE_ROLE_KEY ??
