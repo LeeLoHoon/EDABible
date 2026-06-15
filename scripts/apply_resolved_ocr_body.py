@@ -138,6 +138,44 @@ def is_noise(text: str) -> bool:
     return False
 
 
+def is_note_heading(text: str) -> bool:
+    value = normalize(text)
+    if re.search(r"\(\d{1,3}:\d{1,3}(?:-\d{1,3})?\)", value):
+        return True
+    if re.search(r"\(\d{1,3}:\d{1,3}(?:-\d{1,3})?(?:;\s*\d{1,3}:\d{1,3})*\)", value):
+        return True
+    if re.search(r"\(\d{1,3}:\d{1,3}(?:[-–]\d{1,3})?", value):
+        return True
+    if len(compact(value)) <= 48 and re.search(r"\d{1,3}:\d{1,3}", value):
+        return True
+    return False
+
+
+def box_top(item: dict) -> int:
+    box = item.get("box") or []
+    if isinstance(box, list) and len(box) >= 2 and all(isinstance(value, (int, float)) for value in box[:2]):
+        return int(box[1])
+    return 0
+
+
+def note_floors(items: list[dict]) -> dict[int, int]:
+    floors: dict[int, int] = {}
+    for item in items:
+        q = int(item.get("q", 0))
+        if is_note_heading(item.get("text", "")):
+            floors[q] = min(floors.get(q, 999999), box_top(item))
+            if q == 1:
+                floors[2] = min(floors.get(2, 999999), 0)
+            elif q == 3:
+                floors[4] = min(floors.get(4, 999999), 0)
+    return {q: max(0, floor - 24) for q, floor in floors.items()}
+
+
+def is_note_box_item(item: dict, floors: dict[int, int]) -> bool:
+    q = int(item.get("q", 0))
+    return q in floors and box_top(item) >= floors[q]
+
+
 def is_flagged(text: str) -> bool:
     if not text:
         return True
@@ -238,9 +276,14 @@ def apply_pdf(pdf: str) -> dict:
     for path in sorted((PADDLE / pdf).glob("p*.json")):
         page = int(path.stem[1:])
         page_count += 1
+        paddle_items = json.loads(path.read_text(encoding="utf-8"))
+        floors = note_floors(paddle_items)
         lines = []
         last_q = None
-        for item in json.loads(path.read_text(encoding="utf-8")):
+        recent_keys: list[str] = []
+        for item in paddle_items:
+            if is_note_box_item(item, floors):
+                continue
             q = int(item.get("q", 0))
             text = normalize(item.get("text", ""))
             if is_noise(text):
@@ -252,10 +295,17 @@ def apply_pdf(pdf: str) -> dict:
                     omitted_lines += 1
                     continue
                 text = replacement["selected"]
+                if is_note_heading(text):
+                    continue
                 replaced_lines += 1
             text = clean_final(text)
             if not text or is_noise(text):
                 continue
+            key_text = compact(text)
+            if key_text in recent_keys:
+                continue
+            recent_keys.append(key_text)
+            recent_keys = recent_keys[-16:]
             if last_q is not None and q != last_q:
                 lines.append("")
             lines.append(text)
