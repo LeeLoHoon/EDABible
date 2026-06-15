@@ -165,15 +165,18 @@ def note_floors(items: list[dict]) -> dict[int, int]:
         if is_note_heading(item.get("text", "")):
             floors[q] = min(floors.get(q, 999999), box_top(item))
             if q == 1:
-                floors[2] = min(floors.get(2, 999999), 0)
-            elif q == 3:
+                floors[30] = min(floors.get(30, 999999), 540)
+            if q == 3:
                 floors[4] = min(floors.get(4, 999999), 0)
     return {q: max(0, floor - 24) for q, floor in floors.items()}
 
 
 def is_note_box_item(item: dict, floors: dict[int, int]) -> bool:
     q = int(item.get("q", 0))
-    return q in floors and box_top(item) >= floors[q]
+    top = box_top(item)
+    if q == 3 and 30 in floors and top <= floors[30]:
+        return True
+    return q in floors and top >= floors[q]
 
 
 def is_flagged(text: str) -> bool:

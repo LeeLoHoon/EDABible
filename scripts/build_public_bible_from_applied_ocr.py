@@ -86,10 +86,18 @@ def is_note_heading(line: str) -> bool:
 
 def is_editorial_heading(line: str) -> bool:
     value = line.strip()
+    value_compact = compact(value)
     if value in EDITORIAL_HEADINGS:
         return True
-    if len(compact(value)) <= 18 and not re.search(r"[.!?\"']", value) and not re.match(r"\d", value):
+    if len(value_compact) <= 26 and not re.search(r"[.!?\"']", value) and not re.match(r"\d", value):
         if any(word in value for word in ("창조", "언약", "심판", "족보", "시험", "기도", "머리말", "서문")):
+            return True
+        if re.search(r"(하시다|되시다|받다|쌓다|덮다|죽다|부르시다|맺으시다)$", value_compact):
+            return True
+        if len(value_compact) <= 14 and not re.search(
+            r"(했다|말했다|하셨다|되었다|이었다|있었다|죽었다|낳았다|살았다|갔다|왔다|보았다|주었다|받았다)$",
+            value_compact,
+        ):
             return True
     return False
 
