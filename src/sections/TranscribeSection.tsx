@@ -57,7 +57,7 @@ export default function TranscribeSection({ entry, update, FieldEditor }: Props)
   }, [editingPassage, passage, passageKey])
 
   const startPassageEdit = () => {
-    if (!passage?.canFinalize) return
+    if (!passage?.canEdit) return
     setOpen(true)
     setPassageDraft(passage.text)
     setPassageSaveError(null)
@@ -86,7 +86,7 @@ export default function TranscribeSection({ entry, update, FieldEditor }: Props)
   }
 
   const completePassageEdit = async () => {
-    if (!passage?.canEdit) return
+    if (!passage?.canFinalize) return
     if (!confirm(`${passage.ref} 본문을 완료 처리할까요?\n완료 후에는 이 화면에서 더 이상 수정할 수 없습니다.`)) {
       return
     }
@@ -160,6 +160,10 @@ export default function TranscribeSection({ entry, update, FieldEditor }: Props)
                 <textarea
                   value={passageDraft}
                   onChange={(event) => setPassageDraft(event.target.value)}
+                  autoFocus
+                  autoCapitalize="off"
+                  autoCorrect="off"
+                  spellCheck={false}
                   className="min-h-[12rem] w-full rounded-xl border border-rose-line bg-white px-3 py-2 font-serif text-[15px] leading-[1.75] text-zinc-700 outline-none focus:border-rose-accent"
                   aria-label={`${passage!.ref} 본문 수정`}
                 />
