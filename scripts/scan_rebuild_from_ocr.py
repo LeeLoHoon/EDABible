@@ -37,6 +37,18 @@ PDF_BOOKS = {
 BOOK_TO_PDF = {book: pdf for pdf, books in PDF_BOOKS.items() for book in books}
 BOOK_NAMES = sorted(BOOK_TO_PDF, key=len, reverse=True)
 BOOK_RE = re.compile("|".join(map(re.escape, BOOK_NAMES)))
+BOOK_ALIASES = {
+    "룻기": ["룻기", "릇기", "롯기"],
+    "욥기": ["욥기", "옵기", "읍기"],
+}
+
+MANUAL_ANCHORS = {
+    ("사무엘상", 6): {"pdf": "d", "page": 108, "q": 2, "box": [118, 1125, 148, 1159]},
+    ("시편", 111): {"pdf": "b", "page": 164, "q": 2, "box": [29, 1223, 59, 1264]},
+    ("시편", 117): {"pdf": "b", "page": 168, "q": 1, "box": [22, 287, 52, 327]},
+    ("잠언", 7): {"pdf": "b", "page": 216, "q": 2, "box": [100, 1125, 130, 1149]},
+    ("미가", 6): {"pdf": "c", "page": 414, "q": 2, "box": [97, 1125, 127, 1157]},
+}
 
 CROP_BOXES = {
     1: (0.050, 0.020, 0.530, 0.575),
@@ -95,52 +107,70 @@ def is_note_heading(text: str) -> bool:
     value = normalize(text)
     if re.search(r"\(\d{1,3}:\d{1,3}(?:[-–]\d{1,3})?(?:;\s*\d{1,3}:\d{1,3})*", value):
         return True
-    return False
-
-
-def looks_like_heading(text: str) -> bool:
-    value = normalize(text)
-    value_compact = compact(value)
-    if not value_compact or re.match(r"\d", value_compact):
-        return False
-    if re.search(r"[.!?\"']", value):
-        return False
-    if len(value_compact) <= 26 and re.search(
-        r"(하시다|되시다|받다|쌓다|덮다|죽다|부르시다|맺으시다|족보|언약|창조|심판|기도|서문)$",
-        value_compact,
-    ):
+    if re.search(r"\([가-힣]{1,5}\s*\d{1,3}:\d{1,3}(?:[-–]\d{1,3})?", value):
         return True
-    if len(value_compact) <= 14 and not re.search(
-        r"(했다|말했다|하셨다|되었다|이었다|있었다|죽었다|낳았다|살았다|갔다|왔다|보았다|주었다|받았다)$",
-        value_compact,
-    ):
+    if re.search(r"\([가-힣]{1,5}\s*\d{1,3}(?:[-–]\d{1,3})?$", value):
+        return True
+    if "묵상글" in value:
         return True
     return False
 
 
-def note_exclusion_floors(items: list[dict]) -> dict[int, int]:
-    floors: dict[int, int] = {}
-    for item in items:
+def note_exclusion_ranges(items: list[dict]) -> dict[int, list[tuple[int, int]]]:
+    by_q: dict[int, list[dict]] = defaultdict(list)
+    for item in sorted(items, key=reading_key):
+        by_q[item["q"]].append(item)
+
+    def note_range_from(q: int, start: int) -> tuple[int, int] | None:
+        rows = [
+            row
+            for row in by_q.get(q, [])
+            if row["box"][1] >= start - 24 and not is_noise(row["text"]) and not is_dropcap_item(row)
+        ]
+        if not rows:
+            return None
+        top = rows[0]["box"][1]
+        bottom = rows[0]["box"][3]
+        previous_bottom = bottom
+        for row in rows[1:]:
+            row_top = row["box"][1]
+            if row_top - previous_bottom > 70:
+                break
+            bottom = max(bottom, row["box"][3])
+            previous_bottom = row["box"][3]
+        return top, bottom
+
+    ranges: dict[int, list[tuple[int, int]]] = defaultdict(list)
+    for item in sorted(items, key=reading_key):
         if not is_note_heading(item["text"]):
             continue
         q = item["q"]
         top = item["box"][1]
-        floors[q] = min(floors.get(q, 999999), top)
+        current = note_range_from(q, top)
+        if current is not None:
+            ranges[q].append(current)
         if q == 1:
-            floors[30] = min(floors.get(30, 999999), 0)
+            continuation = note_range_from(3, top)
+            if continuation is not None:
+                ranges[3].append(continuation)
         if q == 2:
-            floors[4] = min(floors.get(4, 999999), top)
+            continuation = note_range_from(4, top)
+            if continuation is not None:
+                ranges[4].append(continuation)
         if q == 3:
-            floors[4] = min(floors.get(4, 999999), 0)
-    return floors
+            continuation = note_range_from(4, top)
+            if continuation is not None:
+                ranges[4].append(continuation)
+    return ranges
 
 
-def is_note_item(item: dict, floors: dict[int, int]) -> bool:
-    q = item["q"]
+def is_note_item(item: dict, ranges: dict[int, list[tuple[int, int]]]) -> bool:
     top = item["box"][1]
-    if q == 3 and 30 in floors and top <= int(0.33 * item["pageHeight"]):
-        return True
-    return q in floors and top >= floors[q] - 24
+    bottom = item["box"][3]
+    for start, end in ranges.get(item["q"], []):
+        if top >= start - 24 and bottom <= end + 24:
+            return True
+    return False
 
 
 def load_items(pdf: str, page: int) -> list[dict]:
@@ -169,7 +199,15 @@ def load_items(pdf: str, page: int) -> list[dict]:
     return out
 
 
-def classify_item(item: dict, floors: dict[int, int]) -> str:
+def is_dropcap_item(item: dict) -> bool:
+    text = item["text"]
+    x1, y1, x2, y2 = item["box"]
+    height = y2 - y1
+    width = x2 - x1
+    return re.fullmatch(r"\d{1,3}", compact(text)) is not None and height >= 50 and width >= 20 and item["confidence"] >= 0.60
+
+
+def classify_item(item: dict, note_ranges: dict[int, list[tuple[int, int]]]) -> str:
     text = item["text"]
     x1, y1, x2, y2 = item["box"]
     height = y2 - y1
@@ -177,14 +215,14 @@ def classify_item(item: dict, floors: dict[int, int]) -> str:
     page_height = item["pageHeight"]
     if y1 < int(0.075 * page_height):
         return "header"
-    if is_note_item(item, floors):
-        return "note"
-    if re.fullmatch(r"\d{1,3}", compact(text)) and height >= 50 and width >= 20 and item["confidence"] >= 0.60:
+    if is_dropcap_item(item):
         return "dropcap"
+    if is_note_heading(text):
+        return "note"
+    if is_note_item(item, note_ranges):
+        return "note"
     if is_noise(text):
         return "noise"
-    if looks_like_heading(text):
-        return "heading"
     return "body"
 
 
@@ -197,6 +235,9 @@ def dedupe_body(items: list[dict]) -> list[dict]:
     out = []
     recent: list[str] = []
     for item in sorted(items, key=reading_key):
+        if item["kind"] != "body":
+            out.append(item)
+            continue
         key = compact(item["text"])
         if key and key in recent:
             copy = dict(item)
@@ -209,13 +250,108 @@ def dedupe_body(items: list[dict]) -> list[dict]:
     return out
 
 
+def first_body_anchor(book_range: dict[str, int], page_docs: list[dict]) -> dict | None:
+    for doc in page_docs:
+        page = doc["page"]
+        if not (book_range["startPage"] <= page <= book_range["endPage"]):
+            continue
+        for item in sorted(doc["items"], key=reading_key):
+            if item["kind"] != "body":
+                continue
+            if not compact(item["text"]):
+                continue
+            box = item["box"]
+            return {
+                "page": page,
+                "q": item["q"],
+                "box": [max(0, box[0] - 120), box[1], max(0, box[0] - 90), box[3]],
+                "raw": "synthetic-book-start",
+                "confidence": 1.0,
+                "image": str(CROPS / book_range["pdf"] / f"p{page:04d}_q{item['q']}.png"),
+                "synthetic": True,
+            }
+    return None
+
+
+def header_chapters(book: str, header: str) -> list[int]:
+    def chapter_prefix(raw: str, minimum: int, maximum: int) -> int | None:
+        best = None
+        for end in range(1, min(3, len(raw)) + 1):
+            value = int(raw[:end])
+            if minimum <= value <= maximum:
+                best = value
+        return best
+
+    for name in BOOK_ALIASES.get(book, [book]):
+        pos = header.find(name)
+        if pos < 0:
+            continue
+        tail = header[pos + len(name) :]
+        match = re.match(r"\s*(\d{1,6})(?:[-–](\d{1,6}))?", tail)
+        if not match:
+            return []
+        max_chapter = CHAPTER_COUNTS[book]
+        start = chapter_prefix(match.group(1), 1, max_chapter)
+        if start is None:
+            return []
+        end = chapter_prefix(match.group(2), start, max_chapter) if match.group(2) else start
+        if end is None:
+            end = start
+        return [chapter for chapter in range(start, end + 1) if 1 <= chapter <= max_chapter]
+    return []
+
+
+def header_transition_anchor(book: str, chapter: int, book_range: dict[str, int], page_docs: list[dict]) -> dict | None:
+    previous = chapter - 1
+    for doc in page_docs:
+        page = doc["page"]
+        if not (book_range["startPage"] <= page <= book_range["endPage"]):
+            continue
+        chapters = header_chapters(book, doc["header"])
+        if chapter not in chapters:
+            continue
+        if previous > 0 and previous not in chapters and min(chapters) != chapter:
+            continue
+        body_items = [item for item in sorted(doc["items"], key=reading_key) if item["kind"] == "body"]
+        starters = [
+            item
+            for item in body_items
+            if re.match(r"^1(?:[-–]\d{1,3})?(?=\D|$)", normalize(item["text"]))
+            and (item["box"][2] - item["box"][0]) >= 120
+            and not re.search(r"\([가-힣]{1,5}\s*\d{1,3}:\d{1,3}", item["text"])
+        ]
+        if not starters:
+            if previous > 0 and previous in chapters and len(chapters) > 1:
+                continue
+            starters = [
+                item
+                for item in body_items
+                if (item["box"][2] - item["box"][0]) >= 120
+                and not re.search(r"\([가-힣]{1,5}\s*\d{1,3}:\d{1,3}", item["text"])
+            ][:1]
+        if not starters:
+            continue
+        item = starters[0]
+        box = item["box"]
+        return {
+            "page": page,
+            "q": item["q"],
+            "box": [max(0, box[0] - 120), box[1], max(0, box[0] - 90), box[3]],
+            "raw": "synthetic-header-transition",
+            "confidence": 0.9,
+            "image": str(CROPS / book_range["pdf"] / f"p{page:04d}_q{item['q']}.png"),
+            "synthetic": True,
+        }
+    return None
+
+
 def classify_page(pdf: str, page: int) -> dict:
     items = load_items(pdf, page)
-    floors = note_exclusion_floors(items)
+    note_ranges = note_exclusion_ranges(items)
     classified = []
     for item in items:
         copy = dict(item)
-        copy["kind"] = classify_item(copy, floors)
+        copy["kind"] = classify_item(copy, note_ranges)
         classified.append(copy)
     dropcap_items = [item for item in classified if item["kind"] == "dropcap"]
     for item in classified:
@@ -227,7 +363,23 @@ def classify_page(pdf: str, page: int) -> dict:
             if abs(item["box"][1] - dropcap["box"][1]) <= 32 and item["box"][0] > dropcap["box"][0]:
                 item["kind"] = "body"
                 break
-    classified = dedupe_body(classified)
+    prompt_note_active: set[int] = set()
+    for item in sorted(classified, key=reading_key):
+        q = item["q"]
+        text = normalize(item["text"])
+        if item["kind"] == "dropcap":
+            prompt_note_active.discard(q)
+            continue
+        if item["kind"] in {"header", "noise", "duplicate"}:
+            continue
+        if q in prompt_note_active and re.match(r"^\d{1,3}(?:[-–]\d{1,3})?(?=\D|$)", text):
+            prompt_note_active.remove(q)
+        if re.match(r"^[①-⑳▪•]", text):
+            prompt_note_active.add(q)
+            item["kind"] = "note"
+            continue
+        if q in prompt_note_active:
+            item["kind"] = "note"
     body_text = "\n".join(
         item["text"] for item in sorted(classified, key=reading_key) if item["kind"] == "body"
     )
@@ -265,7 +417,8 @@ def infer_book_page_ranges(pages: dict[str, list[dict]]) -> dict[str, dict[str, 
         for doc in page_docs:
             text = doc["header"]
             for book in books:
-                if book in text:
+                names = BOOK_ALIASES.get(book, [book])
+                if any(name in text for name in names):
                     seen[book].append(doc["page"])
         starts: dict[str, int] = {}
         for idx, book in enumerate(books):
@@ -274,12 +427,15 @@ def infer_book_page_ranges(pages: dict[str, list[dict]]) -> dict[str, dict[str, 
             elif seen[book]:
                 starts[book] = max(1, min(seen[book]) - 1)
             else:
-                starts[book] = starts[books[idx - 1]]
+                starts[book] = 0
         for idx, book in enumerate(books):
-            start = starts[book]
+            if starts[book]:
+                start = starts[book]
+            else:
+                prev_starts = [starts[prev] for prev in books[:idx] if starts[prev]]
+                start = (prev_starts[-1] if prev_starts else 1)
             if idx + 1 < len(books):
-                next_book = books[idx + 1]
-                next_start = starts.get(next_book)
+                next_start = next((starts[next_book] for next_book in books[idx + 1 :] if starts[next_book]), None)
                 end = (next_start - 1) if next_start else page_docs[-1]["page"]
             else:
                 end = page_docs[-1]["page"]
@@ -315,6 +471,34 @@ def chapter_candidates_for_book(book: str, book_range: dict[str, int], page_docs
                     )
     for rows in candidates.values():
         rows.sort(key=lambda row: (row["page"], row["q"], row["box"][1], -row["confidence"]))
+    start_anchor = first_body_anchor(book_range, page_docs)
+    if start_anchor is not None:
+        chapter_one = candidates.get("1", [])
+        if not chapter_one or chapter_one[0]["page"] > book_range["startPage"] + 3:
+            candidates["1"].insert(0, start_anchor)
+    for chapter in range(2, max_chapter + 1):
+        key = str(chapter)
+        if candidates[key]:
+            continue
+        anchor = header_transition_anchor(book, chapter, book_range, page_docs)
+        if anchor is not None:
+            candidates[key].append(anchor)
+    for (manual_book, chapter), anchor in MANUAL_ANCHORS.items():
+        if manual_book != book:
+            continue
+        key = str(chapter)
+        candidates[key].insert(
+            0,
+            {
+                "page": anchor["page"],
+                "q": anchor["q"],
+                "box": anchor["box"],
+                "raw": "manual-anchor",
+                "confidence": 1.0,
+                "image": str(CROPS / anchor["pdf"] / f"p{anchor['page']:04d}_q{anchor['q']}.png"),
+                "manual": True,
+            },
+        )
     return candidates
 
 
