@@ -18,12 +18,13 @@ except ModuleNotFoundError as exc:
 
 
 SRC = Path("/home/easy/bible/new/scan_rebuild/chapters")
+PAGES = Path("/home/easy/bible/new/scan_rebuild/pages")
 OUT = Path("/home/easy/bible/new/scan_rebuild_spellchecked")
 REPORT = Path("reports/scan-spellcheck")
 
 SCRIPT_RE = re.compile(r"[^0-9A-Za-z가-힣]+")
 JAMO_RE = re.compile(r"[ㄱ-ㅎㅏ-ㅣㆍ]")
-ODD_ASCII_RE = re.compile(r"[A-Za-z]{2,}|[Kk][Ff]?|[oO](?=\s|$)")
+ODD_ASCII_RE = re.compile(r"(?:ol|ln|IP|PJ|Nl|ry|Hl|frac|[A-Za-z]{1,3}\d|\$|\\)", re.IGNORECASE)
 
 COMMON_REPAIRS = [
     ("하니을", "하나님을"),
@@ -40,6 +41,8 @@ COMMON_REPAIRS = [
     ("듣나무", "든 나무"),
     ("아카지아", "아카시아"),
     ("뭘 듯이", "뛸 듯이"),
+    ("받에", "밭에"),
+    ("받에서", "밭에서"),
     ("자갈받", "자갈밭"),
     ("잡초받", "잡초밭"),
     ("풀받", "풀밭"),
@@ -58,6 +61,9 @@ COMMON_REPAIRS = [
     ("비깥", "바깥"),
     ("므낭세", "므낫세"),
     ("므낮세", "므낫세"),
+    ("야벤", "야벳"),
+    ("야켓", "야렛"),
+    ("아박ㅅ", "아르박삿"),
     ("아라탓", "아라랏"),
     ("아라란", "아라랏 산"),
     ("오배상", "오백 살"),
@@ -65,7 +71,6 @@ COMMON_REPAIRS = [
 ]
 
 BAD_FRAGMENTS = [
-    "하나남",
     "히나님",
     "수어다",
     "동사나무",
@@ -79,7 +84,6 @@ BAD_FRAGMENTS = [
     "잔지",
     "불건",
     "마런",
-    "에뉴",
     "이컷",
     "게텔",
     "메센",
@@ -90,11 +94,6 @@ BAD_FRAGMENTS = [
     "비깥",
     "므낭",
     "므낮",
-    "야켓",
-    "야벤",
-    "받에",
-    "받에서",
-    "받을",
     "느리는",
 ]
 
@@ -156,6 +155,14 @@ def repair_line(text: str) -> str:
     value = re.sub(r"\s*[_ㆍ<>、。％%《「」Ｌ]\s*$", "", value)
     for source, target in COMMON_REPAIRS:
         value = value.replace(source, target)
+    if re.fullmatch(r"[\Wㄱ-ㅎㅏ-ㅣA-Za-z0-9]+", value) and len(compact(value)) <= 3:
+        return ""
+    if len(compact(value)) <= 4 and (JAMO_RE.search(value) or ODD_ASCII_RE.search(value)):
+        return ""
+    value = re.sub(r"^[ㄱ-ㅎㅏ-ㅣ]\s*(?=[가-힣])", "", value)
+    value = re.sub(r"^[ㄱ-ㅎㅏ-ㅣ][,.\s]+(?=[가-힣\"'])", "", value)
+    value = re.sub(r"(?<=[가-힣])[ㄱ-ㅎㅏ-ㅣ]$", "", value)
+    value = re.sub(r"(?<=[가-힣])[A-Za-z]{1,3}\d*$", "", value)
     value = re.sub(r"\s+", " ", value).strip()
     return value
 
@@ -217,8 +224,11 @@ def process_chapter(kiwi: Kiwi, book: str, chapter: str, text: str) -> tuple[str
     review: list[dict] = []
     changed = 0
     recent: list[str] = []
-    for line_no, original in enumerate(split_lines(text), start=1):
+    lines = split_lines(text)
+    for line_no, original in enumerate(lines, start=1):
         repaired = repair_line(original)
+        before = lines[line_no - 2] if line_no >= 2 else ""
+        after = lines[line_no] if line_no < len(lines) else ""
         if looks_like_editorial_heading(repaired):
             review.append(
                 {
@@ -227,6 +237,8 @@ def process_chapter(kiwi: Kiwi, book: str, chapter: str, text: str) -> tuple[str
                     "line": line_no,
                     "original": original,
                     "suggested": "",
+                    "before": before,
+                    "after": after,
                     "reasons": ["editorial-heading-omitted"],
                 }
             )
@@ -241,6 +253,8 @@ def process_chapter(kiwi: Kiwi, book: str, chapter: str, text: str) -> tuple[str
                     "line": line_no,
                     "original": original,
                     "suggested": "",
+                    "before": before,
+                    "after": after,
                     "reasons": ["near-duplicate-omitted"],
                 }
             )
@@ -257,6 +271,8 @@ def process_chapter(kiwi: Kiwi, book: str, chapter: str, text: str) -> tuple[str
                     "line": line_no,
                     "original": original,
                     "suggested": repaired,
+                    "before": before,
+                    "after": after,
                     "reasons": reasons,
                 }
             )
@@ -266,20 +282,63 @@ def process_chapter(kiwi: Kiwi, book: str, chapter: str, text: str) -> tuple[str
     return "\n".join(out_lines), review, changed
 
 
+def needs_human_review(item: dict) -> bool:
+    automatic = {"auto-repaired", "editorial-heading-omitted", "near-duplicate-omitted"}
+    reasons = set(item["reasons"])
+    return not reasons.issubset(automatic)
+
+
+def load_source_locations() -> dict[str, list[dict]]:
+    locations: dict[str, list[dict]] = {}
+    for path in sorted(PAGES.glob("*/*.json")):
+        data = json.loads(path.read_text(encoding="utf-8"))
+        pdf = data["pdf"]
+        page = data["page"]
+        for item in data.get("items", []):
+            if item.get("kind") != "body":
+                continue
+            key = compact(item.get("text", ""))
+            if not key:
+                continue
+            locations.setdefault(key, []).append(
+                {
+                    "pdf": pdf,
+                    "page": page,
+                    "q": item.get("q"),
+                    "box": item.get("box"),
+                    "image": f"/home/easy/bible/new/crops/{pdf}/p{page:04d}_q{item.get('q')}.png",
+                }
+            )
+    return locations
+
+
+def enrich_locations(items: list[dict]) -> None:
+    locations = load_source_locations()
+    for item in items:
+        key = compact(item["original"])
+        candidates = locations.get(key, [])
+        item["source"] = candidates[0] if candidates else None
+
+
 def write_markdown(items: list[dict], limit: int = 120) -> list[Path]:
     for old in REPORT.glob("review-batch-*.md"):
         old.unlink()
     paths: list[Path] = []
     batch: list[str] = []
     batch_no = 1
-    for idx, item in enumerate(items, start=1):
+    manual_items = [item for item in items if needs_human_review(item)]
+    for idx, item in enumerate(manual_items, start=1):
         batch.append(
             "\n".join(
                 [
                     f"## {idx}. {item['book']} {item['chapter']}장 line {item['line']}",
                     f"- reasons: `{', '.join(item['reasons'])}`",
+                    f"- source: `{item.get('source')}`",
+                    f"- image: `{item.get('source', {}).get('image') if item.get('source') else ''}`",
+                    f"- before: `{item.get('before', '')}`",
                     f"- original: `{item['original']}`",
                     f"- suggested: `{item['suggested']}`",
+                    f"- after: `{item.get('after', '')}`",
                     "- confirm:",
                 ]
             )
@@ -295,6 +354,25 @@ def write_markdown(items: list[dict], limit: int = 120) -> list[Path]:
         path.write_text(f"# Scan Spellcheck Review {batch_no:03d}\n\n" + "\n\n".join(batch) + "\n", encoding="utf-8")
         paths.append(path)
     return paths
+
+
+def write_auto_markdown(items: list[dict]) -> Path:
+    automatic_items = [item for item in items if not needs_human_review(item)]
+    rows = []
+    for idx, item in enumerate(automatic_items, start=1):
+        rows.append(
+            "\n".join(
+                [
+                    f"## {idx}. {item['book']} {item['chapter']}장 line {item['line']}",
+                    f"- reasons: `{', '.join(item['reasons'])}`",
+                    f"- original: `{item['original']}`",
+                    f"- applied: `{item['suggested']}`",
+                ]
+            )
+        )
+    path = REPORT / "auto-applied.md"
+    path.write_text("# Scan Spellcheck Auto Applied\n\n" + "\n\n".join(rows) + "\n", encoding="utf-8")
+    return path
 
 
 def main() -> int:
@@ -326,14 +404,21 @@ def main() -> int:
         (chapters_out / path.name).write_text(json.dumps(out_data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
     review_items.sort(key=lambda item: (0 if "auto-repaired" not in item["reasons"] else 1, item["book"], int(item["chapter"]), item["line"]))
+    enrich_locations(review_items)
     paths = write_markdown(review_items)
+    auto_path = write_auto_markdown(review_items)
+    manual_count = sum(1 for item in review_items if needs_human_review(item))
+    auto_count = len(review_items) - manual_count
     report = {
         "source": str(SRC),
         "out": str(OUT),
         "totalChapters": total_chapters,
         "changedLines": total_changed,
         "reviewLines": len(review_items),
+        "manualReviewLines": manual_count,
+        "autoAppliedLines": auto_count,
         "batchCount": len(paths),
+        "autoAppliedReport": str(auto_path),
         "summary": summary,
         "items": review_items,
     }
