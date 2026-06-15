@@ -4,6 +4,7 @@ import {
   loadBook,
   makeRef,
   parseRefs,
+  saveBibleChapterText,
   type BookMeta,
   type BookDoc,
 } from '../bible'
@@ -15,6 +16,8 @@ export interface PassageInfo {
   ref: string
   text: string
   loading: boolean
+  canEdit: boolean
+  saveText: (text: string) => Promise<void>
 }
 
 interface Props {
@@ -196,6 +199,8 @@ export default function BiblePicker({ value, onChange, onPassage }: Props) {
         }
 
         return {
+          order: selection.order,
+          file: meta?.file ?? '',
           ref,
           book,
           chapter: selection.chapter,
@@ -238,6 +243,13 @@ export default function BiblePicker({ value, onChange, onPassage }: Props) {
     }
 
     const first = selectedPassages[0]
+    const canEdit =
+      selectedPassages.length === 1 &&
+      !loading &&
+      typeof first.order === 'number' &&
+      !!first.file &&
+      first.chapter === first.endChapter
+
     onPassage({
       book: first.book,
       chapter: first.chapter,
@@ -245,6 +257,16 @@ export default function BiblePicker({ value, onChange, onPassage }: Props) {
       ref: nextValue,
       text: passageText,
       loading,
+      canEdit,
+      saveText: async (text: string) => {
+        if (!canEdit || typeof first.order !== 'number') return
+        const nextDoc = await saveBibleChapterText(first.file, first.chapter, text)
+        setDocs((prev) => {
+          const next = new Map(prev)
+          next.set(first.order, nextDoc)
+          return next
+        })
+      },
     })
     // onPassage는 안정적인 setter 가정
     // eslint-disable-next-line react-hooks/exhaustive-deps

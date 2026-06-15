@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { Entry, Field, FieldMode } from '../types'
 import ModeToggle from '../components/ModeToggle'
 import BiblePicker, { type PassageInfo } from '../components/BiblePicker'
@@ -19,7 +19,46 @@ export default function TranscribeSection({ entry, update, FieldEditor }: Props)
   // 현재 본문 + 펼침 상태 (기본은 접힘 — 필사 공간 확보)
   const [passage, setPassage] = useState<PassageInfo | null>(null)
   const [open, setOpen] = useState(false)
+  const [editingPassage, setEditingPassage] = useState(false)
+  const [passageDraft, setPassageDraft] = useState('')
+  const [savingPassage, setSavingPassage] = useState(false)
+  const [passageSaveError, setPassageSaveError] = useState<string | null>(null)
   const hasPassage = !!passage && (passage.loading || !!passage.text)
+
+  useEffect(() => {
+    if (!passage || editingPassage) return
+    setPassageDraft(passage.text)
+    setPassageSaveError(null)
+  }, [editingPassage, passage])
+
+  const startPassageEdit = () => {
+    if (!passage?.canEdit) return
+    setOpen(true)
+    setPassageDraft(passage.text)
+    setPassageSaveError(null)
+    setEditingPassage(true)
+  }
+
+  const cancelPassageEdit = () => {
+    setPassageDraft(passage?.text ?? '')
+    setPassageSaveError(null)
+    setEditingPassage(false)
+  }
+
+  const savePassageEdit = async () => {
+    if (!passage?.canEdit) return
+    setSavingPassage(true)
+    setPassageSaveError(null)
+    try {
+      await passage.saveText(passageDraft)
+      setPassage((prev) => (prev ? { ...prev, text: passageDraft } : prev))
+      setEditingPassage(false)
+    } catch (e) {
+      setPassageSaveError(String(e instanceof Error ? e.message : e))
+    } finally {
+      setSavingPassage(false)
+    }
+  }
 
   return (
     <div className="space-y-4">
@@ -34,27 +73,66 @@ export default function TranscribeSection({ entry, update, FieldEditor }: Props)
       {hasPassage && (
         <div className="sticky top-[52px] z-[5]">
           <div className="rounded-xl border border-rose-line bg-rose-card px-4 py-3 shadow-sm">
-            <button
-              type="button"
-              onClick={() => setOpen((o) => !o)}
-              disabled={passage!.loading}
-              className="flex w-full items-center justify-between gap-2 disabled:opacity-100"
-            >
-              <span className="font-serif text-sm font-bold tracking-wide text-rose-accent">
-                {passage!.ref}
-              </span>
-              {!passage!.loading && (
-                <span className="shrink-0 text-xs font-medium text-rose-key">
-                  {open ? '접기 ▴' : '펼치기 ▾'}
+            <div className="flex items-center justify-between gap-2">
+              <button
+                type="button"
+                onClick={() => setOpen((o) => !o)}
+                disabled={passage!.loading || editingPassage}
+                className="flex min-w-0 flex-1 items-center justify-between gap-2 disabled:opacity-100"
+              >
+                <span className="min-w-0 truncate font-serif text-sm font-bold tracking-wide text-rose-accent">
+                  {passage!.ref}
                 </span>
+                {!passage!.loading && !editingPassage && (
+                  <span className="shrink-0 text-xs font-medium text-rose-key">
+                    {open ? '접기 ▴' : '펼치기 ▾'}
+                  </span>
+                )}
+              </button>
+              {!passage!.loading && passage!.canEdit && !editingPassage && (
+                <button
+                  type="button"
+                  onClick={startPassageEdit}
+                  className="shrink-0 rounded-lg bg-rose-chip px-2.5 py-1 text-xs font-bold text-rose-accent"
+                >
+                  본문 수정
+                </button>
               )}
-            </button>
+            </div>
 
             {passage!.loading ? (
               <div className="mt-2 animate-pulse space-y-2.5 py-0.5" aria-label="본문 불러오는 중">
                 <div className="h-3 w-full rounded bg-rose-line/50" />
                 <div className="h-3 w-[92%] rounded bg-rose-line/50" />
                 <div className="h-3 w-[70%] rounded bg-rose-line/50" />
+              </div>
+            ) : editingPassage ? (
+              <div className="mt-2 space-y-2">
+                <textarea
+                  value={passageDraft}
+                  onChange={(event) => setPassageDraft(event.target.value)}
+                  className="min-h-[12rem] w-full rounded-xl border border-rose-line bg-white px-3 py-2 font-serif text-[15px] leading-[1.75] text-zinc-700 outline-none focus:border-rose-accent"
+                  aria-label={`${passage!.ref} 본문 수정`}
+                />
+                {passageSaveError && <p className="text-xs text-red-500">{passageSaveError}</p>}
+                <div className="flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={cancelPassageEdit}
+                    disabled={savingPassage}
+                    className="rounded-lg border border-rose-line bg-white px-3 py-2 text-xs font-bold text-rose-key disabled:opacity-50"
+                  >
+                    취소
+                  </button>
+                  <button
+                    type="button"
+                    onClick={savePassageEdit}
+                    disabled={savingPassage}
+                    className="rounded-lg bg-rose-accent px-3 py-2 text-xs font-bold text-white disabled:opacity-50"
+                  >
+                    {savingPassage ? '저장 중' : '저장'}
+                  </button>
+                </div>
               </div>
             ) : (
               <div

@@ -86,6 +86,29 @@ export function loadBook(file: string): Promise<BookDoc> {
   return p
 }
 
+export async function saveBibleChapterText(file: string, chapter: number, text: string): Promise<BookDoc> {
+  const doc = await loadBook(file)
+  const chapters = [...doc.chapters]
+  const index = chapters.findIndex((item) => item.chapter === chapter)
+
+  if (index >= 0) {
+    chapters[index] = { ...chapters[index], text }
+  } else {
+    chapters.push({ chapter, text })
+    chapters.sort((a, b) => a.chapter - b.chapter)
+  }
+
+  const nextDoc: BookDoc = { ...doc, chapters }
+  await db.bibleBooks.put({
+    file,
+    build: BUILD,
+    doc: nextDoc,
+    updatedAt: new Date().toISOString(),
+  })
+  bookCache.set(file, Promise.resolve(nextDoc))
+  return nextDoc
+}
+
 export async function clearBibleCache(): Promise<void> {
   indexCache = null
   bookCache.clear()
