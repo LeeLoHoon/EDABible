@@ -11,6 +11,7 @@ const base = process.env.VERCEL === '1' ? '/' : '/EDABible/'
 // https://vite.dev/config/
 export default defineConfig({
   base,
+  envPrefix: ['VITE_', 'NEXT_PUBLIC_'],
   define: {
     __BUILD__: JSON.stringify(pkg.version),
   },

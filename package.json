@@ -1,11 +1,12 @@
 {
   "name": "edabible",
   "private": true,
-  "version": "1.5.15",
+  "version": "1.5.16",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "seed:supabase-bible": "node scripts/seed_supabase_bible.mjs",
     "rebuild:genesis-ocr": "node scripts/rebuild-genesis-from-ocr.mjs",
     "strip:ocr-headings": "node scripts/strip-ocr-editorial-headings.mjs",
     "validate:bible": "node scripts/validate-bible.mjs",
@@ -13,6 +14,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.108.1",
     "dexie": "^4.4.3",
     "html-to-image": "^1.11.13",
     "html2canvas": "^1.4.1",
@@ -36,6 +38,7 @@
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.2",
     "globals": "^17.6.0",
+    "pg": "^8.21.0",
     "puppeteer-core": "^25.1.0",
     "tailwindcss": "^4.3.0",
     "typescript": "~6.0.2",

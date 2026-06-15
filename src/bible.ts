@@ -1,6 +1,7 @@
 /** 메시지 성경 로더. IndexedDB 캐시를 우선 사용하고, 없으면 public/bible/ 에서 가져온다. */
 
 import { db } from './db'
+import { loadRemoteBook, saveRemoteChapterText } from './remoteBible'
 
 export interface BookMeta {
   order: number
@@ -68,17 +69,35 @@ export function loadBook(file: string): Promise<BookDoc> {
   if (!p) {
     p = (async () => {
       const cached = await db.bibleBooks.get(file)
+      let doc: BookDoc
+
       if (cached?.build === BUILD && cached.doc) {
-        return cached.doc as BookDoc
+        doc = cached.doc as BookDoc
+      } else {
+        doc = await fetchJson<BookDoc>(`${BASE}bible/${file}?v=${BUILD}`, '본문을 불러오지 못했습니다')
+        await db.bibleBooks.put({
+          file,
+          build: BUILD,
+          doc,
+          updatedAt: new Date().toISOString(),
+        })
       }
 
-      const doc = await fetchJson<BookDoc>(`${BASE}bible/${file}?v=${BUILD}`, '본문을 불러오지 못했습니다')
-      await db.bibleBooks.put({
-        file,
-        build: BUILD,
-        doc,
-        updatedAt: new Date().toISOString(),
-      })
+      try {
+        const remoteDoc = await loadRemoteBook(file, doc)
+        if (remoteDoc) {
+          await db.bibleBooks.put({
+            file,
+            build: BUILD,
+            doc: remoteDoc,
+            updatedAt: new Date().toISOString(),
+          })
+          return remoteDoc
+        }
+      } catch (error) {
+        console.warn('Supabase Bible load failed; using local cache.', error)
+      }
+
       return doc
     })()
     bookCache.set(file, p)
@@ -88,6 +107,17 @@ export function loadBook(file: string): Promise<BookDoc> {
 
 export async function saveBibleChapterText(file: string, chapter: number, text: string): Promise<BookDoc> {
   const doc = await loadBook(file)
+  const previousText = doc.chapters.find((item) => item.chapter === chapter)?.text ?? ''
+
+  await saveRemoteChapterText({
+    file,
+    doc,
+    chapter,
+    previousText,
+    nextText: text,
+    build: BUILD,
+  })
+
   const chapters = [...doc.chapters]
   const index = chapters.findIndex((item) => item.chapter === chapter)
 
