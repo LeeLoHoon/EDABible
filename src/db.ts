@@ -1,15 +1,36 @@
 import Dexie, { type Table } from 'dexie'
 import type { Entry } from './types'
 
+export interface BibleIndexCache {
+  id: 'index'
+  build: string
+  items: unknown[]
+  updatedAt: string
+}
+
+export interface BibleBookCache {
+  file: string
+  build: string
+  doc: unknown
+  updatedAt: string
+}
+
 /** 로컬(IndexedDB) 저장소 — 로그인/서버 없이 동작. 추후 Supabase 동기화 예정. */
 class EdaBibleDB extends Dexie {
   entries!: Table<Entry, string>
+  bibleIndex!: Table<BibleIndexCache, string>
+  bibleBooks!: Table<BibleBookCache, string>
 
   constructor() {
     super('edabible')
     this.version(1).stores({
       // id: 기본키, date/updatedAt: 정렬·조회용 인덱스
       entries: 'id, date, updatedAt',
+    })
+    this.version(2).stores({
+      entries: 'id, date, updatedAt',
+      bibleIndex: 'id, build',
+      bibleBooks: 'file, build',
     })
   }
 }

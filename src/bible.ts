@@ -1,4 +1,6 @@
-/** 메시지 성경(권별 JSON) 로더. public/bible/ 에서 fetch, 메모리 캐시. */
+/** 메시지 성경 로더. IndexedDB 캐시를 우선 사용하고, 없으면 public/bible/ 에서 가져온다. */
+
+import { db } from './db'
 
 export interface BookMeta {
   order: number
@@ -29,16 +31,34 @@ export interface PassageRef {
 
 // Vite base('/EDABible/') 기준 — GitHub Pages 서브경로 대응
 const BASE = import.meta.env.BASE_URL
+const BUILD = __BUILD__
 
 let indexCache: Promise<BookMeta[]> | null = null
 const bookCache = new Map<string, Promise<BookDoc>>()
 
+async function fetchJson<T>(url: string, message: string): Promise<T> {
+  const response = await fetch(url)
+  if (!response.ok) throw new Error(message)
+  return response.json()
+}
+
 export function loadIndex(): Promise<BookMeta[]> {
   if (!indexCache) {
-    indexCache = fetch(`${BASE}bible/index.json?v=${__BUILD__}`).then((r) => {
-      if (!r.ok) throw new Error('성경 목록을 불러오지 못했습니다')
-      return r.json()
-    })
+    indexCache = (async () => {
+      const cached = await db.bibleIndex.get('index')
+      if (cached?.build === BUILD && Array.isArray(cached.items)) {
+        return cached.items as BookMeta[]
+      }
+
+      const items = await fetchJson<BookMeta[]>(`${BASE}bible/index.json?v=${BUILD}`, '성경 목록을 불러오지 못했습니다')
+      await db.bibleIndex.put({
+        id: 'index',
+        build: BUILD,
+        items,
+        updatedAt: new Date().toISOString(),
+      })
+      return items
+    })()
   }
   return indexCache
 }
@@ -46,13 +66,33 @@ export function loadIndex(): Promise<BookMeta[]> {
 export function loadBook(file: string): Promise<BookDoc> {
   let p = bookCache.get(file)
   if (!p) {
-    p = fetch(`${BASE}bible/${file}?v=${__BUILD__}`).then((r) => {
-      if (!r.ok) throw new Error('본문을 불러오지 못했습니다')
-      return r.json()
-    })
+    p = (async () => {
+      const cached = await db.bibleBooks.get(file)
+      if (cached?.build === BUILD && cached.doc) {
+        return cached.doc as BookDoc
+      }
+
+      const doc = await fetchJson<BookDoc>(`${BASE}bible/${file}?v=${BUILD}`, '본문을 불러오지 못했습니다')
+      await db.bibleBooks.put({
+        file,
+        build: BUILD,
+        doc,
+        updatedAt: new Date().toISOString(),
+      })
+      return doc
+    })()
     bookCache.set(file, p)
   }
   return p
+}
+
+export async function clearBibleCache(): Promise<void> {
+  indexCache = null
+  bookCache.clear()
+  await db.transaction('rw', db.bibleIndex, db.bibleBooks, async () => {
+    await db.bibleIndex.clear()
+    await db.bibleBooks.clear()
+  })
 }
 
 /** '창세기 3장', '잠언 1~2장' 같은 참조 문자열을 만든다. */
