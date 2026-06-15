@@ -19,6 +19,13 @@ npm run build:bible
 npm run validate:bible
 ```
 
+웹에서 Supabase 본문을 수정한 뒤 그 상태를 코드에 저장하려면 아래 명령을 실행합니다.
+
+```bash
+npm run pull:supabase-bible
+npm run validate:bible
+```
+
 ## Supabase
 
 1. Supabase SQL Editor에서 `supabase/schema.sql`을 실행합니다.
@@ -45,4 +52,5 @@ npm run build:bible
 npm run build
 npm run validate:bible
 npm run seed:supabase-bible
+npm run pull:supabase-bible
 ```

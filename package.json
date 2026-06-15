@@ -8,6 +8,7 @@
     "build": "npm run build:bible && tsc -b && vite build",
     "build:bible": "node scripts/build_public_bible_from_jsonl.mjs",
     "seed:supabase-bible": "node scripts/seed_supabase_bible.mjs",
+    "pull:supabase-bible": "node scripts/pull_supabase_bible.mjs && npm run build:bible",
     "validate:bible": "node scripts/validate-bible.mjs",
     "lint": "eslint .",
     "preview": "vite preview"
