@@ -5,11 +5,24 @@ interface Props {
 }
 
 const VERSE_MARKER = /\((\d{1,3}(?:[-~]\d{1,3})?)\)\s*/g
+const HEADING_MARKER = /^\[\[(.+)\]\]$/
+const PAREN_HEADING = /^\((?!\d{1,3}(?:[-~]\d{1,3})?\))(.{2,80})\)$/
 
 interface Segment {
   label: string | null
   text: string
 }
+
+type Block =
+  | {
+      type: 'heading'
+      text: string
+    }
+  | {
+      type: 'segment'
+      label: string | null
+      text: string
+    }
 
 function splitPassage(text: string): Segment[] {
   const segments: Segment[] = []
@@ -29,6 +42,33 @@ function splitPassage(text: string): Segment[] {
   return segments.length > 0 ? segments : [{ label: null, text }]
 }
 
+function splitBlocks(text: string): Block[] {
+  const blocks: Block[] = []
+
+  for (const rawLine of text.split('\n')) {
+    const line = rawLine.trim()
+    if (!line) continue
+
+    const heading = line.match(HEADING_MARKER)
+    if (heading) {
+      blocks.push({ type: 'heading', text: heading[1].trim() })
+      continue
+    }
+
+    const parentheticalHeading = line.match(PAREN_HEADING)
+    if (parentheticalHeading) {
+      blocks.push({ type: 'heading', text: parentheticalHeading[1].trim() })
+      continue
+    }
+
+    for (const segment of splitPassage(line)) {
+      blocks.push({ type: 'segment', ...segment })
+    }
+  }
+
+  return blocks
+}
+
 function renderText(text: string): ReactNode[] {
   return text.split('\n').flatMap((line, index, lines) =>
     index === lines.length - 1 ? [line] : [line, <br key={index} />],
@@ -36,16 +76,25 @@ function renderText(text: string): ReactNode[] {
 }
 
 export default function PassageText({ text }: Props) {
-  const segments = splitPassage(text)
+  const blocks = splitBlocks(text)
 
   return (
     <div className="selectable-text passage-text font-serif text-[15px] leading-[1.75] text-zinc-700">
-      {segments.map((segment, index) => (
-        <p key={`${segment.label ?? 'intro'}-${index}`} className="passage-segment">
-          {segment.label && <span className="passage-verse">{segment.label}</span>}
-          <span>{renderText(segment.text)}</span>
-        </p>
-      ))}
+      {blocks.map((block, index) =>
+        block.type === 'heading' ? (
+          <h4
+            key={`heading-${block.text}-${index}`}
+            className="mb-1.5 mt-4 font-sans text-[0.82rem] font-black text-rose-ink first:mt-0"
+          >
+            {block.text}
+          </h4>
+        ) : (
+          <p key={`${block.label ?? 'intro'}-${index}`} className="passage-segment">
+            {block.label && <span className="passage-verse">{block.label}</span>}
+            <span>{renderText(block.text)}</span>
+          </p>
+        ),
+      )}
     </div>
   )
 }

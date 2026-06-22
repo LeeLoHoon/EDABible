@@ -31,8 +31,61 @@ function normalizeText(text) {
     .trim()
 }
 
-function chapterText(records) {
-  return normalizeText(records.map((record) => record.text?.trim()).filter(Boolean).join('\n\n'))
+function isDisplayHeading(heading) {
+  if (!heading) return false
+  return !/유튜브|youtube|본문|OCR|ASR|설명란/i.test(heading)
+}
+
+function verseLabel(record) {
+  const start = Number(record.verse_start ?? 0)
+  const end = Number(record.verse_end ?? start)
+  if (!start) return null
+  return end && end !== start ? `${start}-${end}` : `${start}`
+}
+
+function cleanRecordText(text) {
+  return text
+    .trim()
+    .replace(/^[\])]\s*/, '')
+    .trim()
+}
+
+function chapterText(records, { structured = false } = {}) {
+  if (!structured) {
+    return normalizeText(records.map((record) => cleanRecordText(record.text ?? '')).filter(Boolean).join('\n\n'))
+  }
+
+  const lines = []
+  let previousHeading = null
+  for (const record of records) {
+    let text = cleanRecordText(record.text ?? '')
+    if (!text) continue
+
+    const inlineHeading = text.match(/^\((?!\d{1,3}(?:[-~]\d{1,3})?\))([^\n)]{2,80})\)\s*\n+/)
+    const heading = isDisplayHeading(record.heading)
+      ? record.heading.trim()
+      : inlineHeading
+        ? inlineHeading[1].trim()
+        : null
+    if (inlineHeading && heading === inlineHeading[1].trim()) {
+      text = text.slice(inlineHeading[0].length).trim()
+    }
+
+    if (heading && heading !== previousHeading) {
+      if (lines.length > 0) lines.push('')
+      lines.push(`[[${heading}]]`)
+      previousHeading = heading
+    }
+
+    const label = verseLabel(record)
+    lines.push(label ? `(${label}) ${text}` : text)
+  }
+
+  return normalizeText(lines.join('\n'))
+}
+
+function plainChapterText(records) {
+  return normalizeText(records.map((record) => cleanRecordText(record.text ?? '')).filter(Boolean).join('\n\n'))
 }
 
 function scoreText(text) {
@@ -107,14 +160,15 @@ for (const book of books) {
     }
 
     const oldRow = oldByKey.get(key)
-    const sourceText = chapterText(records)
-    if (!sourceText) {
+    const sourcePlainText = plainChapterText(records)
+    if (!sourcePlainText) {
       issues.push({ type: 'empty-source-chapter', book: book.book, chapter })
       continue
     }
+    const sourceText = chapterText(records, { structured: true })
 
     const oldText = oldRow?.text ? normalizeText(oldRow.text) : ''
-    const sourceScore = scoreText(sourceText)
+    const sourceScore = scoreText(sourcePlainText)
     const oldScore = oldText ? scoreText(oldText) : Number.POSITIVE_INFINITY
     const useOld = oldText && oldScore + 25 < sourceScore
     const text = useOld ? oldText : sourceText
