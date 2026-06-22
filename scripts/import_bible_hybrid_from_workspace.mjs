@@ -50,6 +50,42 @@ function cleanRecordText(text) {
     .trim()
 }
 
+function extractInlineHeading(line) {
+  const trimmed = line.trim()
+  const bracket = trimmed.match(/^\[([^\]\n]{2,80})\]$/)
+  if (bracket) return bracket[1].trim()
+  const paren = trimmed.match(/^\((?!\d{1,3}(?:[-~]\d{1,3})?\))([^\n)]{2,80})\)$/)
+  if (paren) return paren[1].trim()
+  return null
+}
+
+function appendStructuredText(lines, text, label) {
+  let labelPending = !!label
+
+  for (const rawLine of text.split('\n')) {
+    let line = rawLine.trim()
+    if (!line) continue
+
+    const heading = extractInlineHeading(line)
+    if (heading) {
+      if (lines.length > 0 && lines.at(-1) !== '') lines.push('')
+      lines.push(`[[${heading}]]`)
+      labelPending = !!label
+      continue
+    }
+
+    const leadingBracket = line.match(/^\[([^\]\n]{2,80})\]\s+(.+)$/)
+    if (leadingBracket) {
+      if (lines.length > 0 && lines.at(-1) !== '') lines.push('')
+      lines.push(`[[${leadingBracket[1].trim()}]]`)
+      line = leadingBracket[2].trim()
+    }
+
+    lines.push(labelPending ? `(${label}) ${line}` : line)
+    labelPending = false
+  }
+}
+
 function chapterText(records, { structured = false } = {}) {
   if (!structured) {
     return normalizeText(records.map((record) => cleanRecordText(record.text ?? '')).filter(Boolean).join('\n\n'))
@@ -78,7 +114,7 @@ function chapterText(records, { structured = false } = {}) {
     }
 
     const label = verseLabel(record)
-    lines.push(label ? `(${label}) ${text}` : text)
+    appendStructuredText(lines, text, label)
   }
 
   return normalizeText(lines.join('\n'))
@@ -93,7 +129,7 @@ function scoreText(text) {
   const verseLine = /^\s*\(?\d{1,3}(?:-\d{1,3})?\)?(?:\s|$)/
   const inlineVerse = /(?:^|\n|\s)\(?\d{1,3}(?:-\d{1,3})?\)?\s+[가-힣"“']/
   const residue =
-    /[ㄱ-ㅎㅏ-ㅣ]|。|하나넘|학나님|허나님|차나님|연지베게|엉검퀴|숫아|일컴|울부지|뽑어|디스리|떨감|무었|계신거야|부혔다오|뼈프린다|발을팡|아리따운 여인 아|연희는|제품에 도시|구매 도시/g
+    /[ㄱ-ㅎㅏ-ㅣ]|。|하나넘|학나님|허나님|차나님|연지베게|엉검퀴|숫아|일컴|울부지|뽑어|디스리|떨감|무었|계신거야|부혔다오|뼈프린다|발을팡|아리따운 여인 아|연희는|제품에 도시|구매 도시|애니와 함께|매일 성경 묵상|오디오 성경 묵상/g
   let score = 0
   score += (text.match(residue)?.length ?? 0) * 40
   score += (text.match(/[A-Za-z]{2,}/g)?.length ?? 0) * 6
@@ -102,6 +138,10 @@ function scoreText(text) {
   if (text.length < 250) score += 600
   if (text.length < 600) score += 200
   return score
+}
+
+function hasNonScriptureTail(text) {
+  return /애니와 함께|매일 성경 묵상|오디오 성경 묵상/.test(text)
 }
 
 function countMatches(texts, pattern) {
@@ -170,7 +210,9 @@ for (const book of books) {
     const oldText = oldRow?.text ? normalizeText(oldRow.text) : ''
     const sourceScore = scoreText(sourcePlainText)
     const oldScore = oldText ? scoreText(oldText) : Number.POSITIVE_INFINITY
-    const useOld = oldText && oldScore + 25 < sourceScore
+    const oldHasTail = hasNonScriptureTail(oldText)
+    const sourceHasTail = hasNonScriptureTail(sourcePlainText)
+    const useOld = oldText && !oldHasTail && (sourceHasTail || oldScore + 25 < sourceScore)
     const text = useOld ? oldText : sourceText
 
     const row = {
