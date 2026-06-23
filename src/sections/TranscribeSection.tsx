@@ -24,6 +24,7 @@ export default function TranscribeSection({ entry, update, FieldEditor }: Props)
   const [savingPassage, setSavingPassage] = useState(false)
   const [finalizingPassage, setFinalizingPassage] = useState(false)
   const [passageSaveError, setPassageSaveError] = useState<string | null>(null)
+  const [showPassageFormatHelp, setShowPassageFormatHelp] = useState(false)
   const previousPassageKeyRef = useRef('')
   const hasPassage = !!passage && (passage.loading || !!passage.text)
   const passageKey = passage
@@ -39,6 +40,7 @@ export default function TranscribeSection({ entry, update, FieldEditor }: Props)
       setPassageSaveError(null)
       setEditingPassage(false)
       setFinalizingPassage(false)
+      setShowPassageFormatHelp(false)
       return
     }
 
@@ -48,6 +50,7 @@ export default function TranscribeSection({ entry, update, FieldEditor }: Props)
       setFinalizingPassage(false)
       setPassageDraft(passage.text)
       setPassageSaveError(null)
+      setShowPassageFormatHelp(false)
       return
     }
 
@@ -59,6 +62,7 @@ export default function TranscribeSection({ entry, update, FieldEditor }: Props)
   const startPassageEdit = () => {
     if (!passage?.canEdit) return
     setOpen(true)
+    setShowPassageFormatHelp(false)
     setPassageDraft(passage.text)
     setPassageSaveError(null)
     setEditingPassage(true)
@@ -141,13 +145,42 @@ export default function TranscribeSection({ entry, update, FieldEditor }: Props)
                 )}
               </button>
               {!passage!.loading && passage!.canEdit && !editingPassage && (
-                <button
-                  type="button"
-                  onClick={startPassageEdit}
-                  className="shrink-0 rounded-lg bg-rose-chip px-2.5 py-1 text-xs font-bold text-rose-accent"
-                >
-                  본문 수정
-                </button>
+                <div className="relative flex shrink-0 items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setShowPassageFormatHelp((value) => !value)}
+                    className="grid h-7 w-7 place-items-center rounded-lg border border-rose-line bg-white text-xs font-black text-rose-key shadow-sm"
+                    aria-expanded={showPassageFormatHelp}
+                    aria-label="본문 수정 방법 보기"
+                    title="본문 수정 방법"
+                  >
+                    ?
+                  </button>
+                  <button
+                    type="button"
+                    onClick={startPassageEdit}
+                    className="rounded-lg bg-rose-chip px-2.5 py-1 text-xs font-bold text-rose-accent"
+                  >
+                    본문 수정
+                  </button>
+                  {showPassageFormatHelp && (
+                    <div className="absolute right-0 top-9 z-20 w-[min(19rem,calc(100vw-2rem))] rounded-xl border border-rose-line bg-white p-3 text-left text-xs leading-relaxed text-zinc-700 shadow-lg">
+                      <p className="font-bold text-rose-accent">본문 수정 방법</p>
+                      <div className="mt-2 rounded-lg bg-rose-bg/70 p-2 font-mono text-[11px] leading-relaxed text-zinc-700">
+                        <p>[[제목]]</p>
+                        <p>(1-3) 본문 내용...</p>
+                        <p>(4-6) 본문 내용...</p>
+                        <p className="mt-2">[[중간 제목]]</p>
+                        <p>(7-10) 본문 내용...</p>
+                      </div>
+                      <ul className="mt-2 space-y-1 text-rose-key">
+                        <li>제목은 <b>[[제목]]</b>으로 단독 줄에 씁니다.</li>
+                        <li>절은 <b>(1)</b> 또는 <b>(1-3)</b>처럼 문단 앞에 씁니다.</li>
+                        <li>절 구분이 확실하지 않으면 절 표기는 쓰지 않습니다.</li>
+                      </ul>
+                    </div>
+                  )}
+                </div>
               )}
               {!passage!.loading && passage!.isFinalized && (
                 <span className="shrink-0 rounded-lg bg-rose-chip px-2.5 py-1 text-xs font-bold text-rose-key">
