@@ -2,6 +2,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises'
 
 const BOOKS_PATH = 'data/bible-books.json'
 const CHAPTERS_PATH = 'data/bible-chapters.jsonl'
+const PACKAGE_PATH = 'package.json'
 const OUT_DIR = 'public/bible'
 
 async function readJson(path) {
@@ -18,6 +19,7 @@ async function readJsonl(path) {
 }
 
 const books = await readJson(BOOKS_PATH)
+const pkg = await readJson(PACKAGE_PATH)
 const chapters = await readJsonl(CHAPTERS_PATH)
 const byOrder = new Map()
 
@@ -72,4 +74,8 @@ if (issues.length > 0) {
 }
 
 await writeFile(`${OUT_DIR}/index.json`, JSON.stringify(index, null, 1) + '\n')
+await writeFile(
+  `${OUT_DIR}/build.json`,
+  JSON.stringify({ build: pkg.version, generatedAt: new Date().toISOString() }, null, 1) + '\n',
+)
 console.log(JSON.stringify({ books: index.length, chapters: chapters.length }, null, 2))

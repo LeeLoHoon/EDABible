@@ -40,6 +40,8 @@ export default defineConfig({
         ],
       },
       workbox: {
+        skipWaiting: true,
+        clientsClaim: true,
         cleanupOutdatedCaches: true,
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
         runtimeCaching: [
@@ -47,7 +49,7 @@ export default defineConfig({
             urlPattern: /\/bible\/.*\.json$/,
             handler: 'NetworkFirst',
             options: {
-              cacheName: 'bible-json',
+              cacheName: `bible-json-${pkg.version}`,
               networkTimeoutSeconds: 5,
               expiration: {
                 maxEntries: 70,

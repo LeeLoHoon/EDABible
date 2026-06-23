@@ -1,16 +1,69 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { registerSW } from 'virtual:pwa-register'
+import { clearBibleCache } from './bible'
 import './index.css'
 import App from './App.tsx'
 
+let reloadingForServiceWorker = false
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (reloadingForServiceWorker) return
+    reloadingForServiceWorker = true
+    window.location.reload()
+  })
+}
+
 const updateSW = registerSW({
   immediate: true,
+  onRegisteredSW(_swUrl, registration) {
+    registration?.update()
+    window.setInterval(
+      () => {
+        registration?.update()
+      },
+      60 * 60 * 1000,
+    )
+  },
   onNeedRefresh() {
     updateSW(true)
   },
   onOfflineReady() {},
 })
+
+async function removeRuntimeBibleCaches() {
+  if (!('caches' in window)) return
+  const names = await caches.keys()
+  await Promise.all(names.filter((name) => name.startsWith('bible-json')).map((name) => caches.delete(name)))
+}
+
+async function ensureCurrentBuild() {
+  try {
+    const response = await fetch(`${import.meta.env.BASE_URL}bible/build.json?t=${Date.now()}`, {
+      cache: 'no-store',
+    })
+    if (!response.ok) return
+
+    const remote = (await response.json()) as { build?: string }
+    if (!remote.build || remote.build === __BUILD__) return
+
+    await clearBibleCache()
+    await removeRuntimeBibleCaches()
+
+    const registration = 'serviceWorker' in navigator ? await navigator.serviceWorker.getRegistration() : undefined
+    await registration?.update()
+    updateSW(true)
+
+    window.setTimeout(() => {
+      window.location.reload()
+    }, 500)
+  } catch (error) {
+    console.warn('Build freshness check failed.', error)
+  }
+}
+
+ensureCurrentBuild()
 
 // iOS: 펜 필기 중 손바닥이 본문 글자에 닿으면 텍스트가 선택되며
 // "링크 만들기" 콜아웃이 뜬다. CSS(user-select:none)만으로는 애플펜슬/
