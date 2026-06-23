@@ -130,7 +130,7 @@ export default function TranscribeSection({ entry, update, FieldEditor }: Props)
                   </span>
                   {!passage!.loading && (
                     <span className="shrink-0 rounded bg-white/70 px-1.5 py-0.5 font-sans text-[10px] font-bold uppercase tracking-wide text-rose-key">
-                      {passage!.sourceQuality}
+                      {passage!.sourceQuality === 'verified' ? 'V' : 'F'}
                     </span>
                   )}
                 </span>
