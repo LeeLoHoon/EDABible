@@ -49,6 +49,7 @@ for (const book of books) {
     chapters: rows.map((row) => ({
       chapter: row.chapter,
       text: row.text,
+      ...(row.source_quality ? { sourceQuality: row.source_quality } : {}),
       ...(row.is_finalized ? { isFinalized: true } : {}),
     })),
   }

@@ -33,7 +33,7 @@ function normalizeText(text) {
 
 function isDisplayHeading(heading) {
   if (!heading) return false
-  return !/유튜브|youtube|본문|OCR|ASR|설명란/i.test(heading)
+  return !/유튜브|youtube|본문|OCR|ASR|설명란|한숲|자동자막|전체듣기|자막/i.test(heading)
 }
 
 function verseLabel(record) {
@@ -41,6 +41,12 @@ function verseLabel(record) {
   const end = Number(record.verse_end ?? start)
   if (!start) return null
   return end && end !== start ? `${start}-${end}` : `${start}`
+}
+
+function hasVerseSegmentation(records) {
+  if (records.length > 1) return true
+  const record = records[0]
+  return record?.quality === 'verified' && Number(record.verse_start ?? 0) > 0
 }
 
 function cleanRecordText(text) {
@@ -93,6 +99,7 @@ function chapterText(records, { structured = false } = {}) {
 
   const lines = []
   let previousHeading = null
+  const hasLabels = hasVerseSegmentation(records)
   for (const record of records) {
     let text = cleanRecordText(record.text ?? '')
     if (!text) continue
@@ -113,7 +120,7 @@ function chapterText(records, { structured = false } = {}) {
       previousHeading = heading
     }
 
-    const label = verseLabel(record)
+    const label = hasLabels ? verseLabel(record) : null
     appendStructuredText(lines, text, label)
   }
 
@@ -142,6 +149,14 @@ function scoreText(text) {
 
 function hasNonScriptureTail(text) {
   return /애니와 함께|매일 성경 묵상|오디오 성경 묵상/.test(text)
+}
+
+function hasVerseMarkers(text) {
+  return /(^|\n)\(\d{1,3}(?:[-~]\d{1,3})?\)\s/.test(text)
+}
+
+function sourceQuality(records) {
+  return records.every((record) => record.quality === 'verified') ? 'verified' : 'fallback'
 }
 
 function countMatches(texts, pattern) {
@@ -212,7 +227,13 @@ for (const book of books) {
     const oldScore = oldText ? scoreText(oldText) : Number.POSITIVE_INFINITY
     const oldHasTail = hasNonScriptureTail(oldText)
     const sourceHasTail = hasNonScriptureTail(sourcePlainText)
-    const useOld = oldText && !oldHasTail && (sourceHasTail || oldScore + 25 < sourceScore)
+    const sourceHasLabels = hasVerseSegmentation(records)
+    const oldHasArtificialVerseMarkers = !sourceHasLabels && hasVerseMarkers(oldText)
+    const useOld =
+      oldText &&
+      !oldHasTail &&
+      !oldHasArtificialVerseMarkers &&
+      (sourceHasTail || oldScore + 25 < sourceScore)
     const text = useOld ? oldText : sourceText
 
     const row = {
@@ -222,6 +243,7 @@ for (const book of books) {
       file: book.file,
       chapter,
       text,
+      source_quality: sourceQuality(records),
     }
 
     if (oldRow?.is_finalized === true) {
@@ -237,7 +259,7 @@ for (const book of books) {
         oldScore,
         sourceScore,
         selected: useOld ? 'existing' : 'hybrid',
-        sourceQuality: records.every((record) => record.quality === 'verified') ? 'verified' : 'fallback',
+        sourceQuality: sourceQuality(records),
         sourceNames: [...new Set(records.map((record) => record.source_name ?? record.ocr_source).filter(Boolean))],
       })
     }

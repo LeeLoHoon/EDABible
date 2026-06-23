@@ -15,6 +15,7 @@ export interface BookMeta {
 export interface Chapter {
   chapter: number
   text: string
+  sourceQuality?: 'verified' | 'fallback'
   isFinalized?: boolean
 }
 

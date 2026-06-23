@@ -124,8 +124,15 @@ export default function TranscribeSection({ entry, update, FieldEditor }: Props)
                 disabled={passage!.loading || editingPassage}
                 className="flex min-w-0 flex-1 items-center justify-between gap-2 disabled:opacity-100"
               >
-                <span className="min-w-0 truncate font-serif text-sm font-bold tracking-wide text-rose-accent">
-                  {passage!.ref}
+                <span className="flex min-w-0 items-center gap-1.5">
+                  <span className="min-w-0 truncate font-serif text-sm font-bold tracking-wide text-rose-accent">
+                    {passage!.ref}
+                  </span>
+                  {!passage!.loading && (
+                    <span className="shrink-0 rounded bg-white/70 px-1.5 py-0.5 font-sans text-[10px] font-bold uppercase tracking-wide text-rose-key">
+                      {passage!.sourceQuality}
+                    </span>
+                  )}
                 </span>
                 {!passage!.loading && !editingPassage && (
                   <span className="shrink-0 text-xs font-medium text-rose-key">

@@ -16,6 +16,7 @@ export interface PassageInfo {
   endChapter: number
   ref: string
   text: string
+  sourceQuality: 'verified' | 'fallback'
   loading: boolean
   canEdit: boolean
   canFinalize: boolean
@@ -195,15 +196,22 @@ export default function BiblePicker({ value, onChange, onPassage }: Props) {
 
         const ref = makeRef(book, selection.chapter, selection.endChapter)
         const texts: string[] = []
+        const sourceQualities: Array<'verified' | 'fallback'> = []
         let isFinalized = false
         if (doc) {
           for (let current = selection.chapter; current <= selection.endChapter; current += 1) {
             const chapter = doc.chapters.find((c) => c.chapter === current)
             const text = chapter?.text ?? chapterText(doc, current)
             if (text) texts.push(text)
+            sourceQualities.push(chapter?.sourceQuality === 'verified' ? 'verified' : 'fallback')
             if (chapter?.isFinalized) isFinalized = true
           }
         }
+        const sourceQuality: 'verified' | 'fallback' = sourceQualities.every(
+          (quality) => quality === 'verified',
+        )
+          ? 'verified'
+          : 'fallback'
 
         return {
           order: selection.order,
@@ -213,6 +221,7 @@ export default function BiblePicker({ value, onChange, onPassage }: Props) {
           chapter: selection.chapter,
           endChapter: selection.endChapter,
           text: texts.join('\n\n'),
+          sourceQuality,
           loading: !doc,
           isFinalized,
         }
@@ -267,6 +276,7 @@ export default function BiblePicker({ value, onChange, onPassage }: Props) {
       endChapter: first.endChapter,
       ref: nextValue,
       text: passageText,
+      sourceQuality: first.sourceQuality,
       loading,
       canEdit,
       canFinalize,
