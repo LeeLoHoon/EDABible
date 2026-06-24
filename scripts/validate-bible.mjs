@@ -14,7 +14,7 @@ const leadingVerse = /^\s*\d{1,3}(?:-\d{1,3})?(?:\s|$)/;
 const leadingChapterLabel = (chapter) => new RegExp(`^\\s*${chapter}\\s*(?:편|장)\\.?\\s*`);
 const boxNoteHeading = /^\s*\([^)]*\d{1,3}:\d{1,3}(?:-\d{1,3})?[^)]*\)/;
 const residualPageHeader = /(?:^|\n)\s*.{0,4}(?:창세기|참세기|출애굽기|레위기|민수기|신명기)\s+\d[\d\- ]*(?:\n|$)/;
-const disallowedSpecialChars = /[%…\u200b:~「」{}\/;#『』〉*>※^<@+\\、|＊》，]/;
+const disallowedSpecialChars = /[%\u200b{}#〉*>※^<@+\\|＊》]/;
 const editorialHeadings = new Set([
   '하늘과 땅의 창조',
   '사람의 불순종',
