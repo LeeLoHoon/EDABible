@@ -186,24 +186,29 @@ export async function clearBibleCache(): Promise<void> {
   })
 }
 
-/** '창세기 3장', '잠언 1~2장' 같은 참조 문자열을 만든다. */
-export function makeRef(book: string, chapter: number, endChapter?: number): string {
-  if (endChapter && endChapter !== chapter) {
-    return `${book} ${chapter}~${endChapter}장`
-  }
-  return `${book} ${chapter}장`
+export function chapterUnit(book?: string): '장' | '편' {
+  return book === '시편' ? '편' : '장'
 }
 
-/** bibleRef 한 조각에서 책 이름과 장 범위를 best-effort로 파싱. */
+/** '창세기 3장', '시편 1~2편' 같은 참조 문자열을 만든다. */
+export function makeRef(book: string, chapter: number, endChapter?: number): string {
+  const unit = chapterUnit(book)
+  if (endChapter && endChapter !== chapter) {
+    return `${book} ${chapter}~${endChapter}${unit}`
+  }
+  return `${book} ${chapter}${unit}`
+}
+
+/** bibleRef 한 조각에서 책 이름과 장/편 범위를 best-effort로 파싱. */
 export function parseRef(ref: string): PassageRef | null {
   if (!ref) return null
-  const m = ref.match(/^(.+?)\s*(\d+)(?:\s*[~-]\s*(\d+))?\s*장?$/)
+  const m = ref.match(/^(.+?)\s*(\d+)(?:\s*[~-]\s*(\d+))?\s*[장편]?$/)
   if (!m) return null
   const chapter = Number(m[2])
   return { book: m[1].trim(), chapter, endChapter: Number(m[3] ?? chapter) }
 }
 
-/** '잠언 1~2장, 전도서 1~2장' 같은 여러 본문 참조를 파싱한다. */
+/** '잠언 1~2장, 시편 1~2편' 같은 여러 본문 참조를 파싱한다. */
 export function parseRefs(refs: string): PassageRef[] {
   return refs
     .split(/[,，、]/)

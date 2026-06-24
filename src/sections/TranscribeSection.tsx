@@ -110,7 +110,7 @@ export default function TranscribeSection({ entry, update, FieldEditor }: Props)
 
   return (
     <div className="space-y-4">
-      {/* 본문 선택 (성경·장) */}
+      {/* 본문 선택 (성경·장/편) */}
       <BiblePicker
         value={entry.bibleRef}
         onChange={(bibleRef) => update({ bibleRef })}

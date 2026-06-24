@@ -3,6 +3,7 @@ import {
   loadIndex,
   loadBook,
   finalizeBibleChapter,
+  chapterUnit,
   makeRef,
   parseRefs,
   saveBibleChapterText,
@@ -26,9 +27,9 @@ export interface PassageInfo {
 }
 
 interface Props {
-  /** 현재 bibleRef (예: '잠언 1~2장, 전도서 1~2장') */
+  /** 현재 bibleRef (예: '잠언 1~2장, 시편 1~2편') */
   value: string
-  /** 책·장 선택 시 bibleRef 갱신 */
+  /** 책·장/편 선택 시 bibleRef 갱신 */
   onChange: (ref: string) => void
   /** 현재 본문(책·장·텍스트·로딩) 변화를 상위로 보고 — 없으면 null */
   onPassage?: (info: PassageInfo | null) => void
@@ -308,7 +309,7 @@ export default function BiblePicker({ value, onChange, onPassage }: Props) {
     <div className="rounded-2xl bg-rose-chip px-4 py-3">
       <div className="mb-2 flex items-center justify-between gap-3">
         <label className="block text-sm font-semibold text-rose-ink">
-          오늘의 본문 (성경·장 선택)
+          오늘의 본문 (성경·장/편 선택)
         </label>
         <button
           type="button"
@@ -331,6 +332,7 @@ export default function BiblePicker({ value, onChange, onPassage }: Props) {
           const count = meta?.standardChapters ?? meta?.chapters ?? 0
           const chapterOptions = Array.from({ length: count }, (_, i) => i + 1)
           const activeDoc = typeof selection.order === 'number' ? docs.get(selection.order) : null
+          const unit = chapterUnit(meta?.book)
 
           return (
             <div
@@ -364,12 +366,12 @@ export default function BiblePicker({ value, onChange, onPassage }: Props) {
                 }
                 disabled={!activeDoc}
                 className="min-w-0 rounded-xl border border-rose-line bg-white px-3 py-2 text-base font-medium text-rose-ink outline-none focus:border-rose-accent disabled:opacity-50"
-                aria-label={`본문 ${rowIndex + 1} 시작 장`}
+                aria-label={`본문 ${rowIndex + 1} 시작 ${unit}`}
               >
                 <option value="">시작</option>
                 {chapterOptions.map((n) => (
                   <option key={n} value={n}>
-                    {n}장
+                    {n}{unit}
                   </option>
                 ))}
               </select>
@@ -385,14 +387,14 @@ export default function BiblePicker({ value, onChange, onPassage }: Props) {
                 }
                 disabled={!activeDoc || selection.chapter === ''}
                 className="min-w-0 rounded-xl border border-rose-line bg-white px-3 py-2 text-base font-medium text-rose-ink outline-none focus:border-rose-accent disabled:opacity-50"
-                aria-label={`본문 ${rowIndex + 1} 끝 장`}
+                aria-label={`본문 ${rowIndex + 1} 끝 ${unit}`}
               >
                 <option value="">끝</option>
                 {chapterOptions
                   .filter((n) => selection.chapter === '' || n >= selection.chapter)
                   .map((n) => (
                     <option key={n} value={n}>
-                      {n}장
+                      {n}{unit}
                     </option>
                   ))}
               </select>
