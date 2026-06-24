@@ -16,9 +16,9 @@ export default function TranscribeSection({ entry, update, FieldEditor }: Props)
   const setMode = (m: FieldMode) =>
     update({ transcription: { ...entry.transcription, mode: m } })
 
-  // 현재 본문 + 펼침 상태 (기본은 접힘 — 필사 공간 확보)
+  // 현재 본문 + 펼침 상태
   const [passage, setPassage] = useState<PassageInfo | null>(null)
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(true)
   const [editingPassage, setEditingPassage] = useState(false)
   const [passageDraft, setPassageDraft] = useState('')
   const [savingPassage, setSavingPassage] = useState(false)
