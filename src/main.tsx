@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { registerSW } from 'virtual:pwa-register'
 import { clearBibleCache } from './bible'
 import './index.css'
-import App from './App.tsx'
+import App from 'virtual:target-app'
 
 let reloadingForServiceWorker = false
 
@@ -63,7 +63,7 @@ async function ensureCurrentBuild() {
   }
 }
 
-ensureCurrentBuild()
+if (__APP_TARGET__ !== 'binder') ensureCurrentBuild()
 
 // iOS: 펜 필기 중 손바닥이 본문 글자에 닿으면 텍스트가 선택되며
 // "링크 만들기" 콜아웃이 뜬다. CSS(user-select:none)만으로는 애플펜슬/

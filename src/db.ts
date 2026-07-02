@@ -1,5 +1,6 @@
 import Dexie, { type Table } from 'dexie'
-import type { Entry } from './types'
+import { emptyField, type Entry, type Field } from './types'
+import { supabase } from './supabase'
 
 export interface BibleIndexCache {
   id: 'index'
@@ -15,11 +16,37 @@ export interface BibleBookCache {
   updatedAt: string
 }
 
-/** 로컬(IndexedDB) 저장소 — 로그인/서버 없이 동작. 추후 Supabase 동기화 예정. */
+export interface BinderWork {
+  bookId: string
+  transcription: Field
+  notes: Field
+  pageInputs: Record<string, Field>
+  pageTextBoxes: Record<string, BinderTextBox[]>
+  bookmarks: BinderBookmark[]
+  updatedAt: number
+}
+
+export interface BinderTextBox {
+  id: string
+  x: number
+  y: number
+  width: number
+  text: string
+}
+
+export interface BinderBookmark {
+  id: string
+  page: number
+  label: string
+  createdAt: number
+}
+
+/** 로컬(IndexedDB) 저장소 — 묵상 노트 저장 및 바인더 오프라인 캐시. */
 class EdaBibleDB extends Dexie {
   entries!: Table<Entry, string>
   bibleIndex!: Table<BibleIndexCache, string>
   bibleBooks!: Table<BibleBookCache, string>
+  binderWorks!: Table<BinderWork, string>
 
   constructor() {
     super('edabible')
@@ -31,6 +58,12 @@ class EdaBibleDB extends Dexie {
       entries: 'id, date, updatedAt',
       bibleIndex: 'id, build',
       bibleBooks: 'file, build',
+    })
+    this.version(3).stores({
+      entries: 'id, date, updatedAt',
+      bibleIndex: 'id, build',
+      bibleBooks: 'file, build',
+      binderWorks: 'bookId, updatedAt',
     })
   }
 }
@@ -57,4 +90,61 @@ export async function clearAllEntries(): Promise<void> {
 /** 최신순 전체 목록 */
 export async function listEntries(): Promise<Entry[]> {
   return db.entries.orderBy('updatedAt').reverse().toArray()
+}
+
+export function createBinderWork(bookId: string): BinderWork {
+  return {
+    bookId,
+    transcription: emptyField(),
+    notes: emptyField(),
+    pageInputs: {},
+    pageTextBoxes: {},
+    bookmarks: [],
+    updatedAt: Date.now(),
+  }
+}
+
+function normalizeBinderWork(bookId: string, work: Partial<BinderWork> | null | undefined): BinderWork {
+  return {
+    ...createBinderWork(bookId),
+    ...work,
+    pageInputs: work?.pageInputs ?? {},
+    pageTextBoxes: work?.pageTextBoxes ?? {},
+    bookmarks: work?.bookmarks ?? [],
+  }
+}
+
+export async function getBinderWork(bookId: string, userId?: string): Promise<BinderWork> {
+  if (supabase && userId) {
+    const { data, error } = await supabase
+      .from('binder_works')
+      .select('data')
+      .eq('user_id', userId)
+      .eq('book_id', bookId)
+      .maybeSingle()
+
+    if (error) throw error
+    if (data?.data) {
+      const work = normalizeBinderWork(bookId, data.data as Partial<BinderWork>)
+      await db.binderWorks.put(work)
+      return work
+    }
+  }
+
+  return normalizeBinderWork(bookId, await db.binderWorks.get(bookId))
+}
+
+export async function putBinderWork(work: BinderWork, userId?: string): Promise<void> {
+  const next = { ...work, updatedAt: Date.now() }
+  await db.binderWorks.put(next)
+
+  if (!supabase || !userId) return
+
+  const { error } = await supabase.from('binder_works').upsert({
+    user_id: userId,
+    book_id: next.bookId,
+    data: next,
+    updated_at: new Date(next.updatedAt).toISOString(),
+  })
+  if (error) throw error
 }

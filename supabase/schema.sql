@@ -36,6 +36,14 @@ create table if not exists public.bible_chapter_edits (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.binder_works (
+  user_id uuid not null references auth.users(id) on delete cascade,
+  book_id text not null,
+  data jsonb not null,
+  updated_at timestamptz not null default now(),
+  primary key (user_id, book_id)
+);
+
 create index if not exists bible_chapters_file_idx
   on public.bible_chapters (file, chapter);
 
@@ -59,6 +67,7 @@ for each row execute function public.touch_bible_chapters_updated_at();
 
 alter table public.bible_chapters enable row level security;
 alter table public.bible_chapter_edits enable row level security;
+alter table public.binder_works enable row level security;
 
 drop policy if exists "public read bible chapters" on public.bible_chapters;
 create policy "public read bible chapters"
@@ -90,3 +99,22 @@ create policy "public insert bible edits"
 on public.bible_chapter_edits for insert
 to anon, authenticated
 with check (true);
+
+drop policy if exists "users read own binder works" on public.binder_works;
+create policy "users read own binder works"
+on public.binder_works for select
+to authenticated
+using (auth.uid() = user_id);
+
+drop policy if exists "users insert own binder works" on public.binder_works;
+create policy "users insert own binder works"
+on public.binder_works for insert
+to authenticated
+with check (auth.uid() = user_id);
+
+drop policy if exists "users update own binder works" on public.binder_works;
+create policy "users update own binder works"
+on public.binder_works for update
+to authenticated
+using (auth.uid() = user_id)
+with check (auth.uid() = user_id);

@@ -7,8 +7,9 @@ export const supabase =
   url && anonKey
     ? createClient(url, anonKey, {
         auth: {
-          persistSession: false,
-          autoRefreshToken: false,
+          persistSession: true,
+          autoRefreshToken: true,
+          detectSessionInUrl: true,
         },
       })
     : null

@@ -49,12 +49,67 @@ SUPABASE_SERVICE_ROLE_KEY=your-service-role-key npm run seed:supabase-bible
 
 ```bash
 npm run dev
+npm run build:note
+npm run build:binder
+npm run build:all
 npm run build:bible
 npm run build
 npm run validate:bible
 npm run seed:supabase-bible
 npm run pull:supabase-bible
 ```
+
+## 분리 배포
+
+```bash
+npm run build:note    # dist: 말씀 묵상 노트만 배포, public/binder 제외
+npm run build:binder  # dist-binder: 에다 SPL 바인더만 배포, public/bible 제외
+npm run build:all     # dist-all: 두 기능을 함께 포함한 통합 배포
+```
+
+Vercel 기본 배포는 `npm run build`를 사용하므로 `dist`에 말씀 묵상 노트만 생성합니다.
+
+### Vercel 배포 채널 2개 구성
+
+같은 Git 저장소를 Vercel 프로젝트 두 개에 연결합니다.
+
+```text
+edabible-note
+Build Command: npm run build:note
+Output Directory: dist
+
+edabible-binder
+Build Command: npm run build:binder
+Output Directory: dist-binder
+```
+
+Vercel 대시보드에서 Build Command를 바꿀 수 없으면 새 바인더 프로젝트는 기본값을 그대로 둔 채 환경변수만 추가합니다.
+
+```text
+APP_TARGET=binder
+Build Command: npm run build
+Output Directory: dist
+```
+
+기존 말씀 묵상 노트 프로젝트에는 `APP_TARGET`을 추가하지 않습니다. 환경변수가 없으면 `npm run build`는 말씀 묵상 노트로 빌드됩니다.
+
+CLI로 배포할 때는 아래 설정 파일을 사용할 수 있습니다.
+
+```bash
+vercel --prod --local-config vercel.note.json
+vercel --prod --local-config vercel.binder.json
+```
+
+### SPL 바인더 로그인
+
+SPL 바인더는 Google 로그인 필수입니다. Supabase에서 아래 설정이 필요합니다.
+
+1. Supabase SQL Editor에서 `supabase/schema.sql`을 다시 실행해 `binder_works` 테이블과 RLS policy를 추가합니다.
+2. Supabase Dashboard → Authentication → Providers → Google을 활성화합니다.
+3. Google OAuth Client ID/Secret을 Supabase에 입력합니다.
+4. Authentication → URL Configuration에 바인더 배포 주소를 Site URL 또는 Redirect URLs에 추가합니다.
+
+바인더 필기와 책갈피는 `binder_works`에 사용자별로 저장됩니다. 기존 기기의 로컬 바인더 기록은 로그인 후 같은 권을 열고 저장 동작이 발생하면 해당 사용자 데이터로 업로드됩니다.
 
 ## 디비에 있는 성경 내려 받기
 
