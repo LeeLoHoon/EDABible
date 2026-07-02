@@ -3,6 +3,7 @@ import type { Session, User } from '@supabase/supabase-js'
 
 export interface AuthState {
   loading: boolean
+  authError: string | null
   session: Session | null
   user: User | null
   signInWithGoogle: () => Promise<void>

@@ -3,24 +3,45 @@ import type { Session } from '@supabase/supabase-js'
 import { AuthContext, type AuthState, useAuth } from './authState'
 import { supabase } from './supabase'
 
+function authRedirectUrl(): string {
+  return `${window.location.origin}${window.location.pathname}`
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(!!supabase)
+  const [authError, setAuthError] = useState<string | null>(null)
   const [session, setSession] = useState<Session | null>(null)
 
   useEffect(() => {
     if (!supabase) return
 
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session)
+    const loadingTimer = window.setTimeout(() => {
       setLoading(false)
-    })
+      setAuthError('로그인 확인이 지연되고 있습니다. 다시 시도해 주세요.')
+    }, 8000)
+
+    supabase.auth
+      .getSession()
+      .then(({ data, error }) => {
+        if (error) setAuthError(error.message)
+        setSession(data.session)
+      })
+      .catch((error) => {
+        setAuthError(error instanceof Error ? error.message : '로그인 상태를 확인하지 못했습니다.')
+      })
+      .finally(() => {
+        window.clearTimeout(loadingTimer)
+        setLoading(false)
+      })
 
     const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      setAuthError(null)
       setSession(nextSession)
       setLoading(false)
     })
 
     return () => {
+      window.clearTimeout(loadingTimer)
       data.subscription.unsubscribe()
     }
   }, [])
@@ -28,31 +49,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const value = useMemo<AuthState>(
     () => ({
       loading,
+      authError,
       session,
       user: session?.user ?? null,
       async signInWithGoogle() {
         if (!supabase) return
+        setAuthError(null)
         const { error } = await supabase.auth.signInWithOAuth({
           provider: 'google',
           options: {
-            redirectTo: window.location.href,
+            redirectTo: authRedirectUrl(),
           },
         })
         if (error) throw error
       },
       async signOut() {
         if (!supabase) return
-        await supabase.auth.signOut()
+        setAuthError(null)
+        setSession(null)
+        const { error } = await supabase.auth.signOut({ scope: 'local' })
+        if (error) setAuthError(error.message)
       },
     }),
-    [loading, session],
+    [authError, loading, session],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 
 export function RequireGoogleLogin({ children }: { children: React.ReactNode }) {
-  const { loading, user, signInWithGoogle } = useAuth()
+  const { authError, loading, user, signInWithGoogle } = useAuth()
   const [error, setError] = useState<string | null>(null)
 
   const handleSignIn = async () => {
@@ -98,7 +124,7 @@ export function RequireGoogleLogin({ children }: { children: React.ReactNode }) 
           >
             Google로 로그인
           </button>
-          {error && <p className="mt-4 text-sm font-bold text-rose-accent">{error}</p>}
+          {(error || authError) && <p className="mt-4 text-sm font-bold text-rose-accent">{error || authError}</p>}
         </div>
       </div>
     )
