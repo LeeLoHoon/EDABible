@@ -119,68 +119,41 @@ export function RequireGoogleLogin({ children }: { children: React.ReactNode }) 
 
   if (!user) {
     return (
-      <div className="min-h-full bg-rose-bg px-5 py-6 text-rose-ink sm:px-6">
-        <div className="mx-auto flex min-h-[calc(100vh-3rem)] max-w-5xl items-center justify-center">
-          <div className="grid w-full items-center gap-6 md:grid-cols-[minmax(0,1fr)_22rem]">
-            <section className="relative min-h-[30rem] overflow-hidden rounded-[28px] border border-rose-line bg-rose-card shadow-[0_22px_70px_rgba(44,39,34,0.16)]">
-              <div className="absolute inset-y-0 left-0 w-8 bg-rose-accent" />
-              <div className="absolute inset-y-0 left-12 border-l border-dashed border-rose-line" />
-              <div className="absolute inset-5 rounded-[22px] border border-rose-line/70" />
-              <div className="absolute inset-x-10 top-10 flex items-center gap-3 text-rose-key">
-                <span className="h-px flex-1 bg-rose-line" />
-                <span className="text-xs font-black tracking-[0.36em]">EDA</span>
-                <span className="h-px flex-1 bg-rose-line" />
-              </div>
-              <div className="relative flex min-h-[30rem] flex-col justify-center px-12 py-14 pl-16 text-center">
-                <p className="text-xs font-black tracking-[0.34em] text-rose-key">PERSONAL LIBRARY</p>
-                <h1 className="mt-7 font-serif text-[3.4rem] font-extrabold leading-none text-rose-ink sm:text-[4.4rem]">
-                  SPL
-                </h1>
-                <p className="mt-3 font-serif text-3xl font-extrabold">바인더</p>
-                <div className="mx-auto my-8 flex w-40 items-center gap-3 text-rose-accent/75">
-                  <span className="h-px flex-1 bg-rose-line" />
-                  <span className="text-lg">✦</span>
-                  <span className="h-px flex-1 bg-rose-line" />
-                </div>
-                <p className="mx-auto max-w-xs text-sm font-bold leading-7 text-rose-key">
-                  필기와 책갈피를 계정에 저장합니다.
-                  <br />
-                  Google 계정으로 계속하세요.
-                </p>
-              </div>
-            </section>
-
-            <aside className="rounded-[24px] border border-rose-line bg-rose-card p-5 shadow-sm md:p-6">
-              <p className="text-xs font-black tracking-[0.28em] text-rose-key">SIGN IN</p>
-              <h2 className="mt-3 font-serif text-2xl font-extrabold">에다 SPL 바인더</h2>
-              <div className="mt-5 space-y-2">
-                <div className="flex items-center justify-between rounded-xl bg-rose-chip px-3 py-2 text-sm font-bold text-rose-key">
-                  <span>동기화</span>
-                  <span className="text-rose-accent">Google</span>
-                </div>
-                <div className="flex items-center justify-between rounded-xl bg-rose-chip px-3 py-2 text-sm font-bold text-rose-key">
-                  <span>저장 위치</span>
-                  <span className="text-rose-accent">내 계정</span>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={handleSignIn}
-                disabled={signingIn}
-                className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-white px-4 py-3 text-base font-extrabold text-rose-ink shadow-sm ring-1 ring-rose-line transition hover:ring-rose-accent active:scale-[0.99] disabled:opacity-70"
-              >
-                <span className="grid h-6 w-6 place-items-center rounded-full border border-rose-line font-sans text-sm font-black text-[#4285f4]">
-                  G
-                </span>
-                {signingIn ? '이동 중...' : 'Google로 로그인'}
-              </button>
-              {(error || authError) && (
-                <p className="mt-4 rounded-xl border border-rose-accent/30 bg-rose-chip px-3 py-2 text-sm font-bold leading-5 text-rose-accent">
-                  {error || authError}
-                </p>
-              )}
-            </aside>
+      <div className="grid min-h-full place-items-center bg-rose-bg px-5 py-8 text-rose-ink">
+        <div className="w-full max-w-[27rem] text-center">
+          <div className="mx-auto mb-8 flex h-14 w-14 items-center justify-center rounded-2xl border border-rose-line bg-rose-card font-serif text-xl font-extrabold text-rose-accent shadow-sm">
+            SPL
           </div>
+
+          <p className="text-xs font-black tracking-[0.32em] text-rose-key">EDA BINDER</p>
+          <h1 className="mt-4 font-serif text-4xl font-extrabold leading-tight text-rose-ink">
+            에다 SPL 바인더
+          </h1>
+          <p className="mx-auto mt-4 max-w-sm text-sm font-bold leading-7 text-rose-key">
+            Google 계정으로 로그인하고 필기, 책갈피, 진행 상황을 안전하게 저장하세요.
+          </p>
+
+          <button
+            type="button"
+            onClick={handleSignIn}
+            disabled={signingIn}
+            className="mt-9 flex w-full items-center justify-center gap-3 rounded-xl border border-rose-line bg-rose-card px-4 py-3.5 text-base font-extrabold text-rose-ink shadow-sm transition hover:border-rose-accent hover:bg-white active:scale-[0.99] disabled:opacity-70"
+          >
+            <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-white font-sans text-sm font-black text-[#4285f4] ring-1 ring-rose-line">
+              G
+            </span>
+            <span>{signingIn ? 'Google로 이동 중...' : 'Google로 계속하기'}</span>
+          </button>
+
+          <p className="mt-4 text-xs font-bold leading-5 text-rose-key/75">
+            로그인 후 내 계정에 바인더 기록이 동기화됩니다.
+          </p>
+
+          {(error || authError) && (
+            <p className="mt-5 rounded-xl border border-rose-accent/30 bg-rose-card px-3 py-2 text-sm font-bold leading-5 text-rose-accent">
+              {error || authError}
+            </p>
+          )}
         </div>
       </div>
     )
