@@ -772,7 +772,7 @@ export default function BinderPage() {
     <div className="min-h-full bg-rose-bg text-rose-ink">
       <header className="sticky top-0 z-20 border-b border-rose-line bg-rose-bg/95 px-4 py-3 backdrop-blur">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-3">
-          <div className="w-[4.5rem] shrink-0">
+          <div className="w-20 shrink-0">
             {__APP_TARGET__ === 'all' && (
               <button
                 type="button"
@@ -786,11 +786,11 @@ export default function BinderPage() {
           <h1 className="min-w-0 flex-1 truncate text-center font-serif text-lg font-extrabold">
             에다 SPL 바인더
           </h1>
-          <div className="flex w-[4.5rem] shrink-0 justify-end">
+          <div className="flex w-20 shrink-0 justify-end">
             {__APP_TARGET__ === 'all' && (
               <Link
                 to="/"
-                className="rounded-lg border border-rose-line bg-rose-card px-3 py-2 text-sm font-bold text-rose-key shadow-sm"
+                className="whitespace-nowrap rounded-lg border border-rose-line bg-rose-card px-3 py-2 text-sm font-bold text-rose-key shadow-sm"
               >
                 노트
               </Link>
@@ -799,7 +799,7 @@ export default function BinderPage() {
               <button
                 type="button"
                 onClick={signOut}
-                className="rounded-lg border border-rose-line bg-rose-card px-3 py-2 text-sm font-bold text-rose-key shadow-sm"
+                className="whitespace-nowrap rounded-lg border border-rose-line bg-rose-card px-3 py-2 text-sm font-bold text-rose-key shadow-sm"
               >
                 로그아웃
               </button>
