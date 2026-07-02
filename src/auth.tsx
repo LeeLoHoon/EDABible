@@ -120,17 +120,18 @@ export function RequireGoogleLogin({ children }: { children: React.ReactNode }) 
   if (!user) {
     return (
       <div className="grid min-h-full place-items-center bg-rose-bg px-5 py-8 text-rose-ink">
-        <div className="w-full max-w-[27rem] text-center">
-          <div className="mx-auto mb-8 flex h-14 w-14 items-center justify-center rounded-2xl border border-rose-line bg-rose-card font-serif text-xl font-extrabold text-rose-accent shadow-sm">
-            SPL
+        <div className="w-full max-w-[30rem] text-center">
+          <div className="mx-auto mb-7 flex max-w-xs items-center gap-3 text-rose-key">
+            <span className="h-px flex-1 bg-rose-line" />
+            <p className="text-xs font-black tracking-[0.28em]">EDA BINDER</p>
+            <span className="h-px flex-1 bg-rose-line" />
           </div>
 
-          <p className="text-xs font-black tracking-[0.32em] text-rose-key">EDA BINDER</p>
-          <h1 className="mt-4 font-serif text-4xl font-extrabold leading-tight text-rose-ink">
+          <h1 className="font-serif text-4xl font-extrabold leading-tight text-rose-ink">
             에다 SPL 바인더
           </h1>
-          <p className="mx-auto mt-4 max-w-sm text-sm font-bold leading-7 text-rose-key">
-            Google 계정으로 로그인하고 필기, 책갈피, 진행 상황을 안전하게 저장하세요.
+          <p className="mx-auto mt-4 max-w-[24rem] text-[15px] font-bold leading-7 text-rose-key">
+            Google 계정으로 로그인해 필기와 책갈피를 내 바인더에 저장합니다.
           </p>
 
           <button
