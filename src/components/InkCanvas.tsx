@@ -186,11 +186,6 @@ export default function InkCanvas({
       window.removeEventListener('pointercancel', up)
     }
     const downCapture = (e: PointerEvent) => {
-      if (!e.isPrimary) {
-        e.stopPropagation()
-        if (e.cancelable) e.preventDefault()
-        return
-      }
       // 지우개 모드: 펜도 라이브러리에 넘기지 않고 직접 지움
       if (propRef.current.tool === 'eraser') {
         e.stopPropagation()
