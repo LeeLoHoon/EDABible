@@ -22,6 +22,18 @@ type InkTool = 'pen' | 'eraser'
 
 const PEN_COLORS = ['#2c2722', '#b25c30', '#2563eb', '#059669', '#be185d']
 
+// iPadOS Safari는 빠른 연속 필기에서 펜 "포인터" 이벤트를 간헐적으로 흘리므로
+// (노트 앱과 동일한 교훈) iOS에서는 네이티브 터치 이벤트(touchType 'stylus')로
+// 획을 받고, 그 외 플랫폼은 포인터 이벤트를 쓴다. setPointerCapture는 iOS에서
+// 캡처 미해제 시 이후 pointerdown까지 막는 버그가 있어 쓰지 않는다.
+const IS_IOS =
+  typeof navigator !== 'undefined' &&
+  (/iP(ad|hone|od)/.test(navigator.userAgent) ||
+    (navigator.userAgent.includes('Macintosh') && navigator.maxTouchPoints > 1))
+
+// 펜을 뗀 뒤에도 잠시 손바닥 터치를 계속 차단하는 유예(ms)
+const PALM_GRACE_MS = 1200
+
 interface BinderCheckpoint {
   id: string
   label: string
@@ -128,12 +140,21 @@ function PageOverlay({
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const drawingRef = useRef<Stroke | null>(null)
   const activePointerRef = useRef<number | null>(null)
-  const erasingPointerRef = useRef<number | null>(null)
+  const activeTouchIdRef = useRef<number | null>(null)
+  const detachWindowRef = useRef<(() => void) | null>(null)
+  const palmGraceTimerRef = useRef<number | null>(null)
+  const rectRef = useRef<DOMRect | null>(null)
   const fieldRef = useRef(field)
   const textBoxesRef = useRef(textBoxes)
   const [tool, setTool] = useState<InkTool>('pen')
   const [color, setColor] = useState(PEN_COLORS[0])
   const [size, setSize] = useState(4)
+  // 터치 엔진은 최초 1회만 등록되므로 최신 값은 ref로 읽는다
+  const inkPropsRef = useRef({ tool, color, size, mode, onChange })
+
+  useEffect(() => {
+    inkPropsRef.current = { tool, color, size, mode, onChange }
+  }, [tool, color, size, mode, onChange])
   const [activeTextBoxId, setActiveTextBoxId] = useState<string | null>(textBoxes[0]?.id ?? null)
   const visibleActiveTextBoxId = textBoxes.some((box) => box.id === activeTextBoxId)
     ? activeTextBoxId
@@ -142,7 +163,10 @@ function PageOverlay({
   useEffect(() => {
     fieldRef.current = field
     const canvas = canvasRef.current
-    if (canvas) drawStrokes(canvas, field.strokes)
+    if (!canvas) return
+    // 진행 중 획이 있으면 함께 그린다 (필기 도중 저장 재렌더로 획이 사라지지 않게)
+    const live = drawingRef.current
+    drawStrokes(canvas, live ? [...field.strokes, live] : field.strokes)
   }, [field])
 
   useEffect(() => {
@@ -180,65 +204,247 @@ function PageOverlay({
     return () => ro.disconnect()
   }, [])
 
-  const pointFromEvent = (event: React.PointerEvent<HTMLCanvasElement>): [number, number, number] => {
-    const rect = event.currentTarget.getBoundingClientRect()
-    return [event.clientX - rect.left, event.clientY - rect.top, event.pressure || 0.5]
+  const redraw = () => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const live = drawingRef.current
+    drawStrokes(canvas, live ? [...fieldRef.current.strokes, live] : fieldRef.current.strokes)
   }
 
   const eraseAt = (x: number, y: number) => {
-    const threshold = Math.max(size * 2, 18)
+    const threshold = Math.max(inkPropsRef.current.size * 2, 18)
     const kept = fieldRef.current.strokes.filter((stroke) => distToStroke(stroke, x, y) > threshold)
     if (kept.length === fieldRef.current.strokes.length) return
     const next = { ...fieldRef.current, strokes: kept }
     fieldRef.current = next
-    onChange(next)
+    inkPropsRef.current.onChange(next)
+    redraw()
   }
 
-  const startStroke = (event: React.PointerEvent<HTMLCanvasElement>) => {
-    if (mode !== 'ink') return
-    if (activePointerRef.current !== null) return
-    activePointerRef.current = event.pointerId
-    event.currentTarget.setPointerCapture(event.pointerId)
-    event.preventDefault()
-    const [x, y, pressure] = pointFromEvent(event)
-    if (tool === 'eraser') {
-      erasingPointerRef.current = event.pointerId
-      eraseAt(x, y)
-      return
+  const holdPalmBlock = () => {
+    if (palmGraceTimerRef.current !== null) {
+      window.clearTimeout(palmGraceTimerRef.current)
+      palmGraceTimerRef.current = null
     }
-    drawingRef.current = { color, size, points: [[x, y, pressure]] }
+    window.document.body.classList.add('ink-active')
   }
 
-  const moveStroke = (event: React.PointerEvent<HTMLCanvasElement>) => {
-    if (mode !== 'ink') return
-    if (activePointerRef.current !== event.pointerId) return
-    event.preventDefault()
-    const [x, y, pressure] = pointFromEvent(event)
-    if (tool === 'eraser' || erasingPointerRef.current === event.pointerId) {
-      eraseAt(x, y)
-      return
-    }
+  const releasePalmBlockSoon = () => {
+    if (palmGraceTimerRef.current !== null) window.clearTimeout(palmGraceTimerRef.current)
+    palmGraceTimerRef.current = window.setTimeout(() => {
+      palmGraceTimerRef.current = null
+      window.document.body.classList.remove('ink-active')
+    }, PALM_GRACE_MS)
+  }
+
+  // 진행 중인 획을 확정해 저장 흐름(onChange)으로 넘긴다
+  const commitDrawing = () => {
     const stroke = drawingRef.current
-    if (!stroke) return
-    stroke.points.push([x, y, pressure])
-    const canvas = canvasRef.current
-    if (canvas) drawStrokes(canvas, [...fieldRef.current.strokes, stroke])
-  }
-
-  const endStroke = (event: React.PointerEvent<HTMLCanvasElement>) => {
-    if (activePointerRef.current !== event.pointerId) return
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId)
-    }
-    activePointerRef.current = null
-    erasingPointerRef.current = null
-    const stroke = drawingRef.current
-    if (!stroke) return
     drawingRef.current = null
+    if (!stroke || stroke.points.length === 0) {
+      redraw()
+      return
+    }
     const next = { ...fieldRef.current, strokes: [...fieldRef.current.strokes, stroke] }
     fieldRef.current = next
-    onChange(next)
+    inkPropsRef.current.onChange(next)
+    redraw()
   }
+
+  // ── 공용 획 엔진 (포인터/터치 양쪽에서 호출, ref만 사용) ──
+  const beginAt = (clientX: number, clientY: number, pressure: number) => {
+    const { tool, color, size } = inkPropsRef.current
+    holdPalmBlock()
+    // 이전 획의 up이 유실됐어도 버리지 말고 확정한 뒤 새로 시작
+    if (drawingRef.current) commitDrawing()
+
+    const rect = rectRef.current
+    if (!rect) return
+    const x = clientX - rect.left
+    const y = clientY - rect.top
+    if (tool === 'eraser') {
+      eraseAt(x, y)
+      return
+    }
+    drawingRef.current = { color, size, points: [[x, y, pressure && pressure > 0 ? pressure : 0.5]] }
+    redraw()
+  }
+
+  const moveAt = (clientX: number, clientY: number, pressure: number) => {
+    const rect = rectRef.current
+    if (!rect) return
+    const x = clientX - rect.left
+    const y = clientY - rect.top
+    if (inkPropsRef.current.tool === 'eraser') {
+      eraseAt(x, y)
+      return
+    }
+    const stroke = drawingRef.current
+    if (!stroke) return
+    stroke.points.push([x, y, pressure && pressure > 0 ? pressure : 0.5])
+    redraw()
+  }
+
+  const finishStroke = () => {
+    releasePalmBlockSoon()
+    if (inkPropsRef.current.tool === 'eraser') return
+    commitDrawing()
+  }
+
+  // ── 포인터 엔진(비-iOS): window에서 직접 추적해 캔버스 밖 up도 놓치지 않는다 ──
+  const startStroke = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    if (inkPropsRef.current.mode !== 'ink') return
+    if (IS_IOS) return
+    if (event.pointerType === 'touch') return
+
+    event.preventDefault()
+    detachWindowRef.current?.()
+
+    const pointerId = event.pointerId
+    activePointerRef.current = pointerId
+    rectRef.current = event.currentTarget.getBoundingClientRect()
+    beginAt(event.clientX, event.clientY, event.pressure)
+
+    const onMove = (e: PointerEvent) => {
+      if (e.pointerId !== pointerId) return
+      if (e.cancelable) e.preventDefault()
+      const points =
+        typeof e.getCoalescedEvents === 'function' && e.getCoalescedEvents().length
+          ? e.getCoalescedEvents()
+          : [e]
+      for (const point of points) moveAt(point.clientX, point.clientY, point.pressure)
+    }
+
+    const onUp = (e: PointerEvent) => {
+      if (e.pointerId !== pointerId) return
+      detachWindowRef.current?.()
+      detachWindowRef.current = null
+      activePointerRef.current = null
+      finishStroke()
+    }
+
+    window.addEventListener('pointermove', onMove, { capture: true })
+    window.addEventListener('pointerup', onUp, { capture: true })
+    window.addEventListener('pointercancel', onUp, { capture: true })
+    detachWindowRef.current = () => {
+      window.removeEventListener('pointermove', onMove, true)
+      window.removeEventListener('pointerup', onUp, true)
+      window.removeEventListener('pointercancel', onUp, true)
+    }
+  }
+
+  // ── 터치 엔진(iOS 전용): 펜 획을 네이티브 터치(touchType 'stylus')로 받는다 ──
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+
+    type StylusTouch = Touch & { touchType?: string }
+
+    const findStylus = (list: TouchList): StylusTouch | null => {
+      for (let i = 0; i < list.length; i += 1) {
+        const touch = list[i] as StylusTouch
+        if (touch.touchType === 'stylus') return touch
+      }
+      return null
+    }
+
+    const findActive = (list: TouchList): Touch | null => {
+      for (let i = 0; i < list.length; i += 1) {
+        if (list[i].identifier === activeTouchIdRef.current) return list[i]
+      }
+      return null
+    }
+
+    const onTouchStart = (event: TouchEvent) => {
+      // 캔버스 위 네이티브 제스처(더블탭 줌·콜아웃·스크롤)를 펜 포함 전부 차단
+      event.preventDefault()
+      if (!IS_IOS || inkPropsRef.current.mode !== 'ink') return
+      const stylus = findStylus(event.changedTouches)
+      if (!stylus) return
+      activeTouchIdRef.current = stylus.identifier
+      rectRef.current = canvas.getBoundingClientRect()
+      beginAt(stylus.clientX, stylus.clientY, stylus.force)
+    }
+
+    const onTouchMove = (event: TouchEvent) => {
+      event.preventDefault()
+      if (!IS_IOS) return
+      const touch = findActive(event.changedTouches)
+      if (!touch) return
+      moveAt(touch.clientX, touch.clientY, touch.force)
+    }
+
+    const onTouchEnd = (event: TouchEvent) => {
+      event.preventDefault()
+      if (!IS_IOS) return
+      const touch = findActive(event.changedTouches)
+      if (!touch) return
+      activeTouchIdRef.current = null
+      finishStroke()
+    }
+
+    canvas.addEventListener('touchstart', onTouchStart, { passive: false })
+    canvas.addEventListener('touchmove', onTouchMove, { passive: false })
+    canvas.addEventListener('touchend', onTouchEnd, { passive: false })
+    canvas.addEventListener('touchcancel', onTouchEnd, { passive: false })
+
+    return () => {
+      canvas.removeEventListener('touchstart', onTouchStart)
+      canvas.removeEventListener('touchmove', onTouchMove)
+      canvas.removeEventListener('touchend', onTouchEnd)
+      canvas.removeEventListener('touchcancel', onTouchEnd)
+    }
+    // 핸들러는 전부 ref 기반이라 최초 등록분으로 충분하다
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // 손바닥 차단: 필기 중 + 유예 동안 문서 전체의 비-스타일러스 터치를 막는다.
+  // 단, 실제로 그리는 중이 아니면 버튼 등 UI 탭은 허용한다.
+  useEffect(() => {
+    const isDrawingNow = () =>
+      activePointerRef.current !== null || activeTouchIdRef.current !== null
+
+    const preventDocumentPalmTouch = (event: TouchEvent) => {
+      if (!window.document.body.classList.contains('ink-active')) return
+      if (!isDrawingNow()) {
+        const target = event.target
+        if (
+          target instanceof Element &&
+          target.closest('button, input, select, textarea, a, [role="button"]')
+        )
+          return
+      }
+      for (let i = 0; i < event.changedTouches.length; i += 1) {
+        const touch = event.changedTouches[i] as Touch & { touchType?: string }
+        if (touch.touchType !== 'stylus') {
+          event.preventDefault()
+          return
+        }
+      }
+    }
+
+    window.document.addEventListener('touchstart', preventDocumentPalmTouch, { passive: false, capture: true })
+    window.document.addEventListener('touchmove', preventDocumentPalmTouch, { passive: false, capture: true })
+    window.document.addEventListener('touchend', preventDocumentPalmTouch, { passive: false, capture: true })
+    window.document.addEventListener('touchcancel', preventDocumentPalmTouch, { passive: false, capture: true })
+
+    return () => {
+      window.document.removeEventListener('touchstart', preventDocumentPalmTouch, true)
+      window.document.removeEventListener('touchmove', preventDocumentPalmTouch, true)
+      window.document.removeEventListener('touchend', preventDocumentPalmTouch, true)
+      window.document.removeEventListener('touchcancel', preventDocumentPalmTouch, true)
+    }
+  }, [])
+
+  // 획 도중 언마운트 시 window 리스너/유예 타이머/바디 클래스 정리
+  useEffect(() => {
+    return () => {
+      detachWindowRef.current?.()
+      detachWindowRef.current = null
+      if (palmGraceTimerRef.current !== null) window.clearTimeout(palmGraceTimerRef.current)
+      window.document.body.classList.remove('ink-active')
+    }
+  }, [])
 
   const undo = () => {
     const next = { ...fieldRef.current, strokes: fieldRef.current.strokes.slice(0, -1) }
@@ -426,9 +632,6 @@ function PageOverlay({
         className={`absolute inset-0 h-full w-full rounded-[16px] ${mode === 'ink' ? 'pointer-events-auto' : 'pointer-events-none'}`}
         style={{ touchAction: 'none' }}
         onPointerDown={startStroke}
-        onPointerMove={moveStroke}
-        onPointerUp={endStroke}
-        onPointerCancel={endStroke}
       />
       {mode === 'ink' && (
         <div className="safe-pad fixed bottom-3 left-1/2 z-30 flex w-max max-w-[calc(100vw-1.5rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-1.5 rounded-full border border-rose-line bg-rose-card/95 px-3 py-1.5 shadow-lg backdrop-blur">
