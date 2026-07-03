@@ -25,6 +25,9 @@
   --color-rose-accent: #568c47; /* 브랜드 초록 (강조·버튼, PDF 로고와 동일값) */
   --color-rose-key: #5c6b52;    /* 그린 그레이 (보조 텍스트) */
   --color-rose-line: #dbe4d2;   /* 그린 샌드 보더 */
+  /* 폰트도 PDF와 동일한 모던 고딕으로 통일 (targetApp.binder.tsx가 CDN 로드) */
+  --font-sans: 'Pretendard Variable', Pretendard, 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
+  --font-serif: 'Pretendard Variable', Pretendard, 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
 }
 
 .theme-binder body {
