@@ -37,7 +37,10 @@ export default function FieldEditor({
     return maxY
   }, [field.strokes])
 
-  const canvasHeight = Math.max(inkHeight, Math.ceil(contentBottom) + 80, inkHeight + extra)
+  // 높이는 160px 계단으로만 늘린다 — 아래쪽에 쓸 때 획마다 높이가 1px씩 변하면
+  // 캔버스가 매 획 재할당·전체 재렌더되어 다음 획 입력이 밀린다.
+  const autoGrown = Math.ceil((contentBottom + 80) / 160) * 160
+  const canvasHeight = Math.max(inkHeight + extra, autoGrown)
 
   return (
     <div className="rounded-2xl border border-rose-line bg-rose-card p-2 shadow-sm">

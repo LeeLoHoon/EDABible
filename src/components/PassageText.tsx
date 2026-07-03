@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { memo, type ReactNode } from 'react'
 
 interface Props {
   text: string
@@ -75,7 +75,9 @@ function renderText(text: string): ReactNode[] {
   )
 }
 
-export default function PassageText({ text }: Props) {
+// memo: 손글씨 획이 커밋될 때마다 EntryPage 전체가 재렌더되는데, 그때마다
+// 장 전체를 재파싱·재렌더하면 다음 획 입력 처리가 밀린다. text가 같으면 건너뛴다.
+function PassageText({ text }: Props) {
   const blocks = splitBlocks(text)
 
   return (
@@ -98,3 +100,5 @@ export default function PassageText({ text }: Props) {
     </div>
   )
 }
+
+export default memo(PassageText)
