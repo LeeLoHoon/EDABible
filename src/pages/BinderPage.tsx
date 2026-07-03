@@ -47,19 +47,21 @@ function defaultCheckpoints(bookId: string): BinderCheckpoint[] {
   ]
 }
 
-function nearbyPages(pageNumber: number, pageCount: number): number[] {
+function nearbyPages(pageNumber: number, pageCount: number, count = 5): number[] {
   const clamped = Math.max(1, Math.min(pageCount, pageNumber))
+  const limit = Math.min(count, pageCount)
+  const half = Math.floor(count / 2)
   const pages = new Set<number>()
 
-  for (const page of [clamped - 1, clamped, clamped + 1]) {
+  for (let page = clamped - half; page <= clamped + half; page += 1) {
     if (page >= 1 && page <= pageCount) pages.add(page)
   }
 
-  for (let page = clamped + 2; pages.size < Math.min(3, pageCount) && page <= pageCount; page += 1) {
+  for (let page = clamped + half + 1; pages.size < limit && page <= pageCount; page += 1) {
     pages.add(page)
   }
 
-  for (let page = clamped - 2; pages.size < Math.min(3, pageCount) && page >= 1; page -= 1) {
+  for (let page = clamped - half - 1; pages.size < limit && page >= 1; page -= 1) {
     pages.add(page)
   }
 
@@ -546,8 +548,8 @@ function PdfThumbnail({
     <div
       className={`relative mx-auto flex shrink-0 items-center justify-center overflow-hidden bg-white transition ${
         active
-          ? 'h-28 w-[80px] rounded-lg shadow-md ring-2 ring-rose-accent'
-          : 'h-[88px] w-[52px] rounded-md border border-rose-line opacity-75 shadow-sm'
+          ? 'h-[100px] w-[72px] rounded-lg shadow-md ring-2 ring-rose-accent'
+          : 'h-[84px] w-[58px] cursor-pointer rounded-md border border-rose-line opacity-75 shadow-sm transition hover:opacity-100'
       }`}
     >
       <canvas ref={canvasRef} className="block h-full w-full bg-white object-contain" />
@@ -647,6 +649,7 @@ export default function BinderPage() {
   const [touchStart, setTouchStart] = useState<number | null>(null)
   const [previewDragging, setPreviewDragging] = useState(false)
   const previewDragRef = useRef<{ startX: number; startPage: number; lastPage: number } | null>(null)
+  const previewMovedRef = useRef(false)
 
   const selected = binderBooks.find((book) => book.id === selectedId) ?? binderBooks[0]
   const pageKey = String(pageNumber)
@@ -779,6 +782,7 @@ export default function BinderPage() {
     if (loadingPdf || !document) return
     event.currentTarget.setPointerCapture(event.pointerId)
     event.preventDefault()
+    previewMovedRef.current = false
     previewDragRef.current = { startX: event.clientX, startPage: pageNumber, lastPage: pageNumber }
     setPreviewDragging(true)
   }
@@ -790,6 +794,7 @@ export default function BinderPage() {
     const pageDelta = Math.round((drag.startX - event.clientX) / 34)
     const nextPage = Math.max(1, Math.min(pageCount, drag.startPage + pageDelta))
     if (nextPage === drag.lastPage) return
+    previewMovedRef.current = true
     drag.lastPage = nextPage
     setPageNumber(nextPage)
   }
@@ -1015,66 +1020,6 @@ export default function BinderPage() {
             </div>
           </section>
 
-          <section className="rounded-[18px] border border-rose-line bg-rose-card p-3 shadow-sm">
-            <div className="mb-2 flex items-center justify-between px-1.5">
-              <h2 className="font-serif text-base font-extrabold">미리보기</h2>
-              <span className="text-xs font-bold tabular-nums text-rose-key/80">
-                {pageNumber} / {pageCount}
-              </span>
-            </div>
-            <div
-              className={`relative flex h-36 items-center justify-center gap-1.5 overflow-hidden rounded-xl bg-rose-chip/60 px-2 py-3 ${
-                previewDragging ? 'cursor-grabbing' : 'cursor-grab'
-              }`}
-              style={{ touchAction: 'none' }}
-              onPointerDown={startPreviewDrag}
-              onPointerMove={movePreviewDrag}
-              onPointerUp={endPreviewDrag}
-              onPointerCancel={endPreviewDrag}
-              aria-label="내용 미리보기 드래그"
-            >
-              {loadingPdf || !document ? (
-                <div className="grid h-full place-items-center text-sm font-bold text-rose-key">
-                  미리보기를 불러오는 중...
-                </div>
-              ) : (
-                previewPages.map((previewPage) => {
-                  const active = previewPage === pageNumber
-                  return (
-                    <div key={previewPage} className="select-none">
-                      <PdfThumbnail pdfDocument={document} pageNumber={previewPage} active={active} />
-                    </div>
-                  )
-                })
-              )}
-            </div>
-            <div className="mt-2.5 flex items-center gap-1.5 px-1">
-              <button
-                type="button"
-                onClick={goPrev}
-                disabled={pageNumber === 1}
-                className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-sm font-bold text-rose-key transition hover:bg-rose-chip disabled:opacity-30"
-                aria-label="이전 쪽"
-              >
-                ←
-              </button>
-              <div className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-rose-chip">
-                <div
-                  className="h-full rounded-full bg-rose-accent transition-[width] duration-200"
-                  style={{ width: `${pageCount <= 1 ? 100 : ((pageNumber - 1) / (pageCount - 1)) * 100}%` }}
-                />
-              </div>
-              <button
-                type="button"
-                onClick={goNext}
-                disabled={pageNumber >= pageCount}
-                className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-sm font-bold text-rose-key transition hover:bg-rose-chip disabled:opacity-30"
-                aria-label="다음 쪽"
-              >
-                →
-              </button>
-            </div>
-          </section>
         </aside>
 
         <section className="order-1 min-w-0 space-y-3 xl:order-2">
@@ -1099,6 +1044,38 @@ export default function BinderPage() {
               ))}
             </select>
             <ModeToggle mode={pageInput.mode} onChange={setPageInputMode} />
+          </div>
+
+          {/* 근처 쪽 미리보기 필름스트립 — 드래그로 훑고, 탭하면 그 쪽으로 이동 */}
+          <div
+            className={`flex h-[120px] select-none items-center justify-center gap-1.5 overflow-hidden rounded-[18px] border border-rose-line bg-rose-card px-2 py-2 shadow-sm ${
+              previewDragging ? 'cursor-grabbing' : 'cursor-grab'
+            }`}
+            style={{ touchAction: 'none' }}
+            onPointerDown={startPreviewDrag}
+            onPointerMove={movePreviewDrag}
+            onPointerUp={endPreviewDrag}
+            onPointerCancel={endPreviewDrag}
+            aria-label="내용 미리보기 — 드래그로 넘기고 탭하면 이동"
+          >
+            {loadingPdf || !document ? (
+              <span className="text-sm font-bold text-rose-key">미리보기를 불러오는 중...</span>
+            ) : (
+              previewPages.map((previewPage) => {
+                const active = previewPage === pageNumber
+                return (
+                  <div
+                    key={previewPage}
+                    onClick={() => {
+                      if (previewMovedRef.current) return
+                      goToPage(previewPage)
+                    }}
+                  >
+                    <PdfThumbnail pdfDocument={document} pageNumber={previewPage} active={active} />
+                  </div>
+                )
+              })
+            )}
           </div>
 
           <article
