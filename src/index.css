@@ -14,6 +14,23 @@
   --font-serif: 'Nanum Myeongjo', 'Apple SD Gothic Neo', serif;
 }
 
+/* 바인더 타깃 전용 그린 테마 — SPL 바인더 PDF 브랜드 컬러(#568c47)에 맞춰
+   rose-* 토큰을 스코프 재정의한다(targetApp.binder.tsx가 html에 클래스 부여).
+   note 타깃은 클래스가 없어 기존 리넨·테라코타 그대로. */
+:root.theme-binder {
+  --color-rose-bg: #f2f4ed;     /* 연한 그린 페이퍼 배경 */
+  --color-rose-card: #fdfefb;   /* 종이 화이트 카드 */
+  --color-rose-chip: #e3ecdc;   /* 라이트 그린 칩 */
+  --color-rose-ink: #2a2f26;    /* 딥 그린 차콜 (제목) */
+  --color-rose-accent: #568c47; /* 브랜드 초록 (강조·버튼, PDF 로고와 동일값) */
+  --color-rose-key: #5c6b52;    /* 그린 그레이 (보조 텍스트) */
+  --color-rose-line: #dbe4d2;   /* 그린 샌드 보더 */
+}
+
+.theme-binder body {
+  color: #343b2f;
+}
+
 html,
 body,
 #root {

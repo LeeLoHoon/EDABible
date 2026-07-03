@@ -21,7 +21,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl
 type PdfDocument = Awaited<ReturnType<typeof pdfjsLib.getDocument>['promise']>
 type InkTool = 'pen' | 'eraser'
 
-const PEN_COLORS = ['#2c2722', '#b25c30', '#2563eb', '#059669', '#be185d']
+const PEN_COLORS = ['#2c2722', '#568c47', '#2563eb', '#d97706', '#be185d']
 
 // iPadOS Safari는 빠른 연속 필기에서 펜 "포인터" 이벤트를 간헐적으로 흘리므로
 // (노트 앱과 동일한 교훈) iOS에서는 네이티브 터치 이벤트(touchType 'stylus')로
@@ -158,7 +158,7 @@ function paintShareTextBox(
 
   const boxHeight = lines.length * lineHeight + padding * 2
   ctx.fillStyle = 'rgba(255, 255, 255, 0.75)'
-  ctx.strokeStyle = 'rgba(178, 92, 48, 0.25)'
+  ctx.strokeStyle = 'rgba(86, 140, 71, 0.25)'
   ctx.lineWidth = 1 * exportScale
   ctx.beginPath()
   ctx.roundRect(x, y, box.width * canvasWidth, boxHeight, 8 * exportScale)
