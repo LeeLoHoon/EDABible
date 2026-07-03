@@ -152,7 +152,7 @@ export default function InkCanvas({
     pad.fromData(strokes.map(strokeToGroup))
   }, [strokes])
 
-  // 손가락 차단(펜 전용) + 지우개 처리: 래퍼 capture 단계에서 가로챈다.
+  // 지우개 처리: 래퍼 capture 단계에서 가로채고, 펜 입력은 signature_pad에 맡긴다.
   useEffect(() => {
     const wrap = wrapRef.current
     if (!wrap) return
@@ -186,8 +186,7 @@ export default function InkCanvas({
       window.removeEventListener('pointercancel', up)
     }
     const downCapture = (e: PointerEvent) => {
-      // 손가락/손바닥은 항상 차단 — signature_pad에 도달하지 못하게 capture에서 중단
-      if (e.pointerType === 'touch') {
+      if (!e.isPrimary) {
         e.stopPropagation()
         if (e.cancelable) e.preventDefault()
         return
