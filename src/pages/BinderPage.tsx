@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import * as pdfjsLib from 'pdfjs-dist'
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.mjs?url'
@@ -905,6 +905,11 @@ export default function BinderPage() {
   const [pageCount, setPageCount] = useState(binderBooks[0]?.pages ?? 1)
   const [loadingPdf, setLoadingPdf] = useState(true)
   const [touchStart, setTouchStart] = useState<number | null>(null)
+  // 폰에서는 스와이프 페이지 넘김을 끈다 (화살표·슬라이더·미리보기로 이동)
+  const isPhone = useMemo(
+    () => typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches,
+    [],
+  )
   const [previewDragging, setPreviewDragging] = useState(false)
   const previewDragRef = useRef<{ startX: number; startPage: number; lastPage: number } | null>(null)
   const previewMovedRef = useRef(false)
@@ -1153,9 +1158,11 @@ export default function BinderPage() {
     }
   }
 
-  // 권 선택 책장: 스크롤바 없이도 마우스·펜·터치 드래그로 넘길 수 있게 한다.
+  // 권 선택 책장: 터치·펜은 네이티브 관성 스크롤에 맡기고(부드러움),
+  // 스크롤바가 없는 마우스만 수동 드래그 스크롤을 붙인다.
   // 캡처는 실제로 움직이기 시작한 뒤에만 잡아, 가만히 탭한 책등의 클릭은 살린다.
   const startShelfDrag = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.pointerType !== 'mouse') return
     shelfMovedRef.current = false
     shelfDragRef.current = {
       pointerId: event.pointerId,
@@ -1323,7 +1330,6 @@ export default function BinderPage() {
             <div className="px-3 pb-3 pt-2">
               <div
                 className="no-scrollbar flex cursor-grab items-end gap-1.5 overflow-x-auto px-1 pb-1 pt-2 active:cursor-grabbing"
-                style={{ touchAction: 'pan-y' }}
                 onPointerDown={startShelfDrag}
                 onPointerMove={moveShelfDrag}
                 onPointerUp={endShelfDrag}
@@ -1595,13 +1601,14 @@ export default function BinderPage() {
 
           <article
             className="relative rounded-[22px] border border-rose-line bg-rose-chip/50 p-2.5 sm:p-3"
+            style={{ touchAction: 'pan-y' }}
             onTouchStart={(event) => {
-              // 손글씨 모드에서는 획이 스와이프로 오인되지 않게 넘김 제스처를 끈다
-              if (inputMode === 'ink') return
+              // 폰에서는 스와이프 넘김 비활성, 손글씨 모드에서는 획 오인 방지
+              if (isPhone || inputMode === 'ink') return
               setTouchStart(event.changedTouches[0]?.clientX ?? null)
             }}
             onTouchEnd={(event) => {
-              if (inputMode === 'ink') return
+              if (isPhone || inputMode === 'ink') return
               handleTouchEnd(event.changedTouches[0]?.clientX ?? 0)
             }}
           >
