@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import GuideButton from '../components/GuideButton'
 import { listEntries, putEntry, deleteEntry, clearAllEntries } from '../db'
 import { createEntry, emptyTemptationVictory, isFieldEmpty, type Entry } from '../types'
@@ -71,13 +71,16 @@ export default function HomePage() {
 
   return (
     <div className="relative mx-auto max-w-2xl">
-      <button
-        type="button"
-        onClick={() => navigate('/review')}
-        className="absolute left-4 top-4 z-10 rounded-full border border-rose-line bg-rose-card/90 px-3 py-2 text-xs font-bold text-rose-ink shadow-sm backdrop-blur transition hover:border-rose-accent"
-      >
-        본문 검수
-      </button>
+      {__APP_TARGET__ === 'all' && (
+        <div className="absolute left-4 top-4 z-10">
+          <Link
+            to="/binder"
+            className="rounded-lg border border-rose-line bg-rose-card/80 px-3 py-2 text-sm font-bold text-rose-key shadow-sm"
+          >
+            SPL 바인더
+          </Link>
+        </div>
+      )}
       <GuideButton className="absolute right-4 top-4 z-10" />
       {/* 책 표지 — 첫 페이지 */}
       <section className="relative flex min-h-[86vh] flex-col items-center justify-center px-6 text-center">
