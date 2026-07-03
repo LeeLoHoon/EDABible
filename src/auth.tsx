@@ -7,6 +7,30 @@ function authRedirectUrl(): string {
   return `${window.location.origin}${window.location.pathname}`
 }
 
+// Google은 앱 내 웹뷰(카카오톡·인스타그램 등 인앱 브라우저)에서의 OAuth 로그인을
+// 차단한다(403 disallowed_useragent). 감지해서 기본 브라우저로 안내한다.
+type InAppBrowser = 'kakaotalk' | 'etc' | null
+
+function detectInAppBrowser(): InAppBrowser {
+  const ua = navigator.userAgent
+  if (/KAKAOTALK/i.test(ua)) return 'kakaotalk'
+  if (/NAVER\(inapp|Instagram|FBAN|FBAV|FB_IAB|Line\/|DaumApps|everytimeApp|band\.us/i.test(ua)) return 'etc'
+  return null
+}
+
+function openInExternalBrowser(kind: InAppBrowser) {
+  const url = window.location.href
+  if (kind === 'kakaotalk') {
+    // 카카오톡 전용: 현재 페이지를 기기 기본 브라우저로 연다
+    window.location.href = `kakaotalk://web/openExternal?url=${encodeURIComponent(url)}`
+    return
+  }
+  if (/android/i.test(navigator.userAgent)) {
+    window.location.href = `intent://${url.replace(/^https?:\/\//, '')}#Intent;scheme=https;action=android.intent.action.VIEW;end`
+  }
+  // iOS의 기타 인앱 브라우저는 스킴이 없어 안내 문구로 대체된다
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(!!supabase)
   const [authError, setAuthError] = useState<string | null>(null)
@@ -81,6 +105,7 @@ export function RequireGoogleLogin({ children }: { children: React.ReactNode }) 
   const { authError, loading, user, signInWithGoogle } = useAuth()
   const [error, setError] = useState<string | null>(null)
   const [signingIn, setSigningIn] = useState(false)
+  const inAppBrowser = useMemo(() => detectInAppBrowser(), [])
 
   const handleSignIn = async () => {
     setError(null)
@@ -171,6 +196,28 @@ export function RequireGoogleLogin({ children }: { children: React.ReactNode }) 
               <br />내 바인더에 안전하게 저장됩니다.
             </p>
 
+            {inAppBrowser ? (
+              <div className="mt-7">
+                <p className="rounded-xl border border-rose-accent/30 bg-rose-bg px-3.5 py-3 text-left text-[13px] font-bold leading-6 text-rose-ink">
+                  {inAppBrowser === 'kakaotalk' ? '카카오톡' : '지금 사용 중인'} 앱 안의 브라우저에서는
+                  Google이 보안 정책상 로그인을 차단해요.
+                  <br />
+                  <span className="text-rose-key">기본 브라우저(Chrome·Safari)로 열면 정상 로그인됩니다.</span>
+                </p>
+                <button
+                  type="button"
+                  onClick={() => openInExternalBrowser(inAppBrowser)}
+                  className="mt-3 w-full rounded-full bg-rose-accent px-4 py-3.5 text-[15px] font-extrabold text-white shadow-sm shadow-rose-accent/30 transition active:scale-[0.99]"
+                >
+                  기본 브라우저로 열기
+                </button>
+                <p className="mt-3 text-xs font-bold leading-5 text-rose-key/70">
+                  버튼이 동작하지 않으면 화면의 메뉴(⋮ 또는 공유)에서
+                  <br />
+                  ‘다른 브라우저로 열기’를 선택해 주세요.
+                </p>
+              </div>
+            ) : (
             <button
               type="button"
               onClick={handleSignIn}
@@ -197,6 +244,7 @@ export function RequireGoogleLogin({ children }: { children: React.ReactNode }) 
               </svg>
               <span>{signingIn ? 'Google로 이동 중...' : 'Google로 계속하기'}</span>
             </button>
+            )}
 
             <p className="mt-4 text-xs font-bold leading-5 text-rose-key/60">
               로그인 후 내 계정에 바인더 기록이 동기화됩니다.
