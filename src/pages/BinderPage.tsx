@@ -5,7 +5,14 @@ import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.mjs?url'
 import { useAuth } from '../authState'
 import { binderBooks, binderUrl } from '../binderLibrary'
 import ModeToggle from '../components/ModeToggle'
-import { getBinderWork, putBinderWork, type BinderBookmark, type BinderTextBox, type BinderWork } from '../db'
+import {
+  getBinderWork,
+  getLastBinderBookId,
+  putBinderWork,
+  type BinderBookmark,
+  type BinderTextBox,
+  type BinderWork,
+} from '../db'
 import { emptyField, type Field, type FieldMode, type Stroke } from '../types'
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl
@@ -640,6 +647,8 @@ function PdfPage({
 
 export default function BinderPage() {
   const { user, signOut } = useAuth()
+  // 토큰 갱신 등으로 user 객체 참조가 바뀌어도 재조회하지 않도록 id 문자열만 의존
+  const userId = user?.id
   const [selectedId, setSelectedId] = useState(binderBooks[0]?.id ?? '')
   const [work, setWork] = useState<BinderWork | null>(null)
   const [document, setDocument] = useState<PdfDocument | null>(null)
@@ -652,6 +661,15 @@ export default function BinderPage() {
   const previewMovedRef = useRef(false)
   const shelfDragRef = useRef<{ pointerId: number; startX: number; startLeft: number; moved: boolean } | null>(null)
   const shelfMovedRef = useRef(false)
+  // 이어보기: 부팅 복원이 끝나기 전에는 마지막 위치를 저장하지 않는다
+  const bootRef = useRef(true)
+  // 권을 바꾼 뒤 사용자가 직접 페이지를 넘겼으면 복원으로 되돌리지 않는다
+  const navigatedSinceSelectRef = useRef(false)
+  const workRef = useRef<BinderWork | null>(null)
+
+  useEffect(() => {
+    workRef.current = work
+  }, [work])
 
   const selected = binderBooks.find((book) => book.id === selectedId) ?? binderBooks[0]
   const pageKey = String(pageNumber)
@@ -672,27 +690,78 @@ export default function BinderPage() {
       ]).size
     : 0
 
+  // 부팅 시 계정의 마지막 사용 권으로 이동
   useEffect(() => {
-    if (!user) return
+    if (!userId) return
     let alive = true
+    getLastBinderBookId(userId)
+      .then((bookId) => {
+        if (!alive || !bookId) return
+        if (binderBooks.some((book) => book.id === bookId)) setSelectedId(bookId)
+      })
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [userId])
+
+  useEffect(() => {
+    if (!userId) return
+    let alive = true
+    navigatedSinceSelectRef.current = false
     const resetTimer = window.setTimeout(() => {
-      if (alive) setWork(null)
+      if (alive) {
+        setWork(null)
+        setPageNumber(1)
+      }
     }, 0)
-    getBinderWork(selected.id, user.id).then((next) => {
-      if (alive) setWork(next)
+    getBinderWork(selected.id, userId).then((next) => {
+      if (!alive) return
+      window.clearTimeout(resetTimer)
+      // 이 권에서 마지막으로 보던 쪽으로 이어보기 (이미 직접 넘겼으면 유지)
+      const target = next.lastPageNumber && next.lastPageNumber > 0 ? next.lastPageNumber : 1
+      const restored = Math.max(1, Math.min(selected.pages, target))
+      if (!navigatedSinceSelectRef.current) setPageNumber(restored)
+
+      if (bootRef.current) {
+        // 부팅 복원: 열람만으로 최근 사용 순서를 바꾸지 않는다
+        bootRef.current = false
+        workRef.current = next
+        setWork(next)
+        return
+      }
+      // 사용자가 직접 고른 권: 페이지를 안 넘겨도 "마지막 사용 권"으로 기록
+      const touched = { ...next, lastPageNumber: restored }
+      workRef.current = touched
+      setWork(touched)
+      void putBinderWork(touched, userId).catch(() => {})
     })
     return () => {
       alive = false
       window.clearTimeout(resetTimer)
     }
-  }, [selected.id, user])
+  }, [selected.id, selected.pages, userId])
+
+  // 마지막 위치(권·쪽) 저장 — 계정별 이어보기용
+  useEffect(() => {
+    if (!userId || bootRef.current) return
+    const timer = window.setTimeout(() => {
+      const current = workRef.current
+      if (!current || current.bookId !== selected.id) return
+      if (current.lastPageNumber === pageNumber) return
+      const next = { ...current, lastPageNumber: pageNumber }
+      workRef.current = next
+      setWork(next)
+      void putBinderWork(next, userId).catch(() => {})
+    }, 800)
+    return () => window.clearTimeout(timer)
+  }, [pageNumber, selected.id, userId])
 
   useEffect(() => {
     let alive = true
     const resetTimer = window.setTimeout(() => {
       if (!alive) return
       setDocument(null)
-      setPageNumber(1)
       setPageCount(selected.pages)
       setLoadingPdf(true)
     }, 0)
@@ -776,9 +845,18 @@ export default function BinderPage() {
     })
   }
 
-  const goPrev = () => setPageNumber((prev) => Math.max(1, prev - 1))
-  const goNext = () => setPageNumber((prev) => Math.min(pageCount, prev + 1))
-  const goToPage = (next: number) => setPageNumber(Math.max(1, Math.min(pageCount, next)))
+  const goPrev = () => {
+    navigatedSinceSelectRef.current = true
+    setPageNumber((prev) => Math.max(1, prev - 1))
+  }
+  const goNext = () => {
+    navigatedSinceSelectRef.current = true
+    setPageNumber((prev) => Math.min(pageCount, prev + 1))
+  }
+  const goToPage = (next: number) => {
+    navigatedSinceSelectRef.current = true
+    setPageNumber(Math.max(1, Math.min(pageCount, next)))
+  }
 
   const startPreviewDrag = (event: React.PointerEvent<HTMLDivElement>) => {
     if (loadingPdf || !document) return
@@ -798,6 +876,7 @@ export default function BinderPage() {
     const nextPage = Math.max(1, Math.min(pageCount, drag.startPage + pageDelta))
     if (nextPage === drag.lastPage) return
     previewMovedRef.current = true
+    navigatedSinceSelectRef.current = true
     drag.lastPage = nextPage
     setPageNumber(nextPage)
   }

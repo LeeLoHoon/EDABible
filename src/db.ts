@@ -23,6 +23,8 @@ export interface BinderWork {
   pageInputs: Record<string, Field>
   pageTextBoxes: Record<string, BinderTextBox[]>
   bookmarks: BinderBookmark[]
+  /** 이 권에서 마지막으로 보던 쪽 — 다시 열 때 이어보기용 */
+  lastPageNumber?: number
   updatedAt: number
 }
 
@@ -116,22 +118,47 @@ function normalizeBinderWork(bookId: string, work: Partial<BinderWork> | null | 
 
 export async function getBinderWork(bookId: string, userId?: string): Promise<BinderWork> {
   if (supabase && userId) {
-    const { data, error } = await supabase
-      .from('binder_works')
-      .select('data')
-      .eq('user_id', userId)
-      .eq('book_id', bookId)
-      .maybeSingle()
+    try {
+      const { data, error } = await supabase
+        .from('binder_works')
+        .select('data')
+        .eq('user_id', userId)
+        .eq('book_id', bookId)
+        .maybeSingle()
 
-    if (error) throw error
-    if (data?.data) {
-      const work = normalizeBinderWork(bookId, data.data as Partial<BinderWork>)
-      await db.binderWorks.put(work)
-      return work
+      if (error) throw error
+      if (data?.data) {
+        const work = normalizeBinderWork(bookId, data.data as Partial<BinderWork>)
+        await db.binderWorks.put(work)
+        return work
+      }
+    } catch {
+      // 오프라인/일시 오류 시 로컬 캐시로 폴백 — 바인더가 아예 안 열리는 것 방지
     }
   }
 
   return normalizeBinderWork(bookId, await db.binderWorks.get(bookId))
+}
+
+/** 계정에서 가장 최근에 사용한 권의 bookId — 기록이 없으면 undefined */
+export async function getLastBinderBookId(userId?: string): Promise<string | undefined> {
+  if (supabase && userId) {
+    try {
+      const { data, error } = await supabase
+        .from('binder_works')
+        .select('book_id')
+        .eq('user_id', userId)
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      if (!error && data?.book_id) return data.book_id as string
+    } catch {
+      // 네트워크 실패 시 로컬 캐시로 폴백
+    }
+  }
+
+  const latest = await db.binderWorks.orderBy('updatedAt').reverse().first()
+  return latest?.bookId
 }
 
 export async function putBinderWork(work: BinderWork, userId?: string): Promise<void> {
