@@ -155,11 +155,39 @@ export default function InkCanvas({
     canvas.addEventListener('touchstart', preventPalmTouch, { passive: false })
     canvas.addEventListener('touchmove', preventPalmTouch, { passive: false })
     canvas.addEventListener('touchend', preventPalmTouch, { passive: false })
+    canvas.addEventListener('touchcancel', preventPalmTouch, { passive: false })
 
     return () => {
       canvas.removeEventListener('touchstart', preventPalmTouch)
       canvas.removeEventListener('touchmove', preventPalmTouch)
       canvas.removeEventListener('touchend', preventPalmTouch)
+      canvas.removeEventListener('touchcancel', preventPalmTouch)
+    }
+  }, [])
+
+  useEffect(() => {
+    const preventDocumentPalmTouch = (event: TouchEvent) => {
+      if (!document.body.classList.contains('ink-active')) return
+      for (let i = 0; i < event.changedTouches.length; i += 1) {
+        const touch = event.changedTouches[i] as Touch & { touchType?: string }
+        if (touch.touchType !== 'stylus') {
+          event.preventDefault()
+          return
+        }
+      }
+    }
+
+    document.addEventListener('touchstart', preventDocumentPalmTouch, { passive: false, capture: true })
+    document.addEventListener('touchmove', preventDocumentPalmTouch, { passive: false, capture: true })
+    document.addEventListener('touchend', preventDocumentPalmTouch, { passive: false, capture: true })
+    document.addEventListener('touchcancel', preventDocumentPalmTouch, { passive: false, capture: true })
+
+    return () => {
+      document.body.classList.remove('ink-active')
+      document.removeEventListener('touchstart', preventDocumentPalmTouch, true)
+      document.removeEventListener('touchmove', preventDocumentPalmTouch, true)
+      document.removeEventListener('touchend', preventDocumentPalmTouch, true)
+      document.removeEventListener('touchcancel', preventDocumentPalmTouch, true)
     }
   }, [])
 
@@ -183,6 +211,7 @@ export default function InkCanvas({
     if (event.pointerType === 'touch') return
 
     event.preventDefault()
+    document.body.classList.add('ink-active')
 
     if (drawingRef.current) {
       drawingRef.current = null
@@ -233,6 +262,7 @@ export default function InkCanvas({
   const finishStroke = (event: React.PointerEvent<HTMLCanvasElement>) => {
     if (activePointerRef.current !== event.pointerId) return
     activePointerRef.current = null
+    document.body.classList.remove('ink-active')
 
     if (propRef.current.tool === 'eraser') return
 

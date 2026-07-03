@@ -81,7 +81,9 @@ const inSelectableText = (el: EventTarget | null): boolean => {
 // 대상이 입력칸/본문이거나, 입력칸이 포커스된 상태면 차단하지 않는다
 // (입력칸 포커스 중 selectstart를 막으면 iOS에서 키보드/편집이 깨짐)
 const allowSelect = (e: Event) =>
-  isEditable(e.target) || isEditable(document.activeElement) || inSelectableText(e.target)
+  isEditable(e.target) ||
+  isEditable(document.activeElement) ||
+  (!document.body.classList.contains('ink-active') && inSelectableText(e.target))
 
 document.addEventListener(
   'selectstart',
