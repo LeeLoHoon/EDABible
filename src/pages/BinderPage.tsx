@@ -78,7 +78,10 @@ function distToStroke(stroke: Stroke, x: number, y: number): number {
 function drawStrokes(canvas: HTMLCanvasElement, strokes: Stroke[]) {
   const ctx = canvas.getContext('2d')
   if (!ctx) return
-  ctx.clearRect(0, 0, canvas.width, canvas.height)
+  const pixelRatio = Number(canvas.dataset.pixelRatio || 1)
+  const rect = canvas.getBoundingClientRect()
+  ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0)
+  ctx.clearRect(0, 0, rect.width, rect.height)
   ctx.lineCap = 'round'
   ctx.lineJoin = 'round'
   for (const stroke of strokes) {
@@ -115,6 +118,8 @@ function PageOverlay({
   const overlayRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const drawingRef = useRef<Stroke | null>(null)
+  const activePointerRef = useRef<number | null>(null)
+  const erasingPointerRef = useRef<number | null>(null)
   const fieldRef = useRef(field)
   const textBoxesRef = useRef(textBoxes)
   const [tool, setTool] = useState<InkTool>('pen')
@@ -154,8 +159,10 @@ function PageOverlay({
     if (!canvas) return
     const syncSize = () => {
       const rect = canvas.getBoundingClientRect()
-      canvas.width = Math.max(1, Math.round(rect.width))
-      canvas.height = Math.max(1, Math.round(rect.height))
+      const pixelRatio = Math.max(1, window.devicePixelRatio || 1)
+      canvas.dataset.pixelRatio = String(pixelRatio)
+      canvas.width = Math.max(1, Math.round(rect.width * pixelRatio))
+      canvas.height = Math.max(1, Math.round(rect.height * pixelRatio))
       drawStrokes(canvas, fieldRef.current.strokes)
     }
     syncSize()
@@ -180,11 +187,13 @@ function PageOverlay({
 
   const startStroke = (event: React.PointerEvent<HTMLCanvasElement>) => {
     if (mode !== 'ink') return
-    if (event.pointerType === 'touch') return
+    if (activePointerRef.current !== null) return
+    activePointerRef.current = event.pointerId
     event.currentTarget.setPointerCapture(event.pointerId)
     event.preventDefault()
     const [x, y, pressure] = pointFromEvent(event)
     if (tool === 'eraser') {
+      erasingPointerRef.current = event.pointerId
       eraseAt(x, y)
       return
     }
@@ -193,8 +202,10 @@ function PageOverlay({
 
   const moveStroke = (event: React.PointerEvent<HTMLCanvasElement>) => {
     if (mode !== 'ink') return
+    if (activePointerRef.current !== event.pointerId) return
+    event.preventDefault()
     const [x, y, pressure] = pointFromEvent(event)
-    if (tool === 'eraser' && event.buttons) {
+    if (tool === 'eraser' || erasingPointerRef.current === event.pointerId) {
       eraseAt(x, y)
       return
     }
@@ -205,7 +216,13 @@ function PageOverlay({
     if (canvas) drawStrokes(canvas, [...fieldRef.current.strokes, stroke])
   }
 
-  const endStroke = () => {
+  const endStroke = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    if (activePointerRef.current !== event.pointerId) return
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId)
+    }
+    activePointerRef.current = null
+    erasingPointerRef.current = null
     const stroke = drawingRef.current
     if (!stroke) return
     drawingRef.current = null
