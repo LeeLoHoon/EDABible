@@ -69,9 +69,11 @@ export default defineConfig({
         short_name: appMeta.shortName,
         description: appMeta.description,
         lang: 'ko',
-        id: appTarget === 'binder' ? '/binder' : '/',
-        start_url: '/',
-        scope: '/',
+        // base 기준으로 계산해야 GitHub Pages(/EDABible/) 설치 앱이 404 루트를
+        // 열지 않는다. Vercel(base '/')에서는 기존 값과 동일하게 유지된다.
+        id: appTarget === 'binder' ? `${base}binder` : base,
+        start_url: base,
+        scope: base,
         display: 'standalone',
         orientation: 'any',
         background_color: '#f6f1e9',

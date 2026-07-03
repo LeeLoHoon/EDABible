@@ -2,16 +2,28 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { registerSW } from 'virtual:pwa-register'
 import { clearBibleCache } from './bible'
+import { flushPendingSaves } from './saveFlush'
 import './index.css'
 import App from 'virtual:target-app'
 
 let reloadingForServiceWorker = false
 
+// 새 SW가 활성화돼도 필기 중(ink-active: 노트·바인더 잉크 엔진이 관리)에는
+// 리로드를 보류하고, 리로드 직전에 대기 중인 저장을 확정한다 — 설치형
+// PWA에서 업데이트 리로드가 필기 도중에 터져 방금 쓴 글씨가 날아가는 것 방지.
+async function reloadWhenSafe() {
+  if (reloadingForServiceWorker) return
+  reloadingForServiceWorker = true
+  while (document.body.classList.contains('ink-active')) {
+    await new Promise((resolve) => setTimeout(resolve, 500))
+  }
+  await flushPendingSaves()
+  window.location.reload()
+}
+
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (reloadingForServiceWorker) return
-    reloadingForServiceWorker = true
-    window.location.reload()
+    void reloadWhenSafe()
   })
 }
 
@@ -54,10 +66,9 @@ async function ensureCurrentBuild() {
     const registration = 'serviceWorker' in navigator ? await navigator.serviceWorker.getRegistration() : undefined
     await registration?.update()
     updateSW(true)
-
-    window.setTimeout(() => {
-      window.location.reload()
-    }, 500)
+    // 여기서 바로 reload하지 않는다 — 새 SW가 실제로 활성화되면 controllerchange
+    // → reloadWhenSafe()가 한 번만 리로드한다. 구버전 SW에 갇힌 기기에서 SW
+    // 설치가 끝나기 전에 리로드를 반복하던 무한 루프(필기 유실의 주범) 방지.
   } catch (error) {
     console.warn('Build freshness check failed.', error)
   }
