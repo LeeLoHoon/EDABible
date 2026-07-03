@@ -111,3 +111,54 @@ body.ink-active .selectable-text {
     transform: translateY(0);
   }
 }
+
+/* 가로 스크롤 영역의 스크롤바 숨김 (책장 등) */
+.no-scrollbar {
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* 바인더 페이지 이동 슬라이더 (기본 range 스타일 대체) */
+.pager-range {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 22px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.pager-range::-webkit-slider-runnable-track {
+  height: 5px;
+  border-radius: 999px;
+  background: var(--color-rose-line);
+}
+
+.pager-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  margin-top: -6.5px;
+  height: 18px;
+  width: 18px;
+  border-radius: 999px;
+  border: 2.5px solid var(--color-rose-accent);
+  background: var(--color-rose-card);
+  box-shadow: 0 1px 4px rgba(44, 39, 34, 0.18);
+}
+
+.pager-range::-moz-range-track {
+  height: 5px;
+  border-radius: 999px;
+  background: var(--color-rose-line);
+}
+
+.pager-range::-moz-range-thumb {
+  height: 13px;
+  width: 13px;
+  border-radius: 999px;
+  border: 2.5px solid var(--color-rose-accent);
+  background: var(--color-rose-card);
+  box-shadow: 0 1px 4px rgba(44, 39, 34, 0.18);
+}

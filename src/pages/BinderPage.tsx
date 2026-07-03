@@ -334,60 +334,69 @@ function PageOverlay({
                   }`}
                 />
                 {active && (
-                  <div className="mt-1 flex items-center gap-1 rounded-lg border border-rose-line bg-rose-card/90 p-1 shadow-sm">
+                  <div className="mt-1.5 inline-flex items-center gap-0.5 rounded-full border border-rose-line bg-rose-card/95 px-1.5 py-1 shadow-md backdrop-blur">
                     <button
                       type="button"
                       onPointerDown={(event) => startMoveTextBox(event, box)}
-                      className="cursor-grab rounded bg-rose-accent px-2 py-1 text-xs font-bold text-white active:cursor-grabbing"
+                      className="cursor-grab rounded-full bg-rose-accent px-2.5 py-1 text-xs font-bold text-white active:cursor-grabbing"
                     >
                       이동
                     </button>
+                    <span className="mx-0.5 h-4 w-px bg-rose-line" />
                     <button
                       type="button"
                       onClick={() => updateTextBox(box.id, { y: Math.max(0, box.y - 0.015) })}
-                      className="rounded px-2 py-1 text-xs font-bold text-rose-key"
+                      className="grid h-7 w-7 place-items-center rounded-full text-xs font-bold text-rose-key transition hover:bg-rose-chip"
+                      aria-label="위로"
                     >
                       ↑
                     </button>
                     <button
                       type="button"
                       onClick={() => updateTextBox(box.id, { y: Math.min(0.94, box.y + 0.015) })}
-                      className="rounded px-2 py-1 text-xs font-bold text-rose-key"
+                      className="grid h-7 w-7 place-items-center rounded-full text-xs font-bold text-rose-key transition hover:bg-rose-chip"
+                      aria-label="아래로"
                     >
                       ↓
                     </button>
                     <button
                       type="button"
                       onClick={() => updateTextBox(box.id, { x: Math.max(0, box.x - 0.015) })}
-                      className="rounded px-2 py-1 text-xs font-bold text-rose-key"
+                      className="grid h-7 w-7 place-items-center rounded-full text-xs font-bold text-rose-key transition hover:bg-rose-chip"
+                      aria-label="왼쪽으로"
                     >
                       ←
                     </button>
                     <button
                       type="button"
                       onClick={() => updateTextBox(box.id, { x: Math.min(0.88, box.x + 0.015) })}
-                      className="rounded px-2 py-1 text-xs font-bold text-rose-key"
+                      className="grid h-7 w-7 place-items-center rounded-full text-xs font-bold text-rose-key transition hover:bg-rose-chip"
+                      aria-label="오른쪽으로"
                     >
                       →
                     </button>
+                    <span className="mx-0.5 h-4 w-px bg-rose-line" />
                     <button
                       type="button"
                       onClick={() => updateTextBox(box.id, { width: Math.max(0.18, box.width - 0.04) })}
-                      className="rounded px-2 py-1 text-xs font-bold text-rose-key"
+                      className="grid h-7 w-7 place-items-center rounded-full text-xs font-bold text-rose-key transition hover:bg-rose-chip"
+                      aria-label="너비 줄이기"
                     >
-                      -
+                      −
                     </button>
                     <button
                       type="button"
                       onClick={() => updateTextBox(box.id, { width: Math.min(0.82, box.width + 0.04) })}
-                      className="rounded px-2 py-1 text-xs font-bold text-rose-key"
+                      className="grid h-7 w-7 place-items-center rounded-full text-xs font-bold text-rose-key transition hover:bg-rose-chip"
+                      aria-label="너비 늘리기"
                     >
                       +
                     </button>
+                    <span className="mx-0.5 h-4 w-px bg-rose-line" />
                     <button
                       type="button"
                       onClick={() => deleteTextBox(box.id)}
-                      className="ml-auto rounded px-2 py-1 text-xs font-bold text-rose-accent"
+                      className="rounded-full px-2.5 py-1 text-xs font-bold text-rose-accent transition hover:bg-rose-chip"
                     >
                       삭제
                     </button>
@@ -397,15 +406,15 @@ function PageOverlay({
             )
           })}
           {textBoxes.length === 0 && (
-            <div className="pointer-events-none absolute inset-x-8 top-8 rounded-xl border border-dashed border-rose-accent/45 bg-white/35 px-4 py-3 text-sm font-bold text-rose-key backdrop-blur-[1px]">
-              입력할 위치를 클릭하세요.
+            <div className="pointer-events-none absolute left-1/2 top-5 -translate-x-1/2 whitespace-nowrap rounded-full bg-rose-ink/70 px-4 py-1.5 text-[13px] font-bold text-white shadow-sm backdrop-blur-[2px]">
+              입력할 위치를 탭하세요
             </div>
           )}
         </>
       )}
       <canvas
         ref={canvasRef}
-        className={`absolute inset-0 h-full w-full rounded-[18px] ${mode === 'ink' ? 'pointer-events-auto' : 'pointer-events-none'}`}
+        className={`absolute inset-0 h-full w-full rounded-[16px] ${mode === 'ink' ? 'pointer-events-auto' : 'pointer-events-none'}`}
         style={{ touchAction: 'none' }}
         onPointerDown={startStroke}
         onPointerMove={moveStroke}
@@ -413,21 +422,26 @@ function PageOverlay({
         onPointerCancel={endStroke}
       />
       {mode === 'ink' && (
-        <div className="absolute bottom-3 left-3 right-3 flex flex-wrap items-center gap-2 rounded-xl border border-rose-line bg-rose-card/90 p-2 shadow-sm backdrop-blur">
+        <div className="safe-pad fixed bottom-3 left-1/2 z-30 flex w-max max-w-[calc(100vw-1.5rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-1.5 rounded-full border border-rose-line bg-rose-card/95 px-3 py-1.5 shadow-lg backdrop-blur">
           <button
             type="button"
             onClick={() => setTool('pen')}
-            className={`rounded-lg px-2.5 py-1 text-sm font-bold ${tool === 'pen' ? 'bg-rose-chip text-rose-ink' : 'text-rose-key'}`}
+            className={`rounded-full px-2.5 py-1 text-[13px] font-bold transition ${
+              tool === 'pen' ? 'bg-rose-chip text-rose-ink' : 'text-rose-key hover:text-rose-ink'
+            }`}
           >
-            펜
+            ✏️ 펜
           </button>
           <button
             type="button"
             onClick={() => setTool('eraser')}
-            className={`rounded-lg px-2.5 py-1 text-sm font-bold ${tool === 'eraser' ? 'bg-rose-chip text-rose-ink' : 'text-rose-key'}`}
+            className={`rounded-full px-2.5 py-1 text-[13px] font-bold transition ${
+              tool === 'eraser' ? 'bg-rose-chip text-rose-ink' : 'text-rose-key hover:text-rose-ink'
+            }`}
           >
-            지우개
+            🧽 지우개
           </button>
+          <span className="mx-0.5 h-4 w-px bg-rose-line" />
           {PEN_COLORS.map((penColor) => (
             <button
               key={penColor}
@@ -436,7 +450,11 @@ function PageOverlay({
                 setColor(penColor)
                 setTool('pen')
               }}
-              className={`h-6 w-6 rounded-full border-2 ${color === penColor && tool === 'pen' ? 'border-rose-accent' : 'border-white'}`}
+              className={`h-6 w-6 rounded-full border-2 transition ${
+                color === penColor && tool === 'pen'
+                  ? 'scale-110 border-rose-accent'
+                  : 'border-white hover:scale-105'
+              }`}
               style={{ backgroundColor: penColor }}
               aria-label={`색상 ${penColor}`}
             />
@@ -450,10 +468,19 @@ function PageOverlay({
             className="w-20 accent-rose-accent"
             aria-label="펜 굵기"
           />
-          <button type="button" onClick={undo} className="rounded-lg px-2.5 py-1 text-sm font-bold text-rose-key">
-            취소
+          <span className="mx-0.5 h-4 w-px bg-rose-line" />
+          <button
+            type="button"
+            onClick={undo}
+            className="rounded-full px-2.5 py-1 text-[13px] font-bold text-rose-key transition hover:text-rose-ink"
+          >
+            ↩️ 취소
           </button>
-          <button type="button" onClick={clear} className="rounded-lg px-2.5 py-1 text-sm font-bold text-rose-key">
+          <button
+            type="button"
+            onClick={clear}
+            className="rounded-full px-2.5 py-1 text-[13px] font-bold text-rose-key transition hover:text-rose-ink"
+          >
             지우기
           </button>
         </div>
@@ -517,10 +544,10 @@ function PdfThumbnail({
 
   return (
     <div
-      className={`relative mx-auto flex shrink-0 items-center justify-center overflow-hidden bg-white shadow-sm transition ${
+      className={`relative mx-auto flex shrink-0 items-center justify-center overflow-hidden bg-white transition ${
         active
-          ? 'h-32 w-[92px] rounded-lg border-2 border-rose-accent shadow-lg shadow-rose-accent/20'
-          : 'h-28 w-[58px] rounded-md border border-[#d6c4a7] opacity-85 shadow'
+          ? 'h-28 w-[80px] rounded-lg shadow-md ring-2 ring-rose-accent'
+          : 'h-[88px] w-[52px] rounded-md border border-rose-line opacity-75 shadow-sm'
       }`}
     >
       <canvas ref={canvasRef} className="block h-full w-full bg-white object-contain" />
@@ -596,8 +623,8 @@ function PdfPage({
   }, [pdfDocument, pageNumber])
 
   return (
-    <div className="relative w-full rounded-[18px] shadow-[0_18px_45px_rgba(44,39,34,0.16)]">
-      <canvas ref={canvasRef} className="block w-full rounded-[18px] bg-white" />
+    <div className="relative w-full rounded-[16px] shadow-[0_8px_28px_rgba(44,39,34,0.14)]">
+      <canvas ref={canvasRef} className="block w-full rounded-[16px] bg-white" />
       <PageOverlay
         field={field}
         textBoxes={textBoxes}
@@ -787,10 +814,10 @@ export default function BinderPage() {
 
   return (
     <div className="min-h-full bg-rose-bg text-rose-ink">
-      <header className="sticky top-0 z-20 border-b border-rose-line bg-rose-bg/95 px-4 py-3 backdrop-blur">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3">
-          <div className="w-20 shrink-0">
-            {__APP_TARGET__ === 'all' && (
+      <header className="sticky top-0 z-20 border-b border-rose-line bg-rose-bg/95 px-4 py-2.5 backdrop-blur">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3">
+          <div className="flex w-24 shrink-0 items-center">
+            {__APP_TARGET__ === 'all' ? (
               <button
                 type="button"
                 onClick={() => window.history.back()}
@@ -798,16 +825,18 @@ export default function BinderPage() {
               >
                 ← 이전
               </button>
+            ) : (
+              <span className="text-[11px] font-black tracking-[0.3em] text-rose-key/70">EDA</span>
             )}
           </div>
           <h1 className="min-w-0 flex-1 truncate text-center font-serif text-lg font-extrabold">
             에다 SPL 바인더
           </h1>
-          <div className="flex w-20 shrink-0 justify-end">
+          <div className="flex w-24 shrink-0 justify-end">
             {__APP_TARGET__ === 'all' && (
               <Link
                 to="/"
-                className="whitespace-nowrap rounded-lg border border-rose-line bg-rose-card px-3 py-2 text-sm font-bold text-rose-key shadow-sm"
+                className="whitespace-nowrap rounded-full border border-rose-line bg-rose-card px-3.5 py-1.5 text-sm font-bold text-rose-key shadow-sm transition hover:text-rose-accent"
               >
                 노트
               </Link>
@@ -816,7 +845,7 @@ export default function BinderPage() {
               <button
                 type="button"
                 onClick={signOut}
-                className="whitespace-nowrap rounded-lg border border-rose-line bg-rose-card px-3 py-2 text-sm font-bold text-rose-key shadow-sm"
+                className="whitespace-nowrap rounded-full px-2 py-1.5 text-[13px] font-bold text-rose-key/80 transition hover:text-rose-accent"
               >
                 로그아웃
               </button>
@@ -825,248 +854,255 @@ export default function BinderPage() {
         </div>
       </header>
 
-      <main className="mx-auto grid max-w-6xl gap-5 px-4 py-5 xl:grid-cols-[15rem_minmax(0,1fr)]">
-        <aside className="space-y-4 xl:sticky xl:top-[74px] xl:self-start">
-          <section className="relative overflow-hidden rounded-[22px] border border-rose-line bg-rose-card p-5 shadow-sm">
-            <div className="pointer-events-none absolute inset-y-0 left-0 w-4 bg-rose-accent/80" />
-            <div className="pointer-events-none absolute left-7 top-0 h-full border-l border-dashed border-rose-line" />
-            <p className="pl-5 text-xs font-bold tracking-[0.32em] text-rose-key">EDA</p>
-            <div className="mt-8 pl-5">
-              <p className="font-serif text-4xl font-extrabold leading-tight">SPL</p>
-              <p className="mt-1 font-serif text-2xl font-extrabold">바인더</p>
-              <div className="mt-6 flex items-center gap-2">
-                <span className="h-px flex-1 bg-rose-line" />
-                <span className="text-xs font-bold text-rose-accent">I{selected.issue}</span>
+      <main className="mx-auto flex max-w-6xl flex-col gap-5 px-4 py-5 xl:grid xl:grid-cols-[15rem_minmax(0,1fr)] xl:items-start">
+        <aside className="order-2 space-y-4 xl:order-1 xl:sticky xl:top-[66px] xl:self-start">
+          <section className="relative overflow-hidden rounded-[20px] border border-rose-line bg-rose-card p-5 pl-7 shadow-sm">
+            <div className="pointer-events-none absolute inset-y-0 left-0 w-2 bg-rose-accent" />
+            <div className="flex items-center justify-between">
+              <p className="text-[11px] font-black tracking-[0.3em] text-rose-key/80">EDA · SPL</p>
+              <span className="rounded-full bg-rose-chip px-2.5 py-0.5 text-[11px] font-black text-rose-accent">
+                {selected.issue}호
+              </span>
+            </div>
+            <p className="mt-3 break-keep font-serif text-[23px] font-extrabold leading-snug">{selected.title}</p>
+            <div className="mt-5">
+              <div className="flex items-baseline justify-between text-xs font-bold text-rose-key">
+                <span>입력한 쪽</span>
+                <span className="tabular-nums">
+                  <span className="text-rose-accent">{completedPages}</span> / {pageCount}
+                </span>
               </div>
-              <p className="mt-5 text-sm leading-6 text-rose-key">
-                {selected.title}
-                <br />
-                입력 {completedPages}/{pageCount}쪽
-              </p>
+              <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-rose-chip">
+                <div
+                  className="h-full rounded-full bg-rose-accent transition-[width] duration-300"
+                  style={{ width: `${pageCount ? Math.min(100, (completedPages / pageCount) * 100) : 0}%` }}
+                />
+              </div>
             </div>
           </section>
 
           <section className="overflow-hidden rounded-[18px] border border-rose-line bg-rose-card shadow-sm">
-            <div className="flex items-center justify-between px-4 py-3">
+            <div className="flex items-center justify-between px-4 pb-1 pt-3">
               <h2 className="font-serif text-base font-extrabold">권 선택</h2>
-              <span className="text-xs font-bold text-rose-key">{binderBooks.length}권</span>
+              <span className="text-xs font-bold text-rose-key/80">{binderBooks.length}권</span>
             </div>
-            <div className="relative border-y border-rose-line bg-[#e7dcc8] px-3 pb-4 pt-3">
-              <div className="pointer-events-none absolute inset-x-0 bottom-0 h-3 bg-[#9d7a54]" />
-              <div className="flex min-h-[168px] items-end gap-1.5 overflow-x-auto pb-3">
-              {binderBooks.map((book) => {
-                const active = selected.id === book.id
-                return (
-                  <button
-                    type="button"
-                    key={book.id}
-                    onClick={() => setSelectedId(book.id)}
-                    className={`group relative flex shrink-0 flex-col justify-between overflow-hidden rounded-t-md border px-2 py-3 text-left shadow-sm transition ${
-                      active
-                        ? '-translate-y-2 border-rose-accent bg-rose-accent text-white shadow-xl shadow-rose-accent/25'
-                        : 'border-[#b8a482] bg-[#f8f2e7] text-rose-ink hover:-translate-y-1 hover:border-rose-accent'
-                    }`}
-                    style={{
-                      width: 44,
-                      height: 142,
-                    }}
-                    aria-label={`${book.title} 선택`}
-                  >
-                    <span
-                      className={`pointer-events-none absolute inset-y-0 left-1 w-px ${
-                        active ? 'bg-white/35' : 'bg-white/70'
+            <div className="px-3 pb-3 pt-2">
+              <div className="no-scrollbar flex items-end gap-1.5 overflow-x-auto px-1 pb-1 pt-2">
+                {binderBooks.map((book) => {
+                  const active = selected.id === book.id
+                  return (
+                    <button
+                      type="button"
+                      key={book.id}
+                      onClick={() => setSelectedId(book.id)}
+                      className={`group relative flex shrink-0 flex-col items-center justify-between overflow-hidden rounded-md rounded-b-sm border px-1.5 py-2.5 transition ${
+                        active
+                          ? '-translate-y-1.5 border-rose-accent bg-rose-accent text-white shadow-lg shadow-rose-accent/30'
+                          : 'border-rose-line bg-rose-bg text-rose-key hover:-translate-y-1 hover:border-rose-accent/50 hover:text-rose-accent'
                       }`}
-                    />
-                    <span
-                      className={`pointer-events-none absolute inset-y-0 right-1 w-px ${
-                        active ? 'bg-black/10' : 'bg-black/5'
-                      }`}
-                    />
-                    <span className={`text-[10px] font-black tracking-[0.18em] ${active ? 'text-white/75' : 'text-rose-key'}`}>
-                      EDA
-                    </span>
-                    <span className="mx-auto flex flex-1 items-center justify-center">
-                      <span className="[writing-mode:vertical-rl] font-serif text-sm font-extrabold tracking-[0.18em]">
-                        SPL
+                      style={{ width: 42, height: 132 }}
+                      aria-label={`${book.title} 선택`}
+                    >
+                      <span
+                        className={`pointer-events-none absolute inset-y-0 left-[3px] w-px ${
+                          active ? 'bg-white/30' : 'bg-white'
+                        }`}
+                      />
+                      <span className={`text-[9px] font-black tracking-[0.14em] ${active ? 'text-white/70' : 'text-rose-key/60'}`}>
+                        EDA
                       </span>
-                    </span>
-                    <span className="text-center font-serif text-base font-extrabold">
-                      {book.issue}
-                    </span>
-                    {active && (
-                      <span className="absolute inset-x-1 bottom-1 h-1 rounded-full bg-white/45" />
-                    )}
-                  </button>
-                )
-              })}
+                      <span className="mx-auto flex flex-1 items-center justify-center">
+                        <span className="[writing-mode:vertical-rl] font-serif text-[13px] font-extrabold tracking-[0.2em]">
+                          SPL
+                        </span>
+                      </span>
+                      <span className="text-center font-serif text-[15px] font-extrabold leading-tight">
+                        {book.issue}
+                      </span>
+                    </button>
+                  )
+                })}
               </div>
-            </div>
-            <div className="bg-[#d1b58d] px-4 py-2">
-              <p className="truncate text-xs font-bold text-[#5f4930]">{selected.title}</p>
+              <div className="h-1.5 rounded-full bg-rose-chip shadow-inner" />
             </div>
           </section>
 
           <section className="rounded-[18px] border border-rose-line bg-rose-card p-3 shadow-sm">
-            <div className="mb-3 flex items-center justify-between px-1">
+            <div className="mb-2 flex items-center justify-between px-1.5">
               <h2 className="font-serif text-base font-extrabold">체크포인트</h2>
               <button
                 type="button"
                 onClick={addBookmark}
-                className="rounded-lg bg-rose-chip px-2 py-1 text-xs font-bold text-rose-accent"
+                className="rounded-full bg-rose-chip px-2.5 py-1 text-xs font-bold text-rose-accent transition hover:bg-rose-accent hover:text-white"
               >
                 + 책갈피
               </button>
             </div>
-            <div className="space-y-1.5">
-              {checkpoints.map((checkpoint) => (
-                <button
-                  type="button"
-                  key={checkpoint.id}
-                  onClick={() => goToPage(checkpoint.page)}
-                  className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm font-bold transition ${
-                    pageNumber === checkpoint.page
-                      ? 'bg-rose-accent text-white'
-                      : 'bg-white text-rose-key hover:text-rose-accent'
-                  }`}
-                >
-                  <span className="truncate">{checkpoint.label}</span>
-                  <span className="shrink-0 text-xs opacity-75">{checkpoint.page}</span>
-                </button>
-              ))}
+            <div className="space-y-0.5">
+              {checkpoints.map((checkpoint) => {
+                const active = pageNumber === checkpoint.page
+                return (
+                  <button
+                    type="button"
+                    key={checkpoint.id}
+                    onClick={() => goToPage(checkpoint.page)}
+                    className={`flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm transition ${
+                      active
+                        ? 'bg-rose-chip font-extrabold text-rose-accent'
+                        : 'font-bold text-rose-key hover:bg-rose-chip/50 hover:text-rose-ink'
+                    }`}
+                  >
+                    <span className="flex min-w-0 items-center gap-2">
+                      <span
+                        className={`h-1.5 w-1.5 shrink-0 rounded-full ${active ? 'bg-rose-accent' : 'bg-rose-line'}`}
+                      />
+                      <span className="truncate">{checkpoint.label}</span>
+                    </span>
+                    <span className={`shrink-0 text-xs tabular-nums ${active ? 'text-rose-accent' : 'text-rose-key/60'}`}>
+                      {checkpoint.page}
+                    </span>
+                  </button>
+                )
+              })}
             </div>
-            <div className="mt-4 border-t border-rose-line pt-3">
-              <div className="mb-2 flex items-center justify-between px-1">
+            <div className="mt-3 border-t border-rose-line pt-2.5">
+              <div className="mb-1.5 flex items-center justify-between px-1.5">
                 <h3 className="text-sm font-extrabold text-rose-ink">내 책갈피</h3>
                 {currentPageBookmarked && <span className="text-xs font-bold text-rose-accent">현재 쪽</span>}
               </div>
               {bookmarks.length === 0 ? (
-                <p className="rounded-lg border border-dashed border-rose-line bg-white/60 px-3 py-3 text-sm leading-5 text-rose-key">
-                  현재 페이지를 저장하려면 + 책갈피를 누르세요.
+                <p className="rounded-lg border border-dashed border-rose-line px-3 py-2.5 text-[13px] leading-5 text-rose-key/80">
+                  + 책갈피를 누르면 지금 보는 쪽이 저장돼요.
                 </p>
               ) : (
-                <div className="space-y-1.5">
-                  {bookmarks.map((bookmark) => (
-                    <div
-                      key={bookmark.id}
-                      className={`flex items-center gap-1 rounded-lg px-2 py-1.5 ${
-                        pageNumber === bookmark.page ? 'bg-rose-chip' : 'bg-white'
-                      }`}
-                    >
-                      <button
-                        type="button"
-                        onClick={() => goToPage(bookmark.page)}
-                        className="min-w-0 flex-1 text-left text-sm font-bold text-rose-key hover:text-rose-accent"
+                <div className="space-y-0.5">
+                  {bookmarks.map((bookmark) => {
+                    const active = pageNumber === bookmark.page
+                    return (
+                      <div
+                        key={bookmark.id}
+                        className={`flex items-center gap-1 rounded-lg px-2.5 py-1.5 transition ${
+                          active ? 'bg-rose-chip' : 'hover:bg-rose-chip/50'
+                        }`}
                       >
-                        <span className="block truncate">{bookmark.label}</span>
-                        <span className="text-xs opacity-70">{bookmark.page}쪽</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => removeBookmark(bookmark.id)}
-                        className="rounded-md px-2 py-1 text-xs font-bold text-rose-key hover:bg-rose-bg hover:text-rose-accent"
-                        aria-label={`${bookmark.label} 책갈피 삭제`}
-                      >
-                        삭제
-                      </button>
-                    </div>
-                  ))}
+                        <button
+                          type="button"
+                          onClick={() => goToPage(bookmark.page)}
+                          className="flex min-w-0 flex-1 items-baseline gap-2 text-left"
+                        >
+                          <span
+                            className={`block truncate text-sm font-bold ${
+                              active ? 'text-rose-accent' : 'text-rose-key'
+                            }`}
+                          >
+                            {bookmark.label}
+                          </span>
+                          <span className="shrink-0 text-xs tabular-nums text-rose-key/60">{bookmark.page}쪽</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => removeBookmark(bookmark.id)}
+                          className="rounded-full px-1.5 py-0.5 text-xs font-bold text-rose-key/50 transition hover:bg-rose-bg hover:text-rose-accent"
+                          aria-label={`${bookmark.label} 책갈피 삭제`}
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    )
+                  })}
                 </div>
               )}
             </div>
           </section>
 
-          <section className="overflow-hidden rounded-[18px] border border-rose-line bg-rose-card shadow-sm">
-            <div className="flex items-center justify-between px-4 py-3">
-              <h2 className="font-serif text-base font-extrabold">내용 미리보기</h2>
-              <span className="text-xs font-bold text-rose-key">
-                {pageNumber}/{pageCount}
+          <section className="rounded-[18px] border border-rose-line bg-rose-card p-3 shadow-sm">
+            <div className="mb-2 flex items-center justify-between px-1.5">
+              <h2 className="font-serif text-base font-extrabold">미리보기</h2>
+              <span className="text-xs font-bold tabular-nums text-rose-key/80">
+                {pageNumber} / {pageCount}
               </span>
             </div>
-            <div className="bg-[#efe4d1] px-3 pb-4 pt-3">
-              <div
-                className={`relative flex h-44 items-center justify-center gap-1.5 overflow-hidden rounded-2xl border border-[#d6c4a7] bg-[#eadcc4] px-2 py-4 shadow-inner ${
-                  previewDragging ? 'cursor-grabbing' : 'cursor-grab'
-                }`}
-                style={{ touchAction: 'none' }}
-                onPointerDown={startPreviewDrag}
-                onPointerMove={movePreviewDrag}
-                onPointerUp={endPreviewDrag}
-                onPointerCancel={endPreviewDrag}
-                aria-label="내용 미리보기 드래그"
-              >
-                <div className="pointer-events-none absolute inset-x-3 bottom-5 h-3 rounded-full bg-[#b7986d]/45 blur-[1px]" />
-                <div className="pointer-events-none absolute inset-x-0 top-0 h-10 bg-white/18" />
-                {loadingPdf || !document ? (
-                  <div className="relative z-10 grid h-full place-items-center text-sm font-bold text-rose-key">
-                    미리보기를 불러오는 중...
-                  </div>
-                ) : (
-                  previewPages.map((previewPage) => {
-                    const active = previewPage === pageNumber
-                    return (
-                      <div
-                        key={previewPage}
-                        className={`relative z-10 flex select-none items-center justify-center rounded-xl transition ${
-                          active
-                            ? 'mx-0.5 scale-105 bg-white/80 p-1.5 shadow-lg'
-                            : 'bg-white/25 p-0.5 opacity-80'
-                        }`}
-                      >
-                        <PdfThumbnail pdfDocument={document} pageNumber={previewPage} active={active} />
-                      </div>
-                    )
-                  })
-                )}
-              </div>
-              <div className="mt-3 flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={goPrev}
-                  disabled={pageNumber === 1}
-                  className="rounded-full border border-rose-line bg-white px-3 py-2 text-sm font-bold text-rose-key disabled:opacity-40"
-                >
-                  ←
-                </button>
-                <div className="h-2 min-w-0 flex-1 overflow-hidden rounded-full bg-white shadow-inner">
-                  <div
-                    className="h-full rounded-full bg-rose-accent"
-                    style={{ width: `${pageCount <= 1 ? 100 : ((pageNumber - 1) / (pageCount - 1)) * 100}%` }}
-                  />
+            <div
+              className={`relative flex h-36 items-center justify-center gap-1.5 overflow-hidden rounded-xl bg-rose-chip/60 px-2 py-3 ${
+                previewDragging ? 'cursor-grabbing' : 'cursor-grab'
+              }`}
+              style={{ touchAction: 'none' }}
+              onPointerDown={startPreviewDrag}
+              onPointerMove={movePreviewDrag}
+              onPointerUp={endPreviewDrag}
+              onPointerCancel={endPreviewDrag}
+              aria-label="내용 미리보기 드래그"
+            >
+              {loadingPdf || !document ? (
+                <div className="grid h-full place-items-center text-sm font-bold text-rose-key">
+                  미리보기를 불러오는 중...
                 </div>
-                <button
-                  type="button"
-                  onClick={goNext}
-                  disabled={pageNumber >= pageCount}
-                  className="rounded-full border border-rose-line bg-white px-3 py-2 text-sm font-bold text-rose-key disabled:opacity-40"
-                >
-                  →
-                </button>
+              ) : (
+                previewPages.map((previewPage) => {
+                  const active = previewPage === pageNumber
+                  return (
+                    <div key={previewPage} className="select-none">
+                      <PdfThumbnail pdfDocument={document} pageNumber={previewPage} active={active} />
+                    </div>
+                  )
+                })
+              )}
+            </div>
+            <div className="mt-2.5 flex items-center gap-1.5 px-1">
+              <button
+                type="button"
+                onClick={goPrev}
+                disabled={pageNumber === 1}
+                className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-sm font-bold text-rose-key transition hover:bg-rose-chip disabled:opacity-30"
+                aria-label="이전 쪽"
+              >
+                ←
+              </button>
+              <div className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-rose-chip">
+                <div
+                  className="h-full rounded-full bg-rose-accent transition-[width] duration-200"
+                  style={{ width: `${pageCount <= 1 ? 100 : ((pageNumber - 1) / (pageCount - 1)) * 100}%` }}
+                />
               </div>
-              <p className="mt-2 truncate text-center text-xs font-bold text-rose-key">
-                {selected.title} · {pageNumber}쪽
-              </p>
+              <button
+                type="button"
+                onClick={goNext}
+                disabled={pageNumber >= pageCount}
+                className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-sm font-bold text-rose-key transition hover:bg-rose-chip disabled:opacity-30"
+                aria-label="다음 쪽"
+              >
+                →
+              </button>
             </div>
           </section>
         </aside>
 
-        <section className="min-w-0 space-y-4">
-          <div className="rounded-[22px] border border-rose-line bg-rose-card p-4 shadow-sm">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <p className="text-xs font-bold tracking-[0.24em] text-rose-key">페이지 넘김</p>
-                <h2 className="mt-1 font-serif text-2xl font-extrabold">{selected.title}</h2>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <ModeToggle mode={pageInput.mode} onChange={setPageInputMode} />
-                <span className="rounded-full bg-rose-chip px-3 py-1 text-xs font-bold text-rose-key">
-                  {pageNumber}/{pageCount}
-                </span>
-              </div>
-            </div>
+        <section className="order-1 min-w-0 space-y-3 xl:order-2">
+          <div className="flex flex-wrap items-center gap-2 rounded-[18px] border border-rose-line bg-rose-card px-3.5 py-2.5 shadow-sm">
+            <h2 className="min-w-0 flex-1 truncate font-serif text-lg font-extrabold">{selected.title}</h2>
+            <select
+              value={checkpoints.find((checkpoint) => checkpoint.page === pageNumber)?.id ?? ''}
+              onChange={(event) => {
+                const checkpoint = checkpoints.find((item) => item.id === event.target.value)
+                if (checkpoint) goToPage(checkpoint.page)
+              }}
+              className="max-w-36 shrink-0 rounded-full border border-rose-line bg-rose-bg px-3 py-1.5 text-[13px] font-bold text-rose-key outline-none focus:border-rose-accent xl:hidden"
+              aria-label="체크포인트로 이동"
+            >
+              <option value="" disabled>
+                바로가기
+              </option>
+              {checkpoints.map((checkpoint) => (
+                <option key={checkpoint.id} value={checkpoint.id}>
+                  {checkpoint.label} · {checkpoint.page}쪽
+                </option>
+              ))}
+            </select>
+            <ModeToggle mode={pageInput.mode} onChange={setPageInputMode} />
           </div>
 
           <article
-            className="relative rounded-[24px] border border-rose-line bg-[#e8ddca] p-3 shadow-sm"
+            className="relative rounded-[22px] border border-rose-line bg-rose-chip/50 p-2.5 sm:p-3"
             onTouchStart={(event) => setTouchStart(event.changedTouches[0]?.clientX ?? null)}
             onTouchEnd={(event) => handleTouchEnd(event.changedTouches[0]?.clientX ?? 0)}
           >
@@ -1090,35 +1126,60 @@ export default function BinderPage() {
               </div>
             )}
 
-            <div className="mt-3 flex items-center justify-between gap-3">
-              <button
-                type="button"
-                onClick={goPrev}
-                disabled={pageNumber === 1}
-                className="rounded-full border border-rose-line bg-rose-card px-4 py-2 text-sm font-bold text-rose-key shadow-sm disabled:opacity-40"
-              >
-                ← 이전
-              </button>
-              <input
-                type="range"
-                min={1}
-                max={pageCount}
-                step={1}
-                value={pageNumber}
-                onChange={(event) => goToPage(Number(event.target.value))}
-                className="min-w-0 flex-1 accent-rose-accent"
-                aria-label="페이지 이동"
-              />
-              <button
-                type="button"
-                onClick={goNext}
-                disabled={pageNumber >= pageCount}
-                className="rounded-full border border-rose-line bg-rose-card px-4 py-2 text-sm font-bold text-rose-key shadow-sm disabled:opacity-40"
-              >
-                다음 →
-              </button>
-            </div>
+            {/* 페이지 위에 떠 있는 좌우 넘김 (태블릿 이상) */}
+            <button
+              type="button"
+              onClick={goPrev}
+              disabled={pageNumber === 1}
+              className="absolute left-0 top-1/2 z-10 hidden h-11 w-11 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border border-rose-line bg-rose-card text-base font-bold text-rose-key shadow-md transition hover:text-rose-accent disabled:opacity-0 md:grid"
+              aria-label="이전 쪽"
+            >
+              ←
+            </button>
+            <button
+              type="button"
+              onClick={goNext}
+              disabled={pageNumber >= pageCount}
+              className="absolute right-0 top-1/2 z-10 hidden h-11 w-11 -translate-y-1/2 translate-x-1/2 place-items-center rounded-full border border-rose-line bg-rose-card text-base font-bold text-rose-key shadow-md transition hover:text-rose-accent disabled:opacity-0 md:grid"
+              aria-label="다음 쪽"
+            >
+              →
+            </button>
           </article>
+
+          <div className="flex items-center gap-2.5 rounded-full border border-rose-line bg-rose-card py-1.5 pl-2 pr-4 shadow-sm">
+            <button
+              type="button"
+              onClick={goPrev}
+              disabled={pageNumber === 1}
+              className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-sm font-bold text-rose-key transition hover:bg-rose-chip disabled:opacity-30 md:hidden"
+              aria-label="이전 쪽"
+            >
+              ←
+            </button>
+            <input
+              type="range"
+              min={1}
+              max={pageCount}
+              step={1}
+              value={pageNumber}
+              onChange={(event) => goToPage(Number(event.target.value))}
+              className="pager-range min-w-0 flex-1"
+              aria-label="페이지 이동"
+            />
+            <button
+              type="button"
+              onClick={goNext}
+              disabled={pageNumber >= pageCount}
+              className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-sm font-bold text-rose-key transition hover:bg-rose-chip disabled:opacity-30 md:hidden"
+              aria-label="다음 쪽"
+            >
+              →
+            </button>
+            <span className="shrink-0 text-[13px] font-bold tabular-nums text-rose-key">
+              <span className="text-rose-accent">{pageNumber}</span> / {pageCount}
+            </span>
+          </div>
         </section>
 
       </main>

@@ -120,25 +120,37 @@ export function RequireGoogleLogin({ children }: { children: React.ReactNode }) 
   if (!user) {
     return (
       <div className="grid min-h-full place-items-center bg-rose-bg px-5 py-8 text-rose-ink">
-        <div className="w-full max-w-[30rem] text-center">
-          <div className="mx-auto mb-7 flex max-w-xs items-center gap-3 text-rose-key">
+        <div className="w-full max-w-[26rem] text-center">
+          {/* 미니 바인더 표지 */}
+          <div className="relative mx-auto h-32 w-24 overflow-hidden rounded-lg rounded-l-sm border border-rose-line bg-rose-card pl-4 shadow-[0_10px_24px_rgba(44,39,34,0.14)]">
+            <span className="pointer-events-none absolute inset-y-0 left-0 w-2.5 bg-rose-accent" />
+            <span className="pointer-events-none absolute inset-y-0 left-3.5 border-l border-dashed border-rose-line" />
+            <div className="flex h-full flex-col items-center justify-center gap-1.5">
+              <p className="text-[8px] font-black tracking-[0.28em] text-rose-key/70">EDA</p>
+              <p className="font-serif text-lg font-extrabold leading-none">SPL</p>
+              <p className="text-[10px] font-bold text-rose-key">바인더</p>
+            </div>
+          </div>
+
+          <div className="mx-auto mb-5 mt-7 flex max-w-[16rem] items-center gap-3 text-rose-key">
             <span className="h-px flex-1 bg-rose-line" />
-            <p className="text-xs font-black tracking-[0.28em]">EDA BINDER</p>
+            <p className="text-[11px] font-black tracking-[0.28em]">EDA BINDER</p>
             <span className="h-px flex-1 bg-rose-line" />
           </div>
 
           <h1 className="font-serif text-4xl font-extrabold leading-tight text-rose-ink">
             에다 SPL 바인더
           </h1>
-          <p className="mx-auto mt-4 max-w-[24rem] text-[15px] font-bold leading-7 text-rose-key">
-            Google 계정으로 로그인해 필기와 책갈피를 내 바인더에 저장합니다.
+          <p className="mx-auto mt-3.5 max-w-[22rem] text-[15px] font-bold leading-7 text-rose-key">
+            Google 계정으로 로그인해 필기와 책갈피를
+            <br />내 바인더에 저장합니다.
           </p>
 
           <button
             type="button"
             onClick={handleSignIn}
             disabled={signingIn}
-            className="mt-9 flex w-full items-center justify-center gap-3 rounded-xl border border-rose-line bg-rose-card px-4 py-3.5 text-base font-extrabold text-rose-ink shadow-sm transition hover:border-rose-accent hover:bg-white active:scale-[0.99] disabled:opacity-70"
+            className="mt-8 flex w-full items-center justify-center gap-3 rounded-full border border-rose-line bg-rose-card px-4 py-3.5 text-base font-extrabold text-rose-ink shadow-sm transition hover:border-rose-accent hover:bg-white active:scale-[0.99] disabled:opacity-70"
           >
             <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-white font-sans text-sm font-black text-[#4285f4] ring-1 ring-rose-line">
               G
@@ -146,7 +158,7 @@ export function RequireGoogleLogin({ children }: { children: React.ReactNode }) 
             <span>{signingIn ? 'Google로 이동 중...' : 'Google로 계속하기'}</span>
           </button>
 
-          <p className="mt-4 text-xs font-bold leading-5 text-rose-key/75">
+          <p className="mt-4 text-xs font-bold leading-5 text-rose-key/70">
             로그인 후 내 계정에 바인더 기록이 동기화됩니다.
           </p>
 
