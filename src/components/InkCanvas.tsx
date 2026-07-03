@@ -73,6 +73,7 @@ export default function InkCanvas({
   const dimRef = useRef({ width: 0, height, dpr: 1 })
   const drawingRef = useRef<Stroke | null>(null)
   const activePointerRef = useRef<number | null>(null)
+  const detachWindowRef = useRef<(() => void) | null>(null)
   const strokesRef = useRef(strokes)
   const propRef = useRef({ color, size, tool, onChange })
 
@@ -206,72 +207,12 @@ export default function InkCanvas({
     renderBase()
   }
 
-  const startStroke = (event: React.PointerEvent<HTMLCanvasElement>) => {
-    const { tool, color, size } = propRef.current
-    if (event.pointerType === 'touch') return
-
-    event.preventDefault()
-    document.body.classList.add('ink-active')
-
-    if (drawingRef.current) {
-      drawingRef.current = null
-      renderLive()
-    }
-
-    activePointerRef.current = event.pointerId
-    rectRef.current = event.currentTarget.getBoundingClientRect()
-    const [x, y, pressure] = getPoint(event.clientX, event.clientY, event.pressure)
-
-    if (tool === 'eraser') {
-      eraseAt(x, y)
-      return
-    }
-
-    drawingRef.current = { color, size, points: [[x, y, pressure]] }
-    renderLive()
-  }
-
-  const moveStroke = (event: React.PointerEvent<HTMLCanvasElement>) => {
-    if (activePointerRef.current !== event.pointerId) return
-    event.preventDefault()
-
-    const { tool } = propRef.current
-
-    if (tool === 'eraser') {
-      const [x, y] = getPoint(event.clientX, event.clientY, event.pressure)
-      eraseAt(x, y)
-      return
-    }
-
-    const drawing = drawingRef.current
-    if (!drawing) return
-
-    const nativeEvent = event.nativeEvent
-    const points =
-      typeof nativeEvent.getCoalescedEvents === 'function' && nativeEvent.getCoalescedEvents().length
-        ? nativeEvent.getCoalescedEvents()
-        : [nativeEvent]
-
-    for (const point of points) {
-      drawing.points.push(getPoint(point.clientX, point.clientY, point.pressure))
-    }
-
-    renderLive()
-  }
-
-  const finishStroke = (event: React.PointerEvent<HTMLCanvasElement>) => {
-    if (activePointerRef.current !== event.pointerId) return
-    activePointerRef.current = null
-    document.body.classList.remove('ink-active')
-
-    if (propRef.current.tool === 'eraser') return
-
+  // 진행 중인 획을 base 캔버스에 확정하고 strokes에 반영
+  const commitDrawing = () => {
     const finished = drawingRef.current
-    if (!finished) return
-
     drawingRef.current = null
 
-    if (finished.points.length === 0) {
+    if (!finished || finished.points.length === 0) {
       renderLive()
       return
     }
@@ -290,6 +231,82 @@ export default function InkCanvas({
     propRef.current.onChange(next)
   }
 
+  const stopTracking = () => {
+    detachWindowRef.current?.()
+    detachWindowRef.current = null
+    activePointerRef.current = null
+    document.body.classList.remove('ink-active')
+  }
+
+  const startStroke = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    const { tool, color, size } = propRef.current
+    if (event.pointerType === 'touch') return
+
+    event.preventDefault()
+
+    // 이전 획의 up이 유실됐어도 버리지 말고 확정한 뒤 새로 시작
+    stopTracking()
+    if (drawingRef.current) commitDrawing()
+
+    document.body.classList.add('ink-active')
+    const pointerId = event.pointerId
+    activePointerRef.current = pointerId
+    rectRef.current = event.currentTarget.getBoundingClientRect()
+    const [x, y, pressure] = getPoint(event.clientX, event.clientY, event.pressure)
+
+    if (tool === 'eraser') {
+      eraseAt(x, y)
+    } else {
+      drawingRef.current = { color, size, points: [[x, y, pressure]] }
+      renderLive()
+    }
+
+    // setPointerCapture는 iOS Safari에서 캡처 미해제 시 이후 pointerdown까지
+    // 막는 버그가 있어 쓰지 않는다. 대신 window에서 직접 추적해, 펜이 캔버스
+    // 밖에서 떨어져도 up/cancel을 놓치지 않게 한다(획 유실·ink-active 고착 방지).
+    const onMove = (e: PointerEvent) => {
+      if (e.pointerId !== pointerId) return
+      if (e.cancelable) e.preventDefault()
+
+      if (propRef.current.tool === 'eraser') {
+        const [ex, ey] = getPoint(e.clientX, e.clientY, e.pressure)
+        eraseAt(ex, ey)
+        return
+      }
+
+      const drawing = drawingRef.current
+      if (!drawing) return
+
+      const points =
+        typeof e.getCoalescedEvents === 'function' && e.getCoalescedEvents().length
+          ? e.getCoalescedEvents()
+          : [e]
+      for (const point of points) {
+        drawing.points.push(getPoint(point.clientX, point.clientY, point.pressure))
+      }
+      renderLive()
+    }
+
+    const onUp = (e: PointerEvent) => {
+      if (e.pointerId !== pointerId) return
+      stopTracking()
+      if (propRef.current.tool === 'eraser') return
+      commitDrawing()
+    }
+
+    window.addEventListener('pointermove', onMove, { capture: true })
+    window.addEventListener('pointerup', onUp, { capture: true })
+    window.addEventListener('pointercancel', onUp, { capture: true })
+    detachWindowRef.current = () => {
+      window.removeEventListener('pointermove', onMove, true)
+      window.removeEventListener('pointerup', onUp, true)
+      window.removeEventListener('pointercancel', onUp, true)
+    }
+  }
+
+  // 획 도중 언마운트되면 window 리스너/바디 클래스 정리
+  useEffect(() => stopTracking, [])
+
   return (
     <div ref={wrapRef} className="relative w-full" style={{ height }}>
       <canvas ref={baseRef} className="absolute inset-0 rounded-xl bg-white" />
@@ -297,9 +314,6 @@ export default function InkCanvas({
         ref={liveRef}
         className="ink-surface absolute inset-0 rounded-xl"
         onPointerDown={startStroke}
-        onPointerMove={moveStroke}
-        onPointerUp={finishStroke}
-        onPointerCancel={finishStroke}
       />
     </div>
   )
