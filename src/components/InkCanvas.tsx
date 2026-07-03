@@ -1,5 +1,5 @@
-import { useEffect, useRef } from 'react'
-import SignaturePad, { type PointGroup } from 'signature_pad'
+import { useCallback, useEffect, useRef } from 'react'
+import { getStroke } from 'perfect-freehand'
 import type { Stroke } from '../types'
 
 export type InkTool = 'pen' | 'eraser'
@@ -14,29 +14,37 @@ interface Props {
   height?: number
 }
 
-function minWidthFor(size: number) {
-  return Math.max(size * 0.6, 0.3)
+const FREEHAND_OPTS = {
+  thinning: 0.4,
+  smoothing: 0.5,
+  streamline: 0.3,
 }
 
-/** 내부 Stroke ↔ signature_pad PointGroup 변환 (기존 스키마/공유카드 호환 유지) */
-function strokeToGroup(s: Stroke): PointGroup {
-  return {
-    penColor: s.color,
-    dotSize: 0,
-    minWidth: minWidthFor(s.size),
-    maxWidth: s.size,
-    velocityFilterWeight: 0.7,
-    compositeOperation: 'source-over',
-    points: s.points.map(([x, y, pressure], i) => ({ x, y, pressure: pressure ?? 0.5, time: i })),
-  }
-}
+function fillStroke(ctx: CanvasRenderingContext2D, stroke: Stroke, isLast = true) {
+  const outline = getStroke(stroke.points, {
+    ...FREEHAND_OPTS,
+    size: stroke.size,
+    last: isLast,
+  })
 
-function groupToStroke(g: PointGroup): Stroke {
-  return {
-    color: g.penColor ?? '#3f3f46',
-    size: g.maxWidth ?? 6,
-    points: g.points.map((p) => [p.x, p.y, p.pressure ?? 0.5]),
+  ctx.fillStyle = stroke.color
+
+  if (outline.length < 2) {
+    const point = stroke.points[0]
+    if (!point) return
+    ctx.beginPath()
+    ctx.arc(point[0], point[1], Math.max(stroke.size / 2, 1), 0, Math.PI * 2)
+    ctx.fill()
+    return
   }
+
+  ctx.beginPath()
+  ctx.moveTo(outline[0][0], outline[0][1])
+  for (let i = 1; i < outline.length; i += 1) {
+    ctx.lineTo(outline[i][0], outline[i][1])
+  }
+  ctx.closePath()
+  ctx.fill()
 }
 
 function distToStroke(stroke: Stroke, x: number, y: number): number {
@@ -48,13 +56,6 @@ function distToStroke(stroke: Stroke, x: number, y: number): number {
   return min
 }
 
-/**
- * signature_pad 기반 손글씨 캔버스.
- * - 입력 이벤트 생명주기를 검증된 라이브러리가 관리(모바일 Safari 안정성).
- * - 손가락/손바닥 터치는 래퍼 capture 단계에서 차단(펜 전용).
- * - 데이터는 기존 Stroke[] 스키마로 변환 저장 → 기존 기록·공유카드 호환.
- * - 지우개는 닿은 획을 통째로 지움(라이브러리 off + 자체 처리).
- */
 export default function InkCanvas({
   strokes,
   onChange,
@@ -64,155 +65,211 @@ export default function InkCanvas({
   height = 240,
 }: Props) {
   const wrapRef = useRef<HTMLDivElement>(null)
-  const canvasRef = useRef<HTMLCanvasElement>(null)
-  const padRef = useRef<SignaturePad | null>(null)
-  const propRef = useRef({ color, size, tool, onChange })
+  const baseRef = useRef<HTMLCanvasElement>(null)
+  const liveRef = useRef<HTMLCanvasElement>(null)
+  const baseCtxRef = useRef<CanvasRenderingContext2D | null>(null)
+  const liveCtxRef = useRef<CanvasRenderingContext2D | null>(null)
+  const rectRef = useRef<DOMRect | null>(null)
+  const dimRef = useRef({ width: 0, height, dpr: 1 })
+  const drawingRef = useRef<Stroke | null>(null)
+  const activePointerRef = useRef<number | null>(null)
   const strokesRef = useRef(strokes)
-  const lastDataRef = useRef<Stroke[]>(strokes) // 우리가 마지막으로 동기화한 strokes 참조
+  const propRef = useRef({ color, size, tool, onChange })
+
+  useEffect(() => {
+    strokesRef.current = strokes
+  }, [strokes])
 
   useEffect(() => {
     propRef.current = { color, size, tool, onChange }
   }, [color, size, tool, onChange])
 
-  useEffect(() => {
-    strokesRef.current = strokes
-  }, [strokes])
-
-  // signature_pad 생성(1회)
-  useEffect(() => {
-    const canvas = canvasRef.current
-    if (!canvas) return
-    const pad = new SignaturePad(canvas, {
-      penColor: propRef.current.color,
-      minWidth: minWidthFor(propRef.current.size),
-      maxWidth: propRef.current.size,
-      velocityFilterWeight: 0.7,
-      throttle: 0, // 이동마다 즉시 그림(반응 지연 감소)
-      minDistance: 1, // 더 촘촘히 점을 받음(반응·정밀도 향상)
-    })
-    padRef.current = pad
-    pad.fromData(strokesRef.current.map(strokeToGroup))
-    lastDataRef.current = strokesRef.current
-
-    const onEnd = () => {
-      const next = pad.toData().map(groupToStroke)
-      strokesRef.current = next
-      lastDataRef.current = next
-      propRef.current.onChange(next)
-    }
-    pad.addEventListener('endStroke', onEnd)
-    return () => {
-      pad.removeEventListener('endStroke', onEnd)
-      pad.off()
-      padRef.current = null
-    }
+  const renderBase = useCallback(() => {
+    const ctx = baseCtxRef.current
+    if (!ctx) return
+    const { width, height, dpr } = dimRef.current
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+    ctx.clearRect(0, 0, width, height)
+    for (const stroke of strokesRef.current) fillStroke(ctx, stroke)
   }, [])
 
-  // 크기/DPR 동기화(데이터 보존). height 변경·컨테이너 리사이즈 대응.
-  useEffect(() => {
-    const canvas = canvasRef.current
+  const renderLive = useCallback(() => {
+    const ctx = liveCtxRef.current
+    if (!ctx) return
+    const { width, height, dpr } = dimRef.current
+    ctx.setTransform(1, 0, 0, 1, 0, 0)
+    ctx.clearRect(0, 0, width * dpr, height * dpr)
+    if (!drawingRef.current) return
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+    fillStroke(ctx, drawingRef.current, false)
+  }, [])
+
+  const resize = useCallback(() => {
     const wrap = wrapRef.current
-    if (!canvas || !wrap) return
-    const resize = () => {
-      const pad = padRef.current
-      if (!pad) return
-      const dpr = window.devicePixelRatio || 1
-      const w = wrap.clientWidth
-      const data = pad.toData()
-      canvas.width = Math.round(w * dpr)
-      canvas.height = Math.round(height * dpr)
-      canvas.style.width = `${w}px`
+    const base = baseRef.current
+    const live = liveRef.current
+    if (!wrap || !base || !live) return
+
+    const dpr = window.devicePixelRatio || 1
+    const width = wrap.clientWidth
+    dimRef.current = { width, height, dpr }
+
+    for (const canvas of [base, live]) {
+      canvas.width = Math.max(1, Math.round(width * dpr))
+      canvas.height = Math.max(1, Math.round(height * dpr))
+      canvas.style.width = `${width}px`
       canvas.style.height = `${height}px`
-      const ctx = canvas.getContext('2d')
-      if (ctx) ctx.scale(dpr, dpr) // canvas.width 설정으로 변환 초기화됨 → 1회 scale
-      pad.fromData(data)
     }
+
+    baseCtxRef.current = base.getContext('2d')
+    liveCtxRef.current = live.getContext('2d', { desynchronized: true })
+    renderBase()
+    renderLive()
+  }, [height, renderBase, renderLive])
+
+  useEffect(() => {
     resize()
     const ro = new ResizeObserver(resize)
-    ro.observe(wrap)
+    if (wrapRef.current) ro.observe(wrapRef.current)
     return () => ro.disconnect()
-  }, [height])
+  }, [resize])
 
-  // 펜 색/굵기 → 새 획에 반영
   useEffect(() => {
-    const pad = padRef.current
-    if (!pad) return
-    pad.penColor = color
-    pad.minWidth = minWidthFor(size)
-    pad.maxWidth = size
-  }, [color, size])
+    renderBase()
+  }, [strokes, renderBase])
 
-  // 외부에서 strokes 변경(취소·전체지우기·로드) → 다시 로드. 우리가 만든 변경이면 스킵.
   useEffect(() => {
-    const pad = padRef.current
-    if (!pad) return
-    if (strokes === lastDataRef.current) return
-    lastDataRef.current = strokes
-    strokesRef.current = strokes
-    pad.fromData(strokes.map(strokeToGroup))
-  }, [strokes])
+    const canvas = liveRef.current
+    if (!canvas) return
 
-  // 지우개 처리: 래퍼 capture 단계에서 가로채고, 펜 입력은 signature_pad에 맡긴다.
-  useEffect(() => {
-    const wrap = wrapRef.current
-    if (!wrap) return
-    let erasing: number | null = null
-
-    const eraseAt = (clientX: number, clientY: number) => {
-      const canvas = canvasRef.current
-      const pad = padRef.current
-      if (!canvas || !pad) return
-      const rect = canvas.getBoundingClientRect()
-      const x = clientX - rect.left
-      const y = clientY - rect.top
-      const { size, onChange } = propRef.current
-      const threshold = Math.max(size, 14)
-      const kept = strokesRef.current.filter((s) => distToStroke(s, x, y) > threshold)
-      if (kept.length !== strokesRef.current.length) {
-        strokesRef.current = kept
-        lastDataRef.current = kept
-        pad.fromData(kept.map(strokeToGroup))
-        onChange(kept)
+    const preventPalmTouch = (event: TouchEvent) => {
+      for (let i = 0; i < event.changedTouches.length; i += 1) {
+        const touch = event.changedTouches[i] as Touch & { touchType?: string }
+        if (touch.touchType !== 'stylus') {
+          event.preventDefault()
+          return
+        }
       }
     }
-    const move = (e: PointerEvent) => {
-      if (erasing === e.pointerId) eraseAt(e.clientX, e.clientY)
-    }
-    const up = (e: PointerEvent) => {
-      if (erasing !== e.pointerId) return
-      erasing = null
-      window.removeEventListener('pointermove', move)
-      window.removeEventListener('pointerup', up)
-      window.removeEventListener('pointercancel', up)
-    }
-    const downCapture = (e: PointerEvent) => {
-      // 지우개 모드: 펜도 라이브러리에 넘기지 않고 직접 지움
-      if (propRef.current.tool === 'eraser') {
-        e.stopPropagation()
-        if (e.cancelable) e.preventDefault()
-        erasing = e.pointerId
-        eraseAt(e.clientX, e.clientY)
-        window.addEventListener('pointermove', move, { passive: false })
-        window.addEventListener('pointerup', up)
-        window.addEventListener('pointercancel', up)
-      }
-      // 펜 + 펜 모드 → 그대로 signature_pad가 처리
-    }
-    wrap.addEventListener('pointerdown', downCapture, true)
+
+    canvas.addEventListener('touchstart', preventPalmTouch, { passive: false })
+    canvas.addEventListener('touchmove', preventPalmTouch, { passive: false })
+    canvas.addEventListener('touchend', preventPalmTouch, { passive: false })
+
     return () => {
-      wrap.removeEventListener('pointerdown', downCapture, true)
-      window.removeEventListener('pointermove', move)
-      window.removeEventListener('pointerup', up)
-      window.removeEventListener('pointercancel', up)
+      canvas.removeEventListener('touchstart', preventPalmTouch)
+      canvas.removeEventListener('touchmove', preventPalmTouch)
+      canvas.removeEventListener('touchend', preventPalmTouch)
     }
   }, [])
+
+  const getPoint = (clientX: number, clientY: number, pressure: number): [number, number, number] => {
+    const rect = rectRef.current ?? liveRef.current!.getBoundingClientRect()
+    return [clientX - rect.left, clientY - rect.top, pressure && pressure > 0 ? pressure : 0.5]
+  }
+
+  const eraseAt = (x: number, y: number) => {
+    const { size, onChange } = propRef.current
+    const threshold = Math.max(size, 12)
+    const kept = strokesRef.current.filter((stroke) => distToStroke(stroke, x, y) > threshold)
+    if (kept.length === strokesRef.current.length) return
+    strokesRef.current = kept
+    onChange(kept)
+    renderBase()
+  }
+
+  const startStroke = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    const { tool, color, size } = propRef.current
+    if (event.pointerType === 'touch') return
+
+    event.preventDefault()
+
+    if (drawingRef.current) {
+      drawingRef.current = null
+      renderLive()
+    }
+
+    activePointerRef.current = event.pointerId
+    rectRef.current = event.currentTarget.getBoundingClientRect()
+    const [x, y, pressure] = getPoint(event.clientX, event.clientY, event.pressure)
+
+    if (tool === 'eraser') {
+      eraseAt(x, y)
+      return
+    }
+
+    drawingRef.current = { color, size, points: [[x, y, pressure]] }
+    renderLive()
+  }
+
+  const moveStroke = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    if (activePointerRef.current !== event.pointerId) return
+    event.preventDefault()
+
+    const { tool } = propRef.current
+
+    if (tool === 'eraser') {
+      const [x, y] = getPoint(event.clientX, event.clientY, event.pressure)
+      eraseAt(x, y)
+      return
+    }
+
+    const drawing = drawingRef.current
+    if (!drawing) return
+
+    const nativeEvent = event.nativeEvent
+    const points =
+      typeof nativeEvent.getCoalescedEvents === 'function' && nativeEvent.getCoalescedEvents().length
+        ? nativeEvent.getCoalescedEvents()
+        : [nativeEvent]
+
+    for (const point of points) {
+      drawing.points.push(getPoint(point.clientX, point.clientY, point.pressure))
+    }
+
+    renderLive()
+  }
+
+  const finishStroke = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    if (activePointerRef.current !== event.pointerId) return
+    activePointerRef.current = null
+
+    if (propRef.current.tool === 'eraser') return
+
+    const finished = drawingRef.current
+    if (!finished) return
+
+    drawingRef.current = null
+
+    if (finished.points.length === 0) {
+      renderLive()
+      return
+    }
+
+    const ctx = baseCtxRef.current
+    if (ctx) {
+      const { dpr } = dimRef.current
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+      fillStroke(ctx, finished)
+    }
+
+    renderLive()
+
+    const next = [...strokesRef.current, finished]
+    strokesRef.current = next
+    propRef.current.onChange(next)
+  }
 
   return (
     <div ref={wrapRef} className="relative w-full" style={{ height }}>
+      <canvas ref={baseRef} className="absolute inset-0 rounded-xl bg-white" />
       <canvas
-        ref={canvasRef}
-        className="ink-surface w-full rounded-xl bg-white"
-        style={{ height, touchAction: 'none' }}
+        ref={liveRef}
+        className="ink-surface absolute inset-0 rounded-xl"
+        onPointerDown={startStroke}
+        onPointerMove={moveStroke}
+        onPointerUp={finishStroke}
+        onPointerCancel={finishStroke}
       />
     </div>
   )
