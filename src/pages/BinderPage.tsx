@@ -1160,7 +1160,10 @@ export default function BinderPage() {
                 ← 이전
               </button>
             ) : (
-              <span className="text-[11px] font-black tracking-[0.3em] text-rose-key/70">EDA</span>
+              <span className="flex flex-col leading-tight">
+                <span className="text-[11px] font-black tracking-[0.3em] text-rose-key/70">EDA</span>
+                <span className="font-mono text-[9px] text-rose-key/45">v{__BUILD__}</span>
+              </span>
             )}
           </div>
           <h1 className="min-w-0 flex-1 truncate text-center font-serif text-lg font-extrabold">

@@ -215,6 +215,7 @@ export function RequireGoogleLogin({ children }: { children: React.ReactNode }) 
             주야로 그것을 묵상하라”
             <footer className="mt-1.5 text-xs text-rose-key/60">— 여호수아 1:8</footer>
           </blockquote>
+          <p className="mt-5 text-center font-mono text-[10px] text-rose-key/40">v{__BUILD__}</p>
         </div>
       </div>
     )
