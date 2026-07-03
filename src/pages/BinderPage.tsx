@@ -785,8 +785,8 @@ function PdfThumbnail({
     <div
       className={`relative mx-auto flex shrink-0 items-center justify-center overflow-hidden bg-white transition ${
         active
-          ? 'h-[100px] w-[72px] rounded-lg shadow-md ring-2 ring-rose-accent'
-          : 'h-[84px] w-[58px] cursor-pointer rounded-md border border-rose-line opacity-75 shadow-sm transition hover:opacity-100'
+          ? 'h-[76px] w-[54px] rounded-lg shadow-md ring-2 ring-rose-accent sm:h-[100px] sm:w-[72px]'
+          : 'h-16 w-11 cursor-pointer rounded-md border border-rose-line opacity-75 shadow-sm transition hover:opacity-100 sm:h-[84px] sm:w-[58px]'
       }`}
     >
       <canvas ref={canvasRef} className="block h-full w-full bg-white object-contain" />
@@ -1463,14 +1463,17 @@ export default function BinderPage() {
 
         <section className="order-1 min-w-0 space-y-3 xl:order-2">
           <div className="sticky top-[52px] z-10 flex flex-wrap items-center gap-2 rounded-[18px] border border-rose-line bg-rose-card/95 px-3.5 py-2.5 shadow-sm backdrop-blur">
-            <h2 className="min-w-0 flex-1 truncate font-serif text-lg font-extrabold">{selected.title}</h2>
+            {/* 제목은 폰에서 숨김(헤더에 앱 이름이 있고, 툴바를 한 줄로 유지하기 위해) */}
+            <h2 className="hidden min-w-0 flex-1 truncate font-serif text-lg font-extrabold sm:block">
+              {selected.title}
+            </h2>
             <select
               value={checkpoints.find((checkpoint) => checkpoint.page === pageNumber)?.id ?? ''}
               onChange={(event) => {
                 const checkpoint = checkpoints.find((item) => item.id === event.target.value)
                 if (checkpoint) goToPage(checkpoint.page)
               }}
-              className="max-w-36 shrink-0 rounded-full border border-rose-line bg-rose-bg px-3 py-1.5 text-[13px] font-bold text-rose-key outline-none focus:border-rose-accent xl:hidden"
+              className="min-w-0 flex-1 rounded-full border border-rose-line bg-rose-bg px-3 py-1.5 text-[13px] font-bold text-rose-key outline-none focus:border-rose-accent sm:max-w-40 sm:flex-none xl:hidden"
               aria-label="체크포인트로 이동"
             >
               <option value="" disabled>
@@ -1493,26 +1496,28 @@ export default function BinderPage() {
 
             {/* 손글씨 도구 줄 — 필기 중 손에 가려지지 않게 상단에 고정 */}
             {inputMode === 'ink' && (
-              <div className="flex w-full flex-wrap items-center gap-1.5 border-t border-rose-line pt-2">
+              <div className="flex w-full flex-wrap items-center gap-1 border-t border-rose-line pt-2 sm:gap-1.5">
                 <button
                   type="button"
                   onClick={() => setInkTool('pen')}
-                  className={`rounded-full px-2.5 py-1 text-[13px] font-bold transition ${
+                  className={`rounded-full px-2 py-1 text-[13px] font-bold transition sm:px-2.5 ${
                     inkTool === 'pen' ? 'bg-rose-chip text-rose-ink' : 'text-rose-key hover:text-rose-ink'
                   }`}
+                  aria-label="펜"
                 >
-                  ✏️ 펜
+                  ✏️<span className="hidden sm:inline"> 펜</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setInkTool('eraser')}
-                  className={`rounded-full px-2.5 py-1 text-[13px] font-bold transition ${
+                  className={`rounded-full px-2 py-1 text-[13px] font-bold transition sm:px-2.5 ${
                     inkTool === 'eraser' ? 'bg-rose-chip text-rose-ink' : 'text-rose-key hover:text-rose-ink'
                   }`}
+                  aria-label="지우개"
                 >
-                  🧽 지우개
+                  🧽<span className="hidden sm:inline"> 지우개</span>
                 </button>
-                <span className="mx-0.5 h-4 w-px bg-rose-line" />
+                <span className="mx-0.5 hidden h-4 w-px bg-rose-line sm:block" />
                 {PEN_COLORS.map((penColor) => (
                   <button
                     key={penColor}
@@ -1521,7 +1526,7 @@ export default function BinderPage() {
                       setInkColor(penColor)
                       setInkTool('pen')
                     }}
-                    className={`h-6 w-6 rounded-full border-2 transition ${
+                    className={`h-5 w-5 rounded-full border-2 transition sm:h-6 sm:w-6 ${
                       inkColor === penColor && inkTool === 'pen'
                         ? 'scale-110 border-rose-accent'
                         : 'border-white hover:scale-105'
@@ -1536,25 +1541,27 @@ export default function BinderPage() {
                   max={14}
                   value={inkSize}
                   onChange={(event) => setInkSize(Number(event.target.value))}
-                  className="w-20 accent-rose-accent"
+                  className="w-14 accent-rose-accent sm:w-20"
                   aria-label="펜 굵기"
                 />
-                <span className="mx-0.5 h-4 w-px bg-rose-line" />
+                <span className="mx-0.5 hidden h-4 w-px bg-rose-line sm:block" />
                 <button
                   type="button"
                   onClick={() => updatePageInput({ ...pageInput, strokes: pageInput.strokes.slice(0, -1) })}
                   disabled={pageInput.strokes.length === 0}
-                  className="rounded-full px-2.5 py-1 text-[13px] font-bold text-rose-key transition hover:text-rose-ink disabled:opacity-40"
+                  className="rounded-full px-2 py-1 text-[13px] font-bold text-rose-key transition hover:text-rose-ink disabled:opacity-40 sm:px-2.5"
+                  aria-label="마지막 획 취소"
                 >
-                  ↩️ 취소
+                  ↩️<span className="hidden sm:inline"> 취소</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => updatePageInput({ ...pageInput, strokes: [] })}
                   disabled={pageInput.strokes.length === 0}
-                  className="rounded-full px-2.5 py-1 text-[13px] font-bold text-rose-key transition hover:text-rose-ink disabled:opacity-40"
+                  className="rounded-full px-2 py-1 text-[13px] font-bold text-rose-key transition hover:text-rose-ink disabled:opacity-40 sm:px-2.5"
+                  aria-label="전체 지우기"
                 >
-                  전체 지우기
+                  🗑️<span className="hidden sm:inline"> 전체 지우기</span>
                 </button>
               </div>
             )}
@@ -1562,7 +1569,7 @@ export default function BinderPage() {
 
           {/* 근처 쪽 미리보기 필름스트립 — 드래그로 훑고, 탭하면 그 쪽으로 이동 */}
           <div
-            className={`flex h-[120px] select-none items-center justify-center gap-1.5 overflow-hidden rounded-[18px] border border-rose-line bg-rose-card px-2 py-2 shadow-sm ${
+            className={`flex h-[92px] select-none items-center justify-center gap-1.5 overflow-hidden rounded-[18px] border border-rose-line bg-rose-card px-2 py-2 shadow-sm sm:h-[120px] ${
               previewDragging ? 'cursor-grabbing' : 'cursor-grab'
             }`}
             style={{ touchAction: 'none' }}
