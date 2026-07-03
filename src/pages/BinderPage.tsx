@@ -13,6 +13,7 @@ import {
   type BinderTextBox,
   type BinderWork,
 } from '../db'
+import { canvasToJpegFile, shareOrDownloadFiles } from '../shareImage'
 import { emptyField, type Field, type FieldMode, type Stroke } from '../types'
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl
@@ -121,6 +122,105 @@ function drawStrokes(canvas: HTMLCanvasElement, strokes: Stroke[]) {
       ctx.stroke()
     }
   }
+}
+
+/** 텍스트 상자를 공유 이미지에 그린다 — 줄바꿈·자동 줄바꿈 포함 */
+function paintShareTextBox(
+  ctx: CanvasRenderingContext2D,
+  box: BinderTextBox,
+  canvasWidth: number,
+  canvasHeight: number,
+  exportScale: number,
+) {
+  const fontSize = 16 * exportScale
+  const lineHeight = fontSize * 1.6
+  const padding = 10 * exportScale
+  const x = box.x * canvasWidth
+  const y = box.y * canvasHeight
+  const maxWidth = box.width * canvasWidth - padding * 2
+
+  ctx.font = `${fontSize}px 'Nanum Myeongjo', 'Apple SD Gothic Neo', serif`
+  ctx.textBaseline = 'top'
+
+  const lines: string[] = []
+  for (const raw of box.text.split('\n')) {
+    let line = ''
+    for (const char of raw) {
+      if (ctx.measureText(line + char).width > maxWidth && line) {
+        lines.push(line)
+        line = char
+      } else {
+        line += char
+      }
+    }
+    lines.push(line)
+  }
+
+  const boxHeight = lines.length * lineHeight + padding * 2
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.75)'
+  ctx.strokeStyle = 'rgba(178, 92, 48, 0.25)'
+  ctx.lineWidth = 1 * exportScale
+  ctx.beginPath()
+  ctx.roundRect(x, y, box.width * canvasWidth, boxHeight, 8 * exportScale)
+  ctx.fill()
+  ctx.stroke()
+
+  ctx.fillStyle = '#2c2722'
+  lines.forEach((line, index) => {
+    ctx.fillText(line, x + padding, y + padding + index * lineHeight)
+  })
+}
+
+/** 한 쪽을 PDF + 필기 획 + 텍스트 상자까지 합성한 공유용 캔버스로 렌더 */
+async function renderSharePage(
+  doc: PdfDocument,
+  pageNumber: number,
+  work: BinderWork | null,
+  displayWidth: number,
+): Promise<HTMLCanvasElement> {
+  const EXPORT_WIDTH = 1400
+  const page = await doc.getPage(pageNumber)
+  const base = page.getViewport({ scale: 1 })
+  const viewport = page.getViewport({ scale: EXPORT_WIDTH / base.width })
+
+  const canvas = window.document.createElement('canvas')
+  canvas.width = Math.floor(viewport.width)
+  canvas.height = Math.floor(viewport.height)
+  const ctx = canvas.getContext('2d')
+  if (!ctx) throw new Error('canvas context unavailable')
+
+  ctx.fillStyle = '#fff'
+  ctx.fillRect(0, 0, canvas.width, canvas.height)
+  await page.render({ canvasContext: ctx, viewport }).promise
+
+  const key = String(pageNumber)
+  // 필기 좌표는 화면 표시 폭 기준 px — 내보내기 폭에 맞춰 배율 적용
+  const exportScale = EXPORT_WIDTH / Math.max(1, displayWidth)
+  const strokes = work?.pageInputs[key]?.strokes ?? []
+  ctx.lineCap = 'round'
+  ctx.lineJoin = 'round'
+  for (const stroke of strokes) {
+    if (stroke.points.length === 0) continue
+    ctx.strokeStyle = stroke.color
+    ctx.fillStyle = stroke.color
+    ctx.lineWidth = stroke.size * exportScale
+    const [firstX, firstY] = stroke.points[0]
+    if (stroke.points.length === 1) {
+      ctx.beginPath()
+      ctx.arc(firstX * exportScale, firstY * exportScale, (stroke.size * exportScale) / 2, 0, Math.PI * 2)
+      ctx.fill()
+      continue
+    }
+    ctx.beginPath()
+    ctx.moveTo(firstX * exportScale, firstY * exportScale)
+    for (const [x, y] of stroke.points.slice(1)) ctx.lineTo(x * exportScale, y * exportScale)
+    ctx.stroke()
+  }
+
+  const boxes = (work?.pageTextBoxes?.[key] ?? []).filter((box) => box.text.trim())
+  for (const box of boxes) paintShareTextBox(ctx, box, canvas.width, canvas.height, exportScale)
+
+  return canvas
 }
 
 function PageOverlay({
@@ -794,6 +894,13 @@ export default function BinderPage() {
   const [inkTool, setInkTool] = useState<InkTool>('pen')
   const [inkColor, setInkColor] = useState(PEN_COLORS[0])
   const [inkSize, setInkSize] = useState(4)
+  // 입력 방식은 페이지가 아니라 세션의 도구 상태 — 쪽을 넘겨도 유지된다
+  const [inputMode, setInputMode] = useState<FieldMode>('text')
+  const [shareOpen, setShareOpen] = useState(false)
+  const [shareBusy, setShareBusy] = useState(false)
+  const [shareSelected, setShareSelected] = useState<number[]>([])
+  const [shareExtraPages, setShareExtraPages] = useState<number[]>([])
+  const [shareExtraInput, setShareExtraInput] = useState('')
   const [pageNumber, setPageNumber] = useState(1)
   const [pageCount, setPageCount] = useState(binderBooks[0]?.pages ?? 1)
   const [loadingPdf, setLoadingPdf] = useState(true)
@@ -821,16 +928,24 @@ export default function BinderPage() {
   const previewPages = nearbyPages(pageNumber, pageCount)
   const bookmarks = [...(work?.bookmarks ?? [])].sort((a, b) => a.page - b.page || a.createdAt - b.createdAt)
   const currentPageBookmarked = bookmarks.some((bookmark) => bookmark.page === pageNumber)
-  const completedPages = work
+  const inputPageSet = work
     ? new Set([
         ...Object.entries(work.pageInputs)
           .filter(([, field]) => field.text.trim() || field.strokes.length)
-          .map(([page]) => page),
+          .map(([page]) => Number(page)),
         ...Object.entries(work.pageTextBoxes ?? {})
           .filter(([, boxes]) => boxes.some((box) => box.text.trim()))
-          .map(([page]) => page),
-      ]).size
-    : 0
+          .map(([page]) => Number(page)),
+      ])
+    : new Set<number>()
+  const completedPages = inputPageSet.size
+  const bookmarkPageSet = new Set(bookmarks.map((bookmark) => bookmark.page))
+  // 공유 후보: 필기한 쪽 + 책갈피 쪽 + 현재 쪽 + 직접 추가한 쪽
+  const shareCandidates = [
+    ...new Set([pageNumber, ...inputPageSet, ...bookmarkPageSet, ...shareExtraPages]),
+  ]
+    .filter((page) => page >= 1 && page <= pageCount)
+    .sort((a, b) => a - b)
 
   // 부팅 시 계정의 마지막 사용 권으로 이동
   useEffect(() => {
@@ -956,10 +1071,6 @@ export default function BinderPage() {
     })
   }
 
-  const setPageInputMode = (nextMode: FieldMode) => {
-    updatePageInput({ ...pageInput, mode: nextMode })
-  }
-
   const addBookmark = () => {
     if (!work) return
     const fallback = `${pageNumber}쪽`
@@ -1073,6 +1184,53 @@ export default function BinderPage() {
     shelfDragRef.current = null
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId)
+    }
+  }
+
+  const openShare = () => {
+    setShareSelected([pageNumber])
+    setShareExtraInput('')
+    setShareOpen(true)
+  }
+
+  const toggleSharePage = (page: number) => {
+    setShareSelected((prev) => (prev.includes(page) ? prev.filter((p) => p !== page) : [...prev, page]))
+  }
+
+  const addShareExtraPage = () => {
+    const page = Number(shareExtraInput)
+    if (!Number.isInteger(page) || page < 1 || page > pageCount) return
+    setShareExtraPages((prev) => (prev.includes(page) ? prev : [...prev, page]))
+    setShareSelected((prev) => (prev.includes(page) ? prev : [...prev, page]))
+    setShareExtraInput('')
+  }
+
+  const sharePages = async () => {
+    if (!document || shareBusy || shareSelected.length === 0) return
+    setShareBusy(true)
+    try {
+      await window.document.fonts?.ready
+      const displayWidth =
+        window.document.querySelector('article canvas')?.getBoundingClientRect().width ?? 720
+      const pages = [...shareSelected].sort((a, b) => a - b)
+      const files: File[] = []
+      for (const page of pages) {
+        const canvas = await renderSharePage(document, page, work, displayWidth)
+        files.push(
+          await canvasToJpegFile(canvas, `eda-spl-${selected.issue}-p${String(page).padStart(3, '0')}.jpg`),
+        )
+      }
+      const result = await shareOrDownloadFiles(
+        files,
+        `에다 SPL 바인더 ${selected.issue}호`,
+        `${selected.title} · ${pages.map((page) => `${page}쪽`).join(', ')}`,
+      )
+      if (result !== 'cancelled') setShareOpen(false)
+    } catch (error) {
+      console.error(error)
+      alert('이미지를 만들지 못했습니다. 선택한 쪽 수를 줄여 다시 시도해 주세요.')
+    } finally {
+      setShareBusy(false)
     }
   }
 
@@ -1324,10 +1482,17 @@ export default function BinderPage() {
                 </option>
               ))}
             </select>
-            <ModeToggle mode={pageInput.mode} onChange={setPageInputMode} />
+            <ModeToggle mode={inputMode} onChange={setInputMode} />
+            <button
+              type="button"
+              onClick={openShare}
+              className="flex shrink-0 items-center gap-1 rounded-full bg-rose-accent px-3 py-1.5 text-[13px] font-bold text-white shadow-sm shadow-rose-accent/30 transition active:scale-95"
+            >
+              <span aria-hidden>📤</span> 공유
+            </button>
 
             {/* 손글씨 도구 줄 — 필기 중 손에 가려지지 않게 상단에 고정 */}
-            {pageInput.mode === 'ink' && (
+            {inputMode === 'ink' && (
               <div className="flex w-full flex-wrap items-center gap-1.5 border-t border-rose-line pt-2">
                 <button
                   type="button"
@@ -1423,8 +1588,15 @@ export default function BinderPage() {
 
           <article
             className="relative rounded-[22px] border border-rose-line bg-rose-chip/50 p-2.5 sm:p-3"
-            onTouchStart={(event) => setTouchStart(event.changedTouches[0]?.clientX ?? null)}
-            onTouchEnd={(event) => handleTouchEnd(event.changedTouches[0]?.clientX ?? 0)}
+            onTouchStart={(event) => {
+              // 손글씨 모드에서는 획이 스와이프로 오인되지 않게 넘김 제스처를 끈다
+              if (inputMode === 'ink') return
+              setTouchStart(event.changedTouches[0]?.clientX ?? null)
+            }}
+            onTouchEnd={(event) => {
+              if (inputMode === 'ink') return
+              handleTouchEnd(event.changedTouches[0]?.clientX ?? 0)
+            }}
           >
             {loadingPdf ? (
               <div className="grid min-h-[56vh] place-items-center rounded-[18px] bg-rose-card text-rose-key">
@@ -1436,7 +1608,7 @@ export default function BinderPage() {
                 pageNumber={pageNumber}
                 field={pageInput}
                 textBoxes={pageTextBoxes}
-                mode={pageInput.mode}
+                mode={inputMode}
                 tool={inkTool}
                 color={inkColor}
                 size={inkSize}
@@ -1506,6 +1678,101 @@ export default function BinderPage() {
         </section>
 
       </main>
+
+      {/* 페이지 JPG 공유 모달 */}
+      {shareOpen && (
+        <div
+          className="fixed inset-0 z-40 grid place-items-center bg-rose-ink/45 p-4 backdrop-blur-[2px]"
+          onClick={() => {
+            if (!shareBusy) setShareOpen(false)
+          }}
+        >
+          <div
+            className="flex max-h-[85vh] w-full max-w-lg flex-col rounded-2xl border border-rose-line bg-rose-card p-4 shadow-xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <h3 className="font-serif text-lg font-extrabold">페이지 JPG 공유</h3>
+              <button
+                type="button"
+                onClick={() => setShareOpen(false)}
+                disabled={shareBusy}
+                className="grid h-8 w-8 place-items-center rounded-full text-rose-key transition hover:bg-rose-chip disabled:opacity-40"
+                aria-label="닫기"
+              >
+                ✕
+              </button>
+            </div>
+            <p className="mt-1 text-[13px] leading-5 text-rose-key">
+              필기한 쪽(✍️)·책갈피(🔖)·현재 쪽이 후보로 나와요. 탭해서 여러 쪽을 고르세요.
+            </p>
+
+            <div className="mt-3 grid min-h-0 flex-1 grid-cols-3 content-start gap-2 overflow-y-auto rounded-xl bg-rose-chip/40 p-2 sm:grid-cols-4">
+              {shareCandidates.map((page) => {
+                const selectedPage = shareSelected.includes(page)
+                return (
+                  <button
+                    type="button"
+                    key={page}
+                    onClick={() => toggleSharePage(page)}
+                    className={`flex flex-col items-center gap-1.5 rounded-xl border p-2 transition ${
+                      selectedPage
+                        ? 'border-rose-accent bg-white shadow-sm'
+                        : 'border-transparent bg-white/50 opacity-80 hover:opacity-100'
+                    }`}
+                  >
+                    <PdfThumbnail pdfDocument={document} pageNumber={page} active={selectedPage} />
+                    <span
+                      className={`text-xs font-bold tabular-nums ${
+                        selectedPage ? 'text-rose-accent' : 'text-rose-key'
+                      }`}
+                    >
+                      {selectedPage ? '✓ ' : ''}
+                      {page}쪽 {inputPageSet.has(page) ? '✍️' : ''}
+                      {bookmarkPageSet.has(page) ? '🔖' : ''}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+
+            <div className="mt-3 flex items-center gap-2">
+              <input
+                type="number"
+                min={1}
+                max={pageCount}
+                value={shareExtraInput}
+                onChange={(event) => setShareExtraInput(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') addShareExtraPage()
+                }}
+                placeholder="쪽 번호"
+                className="w-24 rounded-full border border-rose-line bg-white px-3 py-1.5 text-sm text-rose-ink outline-none focus:border-rose-accent"
+                aria-label="추가할 쪽 번호"
+              />
+              <button
+                type="button"
+                onClick={addShareExtraPage}
+                className="rounded-full bg-rose-chip px-3 py-1.5 text-[13px] font-bold text-rose-accent transition hover:bg-rose-accent hover:text-white"
+              >
+                + 다른 쪽 추가
+              </button>
+              <span className="ml-auto text-[13px] font-bold tabular-nums text-rose-key">
+                선택 <span className="text-rose-accent">{shareSelected.length}</span>쪽
+              </span>
+            </div>
+
+            <button
+              type="button"
+              onClick={sharePages}
+              disabled={shareBusy || shareSelected.length === 0}
+              className="mt-3 w-full rounded-full bg-rose-accent px-4 py-3 text-[15px] font-extrabold text-white shadow-sm shadow-rose-accent/30 transition active:scale-[0.99] disabled:opacity-50"
+            >
+              {shareBusy ? '이미지 만드는 중...' : 'JPG로 공유'}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

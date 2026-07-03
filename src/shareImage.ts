@@ -74,11 +74,21 @@ export async function createEntryImageFile(
 }
 
 export async function shareOrDownloadEntryImage(file: File, entry: Entry): Promise<'shared' | 'downloaded' | 'cancelled'> {
-  const shareData = {
-    title: `EDABible ${entry.date}`,
-    text: entry.bibleRef ? `${entry.date} ${entry.bibleRef}` : entry.date,
-    files: [file],
-  }
+  return shareOrDownloadFiles([file], `EDABible ${entry.date}`, entry.bibleRef ? `${entry.date} ${entry.bibleRef}` : entry.date)
+}
+
+/** 캔버스를 JPG 파일로 변환 (바인더 페이지 공유 등) */
+export function canvasToJpegFile(canvas: HTMLCanvasElement, name: string): Promise<File> {
+  return canvasToFile(canvas, name, 'image/jpeg')
+}
+
+/** 여러 이미지 파일을 공유 시트로 보내고, 미지원이면 순서대로 다운로드한다. */
+export async function shareOrDownloadFiles(
+  files: File[],
+  title: string,
+  text: string,
+): Promise<'shared' | 'downloaded' | 'cancelled'> {
+  const shareData = { title, text, files }
 
   if (navigator.canShare?.(shareData)) {
     try {
@@ -92,6 +102,6 @@ export async function shareOrDownloadEntryImage(file: File, entry: Entry): Promi
     }
   }
 
-  downloadFile(file)
+  for (const file of files) downloadFile(file)
   return 'downloaded'
 }
