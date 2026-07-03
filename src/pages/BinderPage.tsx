@@ -127,12 +127,18 @@ function PageOverlay({
   field,
   textBoxes,
   mode,
+  tool,
+  color,
+  size,
   onChange,
   onTextBoxesChange,
 }: {
   field: Field
   textBoxes: BinderTextBox[]
   mode: FieldMode
+  tool: InkTool
+  color: string
+  size: number
   onChange: (field: Field) => void
   onTextBoxesChange: (boxes: BinderTextBox[]) => void
 }) {
@@ -146,9 +152,6 @@ function PageOverlay({
   const rectRef = useRef<DOMRect | null>(null)
   const fieldRef = useRef(field)
   const textBoxesRef = useRef(textBoxes)
-  const [tool, setTool] = useState<InkTool>('pen')
-  const [color, setColor] = useState(PEN_COLORS[0])
-  const [size, setSize] = useState(4)
   // 터치 엔진은 최초 1회만 등록되므로 최신 값은 ref로 읽는다
   const inkPropsRef = useRef({ tool, color, size, mode, onChange })
 
@@ -446,18 +449,6 @@ function PageOverlay({
     }
   }, [])
 
-  const undo = () => {
-    const next = { ...fieldRef.current, strokes: fieldRef.current.strokes.slice(0, -1) }
-    fieldRef.current = next
-    onChange(next)
-  }
-
-  const clear = () => {
-    const next = { ...fieldRef.current, strokes: [] }
-    fieldRef.current = next
-    onChange(next)
-  }
-
   const addTextBox = (event: React.MouseEvent<HTMLDivElement>) => {
     if (mode !== 'text') return
     if (event.target !== event.currentTarget) return
@@ -633,70 +624,6 @@ function PageOverlay({
         style={{ touchAction: 'none' }}
         onPointerDown={startStroke}
       />
-      {mode === 'ink' && (
-        <div className="safe-pad fixed bottom-3 left-1/2 z-30 flex w-max max-w-[calc(100vw-1.5rem)] -translate-x-1/2 flex-wrap items-center justify-center gap-1.5 rounded-full border border-rose-line bg-rose-card/95 px-3 py-1.5 shadow-lg backdrop-blur">
-          <button
-            type="button"
-            onClick={() => setTool('pen')}
-            className={`rounded-full px-2.5 py-1 text-[13px] font-bold transition ${
-              tool === 'pen' ? 'bg-rose-chip text-rose-ink' : 'text-rose-key hover:text-rose-ink'
-            }`}
-          >
-            ✏️ 펜
-          </button>
-          <button
-            type="button"
-            onClick={() => setTool('eraser')}
-            className={`rounded-full px-2.5 py-1 text-[13px] font-bold transition ${
-              tool === 'eraser' ? 'bg-rose-chip text-rose-ink' : 'text-rose-key hover:text-rose-ink'
-            }`}
-          >
-            🧽 지우개
-          </button>
-          <span className="mx-0.5 h-4 w-px bg-rose-line" />
-          {PEN_COLORS.map((penColor) => (
-            <button
-              key={penColor}
-              type="button"
-              onClick={() => {
-                setColor(penColor)
-                setTool('pen')
-              }}
-              className={`h-6 w-6 rounded-full border-2 transition ${
-                color === penColor && tool === 'pen'
-                  ? 'scale-110 border-rose-accent'
-                  : 'border-white hover:scale-105'
-              }`}
-              style={{ backgroundColor: penColor }}
-              aria-label={`색상 ${penColor}`}
-            />
-          ))}
-          <input
-            type="range"
-            min={1}
-            max={14}
-            value={size}
-            onChange={(event) => setSize(Number(event.target.value))}
-            className="w-20 accent-rose-accent"
-            aria-label="펜 굵기"
-          />
-          <span className="mx-0.5 h-4 w-px bg-rose-line" />
-          <button
-            type="button"
-            onClick={undo}
-            className="rounded-full px-2.5 py-1 text-[13px] font-bold text-rose-key transition hover:text-rose-ink"
-          >
-            ↩️ 취소
-          </button>
-          <button
-            type="button"
-            onClick={clear}
-            className="rounded-full px-2.5 py-1 text-[13px] font-bold text-rose-key transition hover:text-rose-ink"
-          >
-            지우기
-          </button>
-        </div>
-      )}
     </div>
   )
 }
@@ -780,6 +707,9 @@ function PdfPage({
   field,
   textBoxes,
   mode,
+  tool,
+  color,
+  size,
   onChange,
   onTextBoxesChange,
 }: {
@@ -788,6 +718,9 @@ function PdfPage({
   field: Field
   textBoxes: BinderTextBox[]
   mode: FieldMode
+  tool: InkTool
+  color: string
+  size: number
   onChange: (field: Field) => void
   onTextBoxesChange: (boxes: BinderTextBox[]) => void
 }) {
@@ -841,6 +774,9 @@ function PdfPage({
         field={field}
         textBoxes={textBoxes}
         mode={mode}
+        tool={tool}
+        color={color}
+        size={size}
         onChange={onChange}
         onTextBoxesChange={onTextBoxesChange}
       />
@@ -855,6 +791,9 @@ export default function BinderPage() {
   const [selectedId, setSelectedId] = useState(binderBooks[0]?.id ?? '')
   const [work, setWork] = useState<BinderWork | null>(null)
   const [document, setDocument] = useState<PdfDocument | null>(null)
+  const [inkTool, setInkTool] = useState<InkTool>('pen')
+  const [inkColor, setInkColor] = useState(PEN_COLORS[0])
+  const [inkSize, setInkSize] = useState(4)
   const [pageNumber, setPageNumber] = useState(1)
   const [pageCount, setPageCount] = useState(binderBooks[0]?.pages ?? 1)
   const [loadingPdf, setLoadingPdf] = useState(true)
@@ -1365,7 +1304,7 @@ export default function BinderPage() {
         </aside>
 
         <section className="order-1 min-w-0 space-y-3 xl:order-2">
-          <div className="flex flex-wrap items-center gap-2 rounded-[18px] border border-rose-line bg-rose-card px-3.5 py-2.5 shadow-sm">
+          <div className="sticky top-[52px] z-10 flex flex-wrap items-center gap-2 rounded-[18px] border border-rose-line bg-rose-card/95 px-3.5 py-2.5 shadow-sm backdrop-blur">
             <h2 className="min-w-0 flex-1 truncate font-serif text-lg font-extrabold">{selected.title}</h2>
             <select
               value={checkpoints.find((checkpoint) => checkpoint.page === pageNumber)?.id ?? ''}
@@ -1386,6 +1325,74 @@ export default function BinderPage() {
               ))}
             </select>
             <ModeToggle mode={pageInput.mode} onChange={setPageInputMode} />
+
+            {/* 손글씨 도구 줄 — 필기 중 손에 가려지지 않게 상단에 고정 */}
+            {pageInput.mode === 'ink' && (
+              <div className="flex w-full flex-wrap items-center gap-1.5 border-t border-rose-line pt-2">
+                <button
+                  type="button"
+                  onClick={() => setInkTool('pen')}
+                  className={`rounded-full px-2.5 py-1 text-[13px] font-bold transition ${
+                    inkTool === 'pen' ? 'bg-rose-chip text-rose-ink' : 'text-rose-key hover:text-rose-ink'
+                  }`}
+                >
+                  ✏️ 펜
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setInkTool('eraser')}
+                  className={`rounded-full px-2.5 py-1 text-[13px] font-bold transition ${
+                    inkTool === 'eraser' ? 'bg-rose-chip text-rose-ink' : 'text-rose-key hover:text-rose-ink'
+                  }`}
+                >
+                  🧽 지우개
+                </button>
+                <span className="mx-0.5 h-4 w-px bg-rose-line" />
+                {PEN_COLORS.map((penColor) => (
+                  <button
+                    key={penColor}
+                    type="button"
+                    onClick={() => {
+                      setInkColor(penColor)
+                      setInkTool('pen')
+                    }}
+                    className={`h-6 w-6 rounded-full border-2 transition ${
+                      inkColor === penColor && inkTool === 'pen'
+                        ? 'scale-110 border-rose-accent'
+                        : 'border-white hover:scale-105'
+                    }`}
+                    style={{ backgroundColor: penColor }}
+                    aria-label={`색상 ${penColor}`}
+                  />
+                ))}
+                <input
+                  type="range"
+                  min={1}
+                  max={14}
+                  value={inkSize}
+                  onChange={(event) => setInkSize(Number(event.target.value))}
+                  className="w-20 accent-rose-accent"
+                  aria-label="펜 굵기"
+                />
+                <span className="mx-0.5 h-4 w-px bg-rose-line" />
+                <button
+                  type="button"
+                  onClick={() => updatePageInput({ ...pageInput, strokes: pageInput.strokes.slice(0, -1) })}
+                  disabled={pageInput.strokes.length === 0}
+                  className="rounded-full px-2.5 py-1 text-[13px] font-bold text-rose-key transition hover:text-rose-ink disabled:opacity-40"
+                >
+                  ↩️ 취소
+                </button>
+                <button
+                  type="button"
+                  onClick={() => updatePageInput({ ...pageInput, strokes: [] })}
+                  disabled={pageInput.strokes.length === 0}
+                  className="rounded-full px-2.5 py-1 text-[13px] font-bold text-rose-key transition hover:text-rose-ink disabled:opacity-40"
+                >
+                  전체 지우기
+                </button>
+              </div>
+            )}
           </div>
 
           {/* 근처 쪽 미리보기 필름스트립 — 드래그로 훑고, 탭하면 그 쪽으로 이동 */}
@@ -1430,6 +1437,9 @@ export default function BinderPage() {
                 field={pageInput}
                 textBoxes={pageTextBoxes}
                 mode={pageInput.mode}
+                tool={inkTool}
+                color={inkColor}
+                size={inkSize}
                 onChange={updatePageInput}
                 onTextBoxesChange={updatePageTextBoxes}
               />
