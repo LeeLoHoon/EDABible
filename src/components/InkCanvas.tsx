@@ -134,7 +134,11 @@ export default function InkCanvas({
     }
 
     baseCtxRef.current = base.getContext('2d')
-    liveCtxRef.current = live.getContext('2d', { desynchronized: true })
+    // desynchronized(저지연) 힌트 금지 — Android 설치형(standalone) PWA에서는
+    // 힌트가 실제 발동해 live 캔버스가 불투명 오버레이로 승격되고, 아래층
+    // base 캔버스(확정 획)를 가려 "펜을 떼는 순간 글씨가 지워져 보이는" 문제를
+    // 만든다(브라우저 탭·iOS Safari는 힌트를 무시해 정상으로 보였음).
+    liveCtxRef.current = live.getContext('2d')
     renderBase()
     renderLive()
   }, [height, renderBase, renderLive])
