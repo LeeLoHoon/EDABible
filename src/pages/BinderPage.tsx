@@ -650,6 +650,8 @@ export default function BinderPage() {
   const [previewDragging, setPreviewDragging] = useState(false)
   const previewDragRef = useRef<{ startX: number; startPage: number; lastPage: number } | null>(null)
   const previewMovedRef = useRef(false)
+  const shelfDragRef = useRef<{ pointerId: number; startX: number; startLeft: number; moved: boolean } | null>(null)
+  const shelfMovedRef = useRef(false)
 
   const selected = binderBooks.find((book) => book.id === selectedId) ?? binderBooks[0]
   const pageKey = String(pageNumber)
@@ -791,7 +793,8 @@ export default function BinderPage() {
     const drag = previewDragRef.current
     if (!drag) return
     event.preventDefault()
-    const pageDelta = Math.round((drag.startX - event.clientX) / 34)
+    // 썸네일 한 칸 폭(약 60px)마다 1쪽 — 살짝 움직인 건 탭으로 취급되도록 trunc 사용
+    const pageDelta = Math.trunc((drag.startX - event.clientX) / 60)
     const nextPage = Math.max(1, Math.min(pageCount, drag.startPage + pageDelta))
     if (nextPage === drag.lastPage) return
     previewMovedRef.current = true
@@ -803,6 +806,50 @@ export default function BinderPage() {
     if (!previewDragRef.current) return
     previewDragRef.current = null
     setPreviewDragging(false)
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId)
+    }
+    // 드래그가 아니라 탭이면 그 자리의 썸네일로 이동.
+    // 캡처가 클릭 이벤트를 컨테이너로 돌려버려 썸네일 onClick은 오지 않으므로
+    // 손을 뗀 좌표에서 직접 찾는다. (state `document`가 전역을 가리므로 window.document)
+    if (event.type !== 'pointercancel' && !previewMovedRef.current) {
+      const hit = window.document
+        .elementFromPoint(event.clientX, event.clientY)
+        ?.closest('[data-preview-page]')
+      const page = hit ? Number(hit.getAttribute('data-preview-page')) : NaN
+      if (!Number.isNaN(page)) goToPage(page)
+    }
+  }
+
+  // 권 선택 책장: 스크롤바 없이도 마우스·펜·터치 드래그로 넘길 수 있게 한다.
+  // 캡처는 실제로 움직이기 시작한 뒤에만 잡아, 가만히 탭한 책등의 클릭은 살린다.
+  const startShelfDrag = (event: React.PointerEvent<HTMLDivElement>) => {
+    shelfMovedRef.current = false
+    shelfDragRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startLeft: event.currentTarget.scrollLeft,
+      moved: false,
+    }
+  }
+
+  const moveShelfDrag = (event: React.PointerEvent<HTMLDivElement>) => {
+    const drag = shelfDragRef.current
+    if (!drag || drag.pointerId !== event.pointerId) return
+    const dx = drag.startX - event.clientX
+    if (!drag.moved) {
+      if (Math.abs(dx) < 8) return
+      drag.moved = true
+      shelfMovedRef.current = true
+      event.currentTarget.setPointerCapture(event.pointerId)
+    }
+    event.currentTarget.scrollLeft = drag.startLeft + dx
+  }
+
+  const endShelfDrag = (event: React.PointerEvent<HTMLDivElement>) => {
+    const drag = shelfDragRef.current
+    if (!drag || drag.pointerId !== event.pointerId) return
+    shelfDragRef.current = null
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId)
     }
@@ -892,14 +939,24 @@ export default function BinderPage() {
               <span className="text-xs font-bold text-rose-key/80">{binderBooks.length}권</span>
             </div>
             <div className="px-3 pb-3 pt-2">
-              <div className="no-scrollbar flex items-end gap-1.5 overflow-x-auto px-1 pb-1 pt-2">
+              <div
+                className="no-scrollbar flex cursor-grab items-end gap-1.5 overflow-x-auto px-1 pb-1 pt-2 active:cursor-grabbing"
+                style={{ touchAction: 'pan-y' }}
+                onPointerDown={startShelfDrag}
+                onPointerMove={moveShelfDrag}
+                onPointerUp={endShelfDrag}
+                onPointerCancel={endShelfDrag}
+              >
                 {binderBooks.map((book) => {
                   const active = selected.id === book.id
                   return (
                     <button
                       type="button"
                       key={book.id}
-                      onClick={() => setSelectedId(book.id)}
+                      onClick={() => {
+                        if (shelfMovedRef.current) return
+                        setSelectedId(book.id)
+                      }}
                       className={`group relative flex shrink-0 flex-col items-center justify-between overflow-hidden rounded-md rounded-b-sm border px-1.5 py-2.5 transition ${
                         active
                           ? '-translate-y-1.5 border-rose-accent bg-rose-accent text-white shadow-lg shadow-rose-accent/30'
@@ -1064,13 +1121,7 @@ export default function BinderPage() {
               previewPages.map((previewPage) => {
                 const active = previewPage === pageNumber
                 return (
-                  <div
-                    key={previewPage}
-                    onClick={() => {
-                      if (previewMovedRef.current) return
-                      goToPage(previewPage)
-                    }}
-                  >
+                  <div key={previewPage} data-preview-page={previewPage}>
                     <PdfThumbnail pdfDocument={document} pageNumber={previewPage} active={active} />
                   </div>
                 )
