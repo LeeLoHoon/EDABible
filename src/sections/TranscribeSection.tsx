@@ -91,15 +91,28 @@ export default function TranscribeSection({ entry, update, FieldEditor }: Props)
 
   const completePassageEdit = async () => {
     if (!passage?.canFinalize) return
-    if (!confirm(`${passage.ref} 본문을 완료 처리할까요?\n완료 후에는 이 화면에서 더 이상 수정할 수 없습니다.`)) {
+    if (!confirm(`${passage.ref} 본문을 저장하고 완료 처리할까요?\n완료 후에는 이 화면에서 더 이상 수정할 수 없습니다.`)) {
       return
     }
 
     setFinalizingPassage(true)
     setPassageSaveError(null)
     try {
+      if (passageDraft !== passage.text) {
+        await passage.saveText(passageDraft)
+      }
       await passage.finalize()
-      setPassage((prev) => (prev ? { ...prev, isFinalized: true, canEdit: false } : prev))
+      setPassage((prev) =>
+        prev
+          ? {
+              ...prev,
+              text: passageDraft,
+              isFinalized: true,
+              canEdit: false,
+              canFinalize: false,
+            }
+          : prev,
+      )
       setEditingPassage(false)
     } catch (e) {
       setPassageSaveError(String(e instanceof Error ? e.message : e))
@@ -216,7 +229,7 @@ export default function TranscribeSection({ entry, update, FieldEditor }: Props)
                       disabled={savingPassage || finalizingPassage}
                       className="rounded-lg border border-rose-accent bg-white px-3 py-2 text-xs font-bold text-rose-accent disabled:opacity-50"
                     >
-                      {finalizingPassage ? '완료 중' : '완료'}
+                      {finalizingPassage ? '완료 중' : '저장 후 완료'}
                     </button>
                   )}
                   <button
