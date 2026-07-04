@@ -244,7 +244,7 @@ export default function TranscribeSection({ entry, update, FieldEditor }: Props)
                     type="button"
                     onClick={savePassageEdit}
                     disabled={savingPassage || finalizingPassage}
-                    className="rounded-lg bg-rose-accent px-3 py-2 text-xs font-bold text-white disabled:opacity-50"
+                    className="rounded-lg bg-rose-accent-deep px-3 py-2 text-xs font-bold text-white disabled:opacity-50"
                   >
                     {savingPassage ? '저장 중' : '저장'}
                   </button>

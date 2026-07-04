@@ -173,7 +173,7 @@ export default function TemptationVictorySection({ entry, update, FieldEditor }:
                   <span
                     className={`grid h-5 w-5 place-items-center rounded-full border text-xs ${
                       selected
-                        ? 'border-rose-accent bg-rose-accent text-white'
+                        ? 'border-rose-accent-deep bg-rose-accent-deep text-white'
                         : 'border-rose-line text-transparent'
                     }`}
                   >

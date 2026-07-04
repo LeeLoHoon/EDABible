@@ -76,8 +76,8 @@ export default defineConfig({
         scope: base,
         display: 'standalone',
         orientation: 'any',
-        background_color: appTarget === 'binder' ? '#f2f4ed' : '#f6f1e9',
-        theme_color: appTarget === 'binder' ? '#f2f4ed' : '#f6f1e9',
+        background_color: '#f6f1e9',
+        theme_color: '#f6f1e9',
         icons: [
           { src: 'pwa-192.png', sizes: '192x192', type: 'image/png' },
           { src: 'pwa-512.png', sizes: '512x512', type: 'image/png' },

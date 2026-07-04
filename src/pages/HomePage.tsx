@@ -190,7 +190,7 @@ export default function HomePage() {
         onClick={startNew}
         className="safe-pad fixed inset-x-0 bottom-0 mx-auto flex max-w-2xl items-center justify-center"
       >
-        <span className="mb-5 w-[calc(100%-2rem)] rounded-2xl bg-rose-accent py-4 text-center text-lg font-bold text-white shadow-lg shadow-rose-accent/30 active:scale-[0.99]">
+        <span className="mb-5 w-[calc(100%-2rem)] rounded-2xl bg-rose-accent-deep py-4 text-center text-lg font-bold text-white shadow-lg shadow-rose-accent/30 active:scale-[0.99]">
           ✏️ 오늘 묵상 시작
         </span>
       </button>

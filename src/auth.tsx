@@ -207,7 +207,7 @@ export function RequireGoogleLogin({ children }: { children: React.ReactNode }) 
                 <button
                   type="button"
                   onClick={() => openInExternalBrowser(inAppBrowser)}
-                  className="mt-3 w-full rounded-full bg-rose-accent px-4 py-3.5 text-[15px] font-extrabold text-white shadow-sm shadow-rose-accent/30 transition active:scale-[0.99]"
+                  className="mt-3 w-full rounded-full bg-rose-accent-deep px-4 py-3.5 text-[15px] font-extrabold text-white shadow-sm shadow-rose-accent/30 transition active:scale-[0.99]"
                 >
                   기본 브라우저로 열기
                 </button>

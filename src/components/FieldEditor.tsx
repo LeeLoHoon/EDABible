@@ -11,7 +11,7 @@ interface Props {
   inkHeight?: number
 }
 
-const PEN_COLORS = ['#3f3f46', '#be185d', '#2563eb', '#059669', '#d97706']
+const PEN_COLORS = ['#3a3626', '#be185d', '#2563eb', '#7e7a28', '#d97706']
 
 export default function FieldEditor({
   field,
@@ -95,7 +95,7 @@ export default function FieldEditor({
               max={14}
               value={size}
               onChange={(e) => setSize(Number(e.target.value))}
-              className="w-20 accent-rose-accent"
+              className="w-20 accent-rose-accent-deep"
               aria-label="펜 굵기"
             />
 

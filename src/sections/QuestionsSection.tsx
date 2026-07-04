@@ -43,7 +43,7 @@ function SetToggle({
           type="button"
           onClick={() => onChange(s.id)}
           className={`rounded-full px-3 py-1 text-sm font-medium transition ${
-            value === s.id ? 'bg-rose-accent text-white' : 'text-rose-ink'
+            value === s.id ? 'bg-rose-accent-deep text-white' : 'text-rose-ink'
           }`}
         >
           {s.label}

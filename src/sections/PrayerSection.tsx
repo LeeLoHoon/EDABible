@@ -53,7 +53,7 @@ function PrayerSet({
           <button
             type="button"
             onClick={onAddTopic}
-            className="rounded-full bg-rose-accent px-3 py-1 text-sm font-medium text-white"
+            className="rounded-full bg-rose-accent-deep px-3 py-1 text-sm font-medium text-white"
           >
             + 추가
           </button>

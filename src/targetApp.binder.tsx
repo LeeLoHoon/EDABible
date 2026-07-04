@@ -2,9 +2,9 @@ import { HashRouter, Routes, Route } from 'react-router-dom'
 import { AuthProvider, RequireGoogleLogin } from './auth'
 import BinderPage from './pages/BinderPage'
 
-// 바인더 그린 테마 활성화 — index.css의 :root.theme-binder 토큰 재정의를 켠다
+// 바인더 폰트 재정의 활성화 — index.css의 :root.theme-binder를 켠다
+// (색상은 note와 동일한 올리빈 팔레트 공유, theme-color도 index.html 값 그대로)
 document.documentElement.classList.add('theme-binder')
-document.querySelector('meta[name="theme-color"]')?.setAttribute('content', '#f2f4ed')
 
 // 바인더 폰트: SPL PDF와 같은 모던 고딕(Pretendard) — dynamic subset이라
 // 화면에 쓰인 글리프만 내려받는다. 오프라인이면 시스템 고딕으로 폴백.

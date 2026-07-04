@@ -104,7 +104,7 @@ export default function EntryPage() {
             type="button"
             onClick={() => setShareOpen((v) => !v)}
             disabled={shareState === 'working'}
-            className="flex items-center gap-1.5 rounded-full bg-rose-accent px-3.5 py-1.5 text-sm font-semibold text-white shadow-sm shadow-rose-accent/30 transition active:scale-95 disabled:opacity-60"
+            className="flex items-center gap-1.5 rounded-full bg-rose-accent-deep px-3.5 py-1.5 text-sm font-semibold text-white shadow-sm shadow-rose-accent/30 transition active:scale-95 disabled:opacity-60"
           >
             <span aria-hidden>📤</span>
             {shareState === 'working' ? '생성 중…' : '공유'}
@@ -129,7 +129,7 @@ export default function EntryPage() {
                           [key]: e.target.checked,
                         }))
                       }
-                      className="h-4 w-4 accent-rose-accent"
+                      className="h-4 w-4 accent-rose-accent-deep"
                     />
                     <span>{label}</span>
                   </label>
@@ -139,7 +139,7 @@ export default function EntryPage() {
                 type="button"
                 onClick={shareEntry}
                 disabled={!canShare || shareState === 'working'}
-                className="mt-3 w-full rounded-lg bg-rose-accent px-3 py-2 font-semibold text-white disabled:opacity-50"
+                className="mt-3 w-full rounded-lg bg-rose-accent-deep px-3 py-2 font-semibold text-white disabled:opacity-50"
               >
                 JPG 공유
               </button>

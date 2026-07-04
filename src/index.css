@@ -1,37 +1,28 @@
 @import 'tailwindcss';
 
-/* 리넨 페이퍼 + 클레이 디자인 토큰 (따뜻하고 차분한 묵상 톤) */
+/* 올리빈(Pantone 20-0184 Olivine) 브랜드 팔레트 — 묵상노트·SPL 바인더 공통.
+   포인트는 #a09c33, 흰 글자를 얹는 버튼/active는 진한 #7e7a28을 쓴다. */
 @theme {
-  --color-rose-bg: #f6f1e9;     /* 리넨 배경 */
-  --color-rose-card: #fffdf8;   /* 따뜻한 화이트 카드 */
-  --color-rose-chip: #ede3d3;   /* 소프트 샌드 (칩·섹션 라벨) */
-  --color-rose-ink: #2c2722;    /* 에스프레소 (제목) */
-  --color-rose-accent: #b25c30; /* 클레이/테라코타 (강조·버튼) */
-  --color-rose-key: #7a6b54;    /* 웜 토프 (보조 텍스트) */
-  --color-rose-line: #e4d9c6;   /* 샌드 보더 */
+  --color-rose-bg: #f6f1e9;          /* 배경 (기존 유지) */
+  --color-rose-card: #fbf8f2;        /* 카드/표면 */
+  --color-rose-chip: #ece6d4;        /* 소프트 샌드 (칩·섹션 라벨) */
+  --color-rose-ink: #3a3626;         /* 본문 텍스트 */
+  --color-rose-accent: #a09c33;      /* 포인트 (Olivine) */
+  --color-rose-accent-deep: #7e7a28; /* 포인트 진하게 (버튼/active) */
+  --color-rose-key: #8b8672;         /* 보조 텍스트 */
+  --color-rose-line: #e3dcc9;        /* 구분선/테두리 */
+  --color-rose-highlight: #d9cb6a;   /* 말씀 하이라이트 */
   /* 글씨체 통일: 전체 나눔명조 (sans 토큰도 동일 폰트를 가리킴) */
   --font-sans: 'Nanum Myeongjo', 'Apple SD Gothic Neo', serif;
   --font-serif: 'Nanum Myeongjo', 'Apple SD Gothic Neo', serif;
 }
 
-/* 바인더 타깃 전용 그린 테마 — SPL 바인더 PDF 브랜드 컬러(#568c47)에 맞춰
-   rose-* 토큰을 스코프 재정의한다(targetApp.binder.tsx가 html에 클래스 부여).
-   note 타깃은 클래스가 없어 기존 리넨·테라코타 그대로. */
+/* 바인더 타깃 — 색상은 note와 동일한 올리빈 팔레트를 공유하고,
+   폰트만 SPL PDF와 같은 모던 고딕으로 재정의한다
+   (targetApp.binder.tsx가 html에 클래스 부여 + CDN 로드). */
 :root.theme-binder {
-  --color-rose-bg: #f2f4ed;     /* 연한 그린 페이퍼 배경 */
-  --color-rose-card: #fdfefb;   /* 종이 화이트 카드 */
-  --color-rose-chip: #e3ecdc;   /* 라이트 그린 칩 */
-  --color-rose-ink: #2a2f26;    /* 딥 그린 차콜 (제목) */
-  --color-rose-accent: #568c47; /* 브랜드 초록 (강조·버튼, PDF 로고와 동일값) */
-  --color-rose-key: #5c6b52;    /* 그린 그레이 (보조 텍스트) */
-  --color-rose-line: #dbe4d2;   /* 그린 샌드 보더 */
-  /* 폰트도 PDF와 동일한 모던 고딕으로 통일 (targetApp.binder.tsx가 CDN 로드) */
   --font-sans: 'Pretendard Variable', Pretendard, 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
   --font-serif: 'Pretendard Variable', Pretendard, 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
-}
-
-.theme-binder body {
-  color: #343b2f;
 }
 
 html,
@@ -43,7 +34,7 @@ body,
 body {
   margin: 0;
   background: var(--color-rose-bg);
-  color: #3a342c;
+  color: var(--color-rose-ink);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;
@@ -163,7 +154,7 @@ body.ink-active .selectable-text {
   height: 18px;
   width: 18px;
   border-radius: 999px;
-  border: 2.5px solid var(--color-rose-accent);
+  border: 2.5px solid var(--color-rose-accent-deep);
   background: var(--color-rose-card);
   box-shadow: 0 1px 4px rgba(44, 39, 34, 0.18);
 }
@@ -178,7 +169,7 @@ body.ink-active .selectable-text {
   height: 13px;
   width: 13px;
   border-radius: 999px;
-  border: 2.5px solid var(--color-rose-accent);
+  border: 2.5px solid var(--color-rose-accent-deep);
   background: var(--color-rose-card);
   box-shadow: 0 1px 4px rgba(44, 39, 34, 0.18);
 }

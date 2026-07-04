@@ -21,7 +21,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl
 type PdfDocument = Awaited<ReturnType<typeof pdfjsLib.getDocument>['promise']>
 type InkTool = 'pen' | 'eraser'
 
-const PEN_COLORS = ['#2c2722', '#568c47', '#2563eb', '#d97706', '#be185d']
+const PEN_COLORS = ['#3a3626', '#7e7a28', '#2563eb', '#d97706', '#be185d']
 
 // iPadOS Safari는 빠른 연속 필기에서 펜 "포인터" 이벤트를 간헐적으로 흘리므로
 // (노트 앱과 동일한 교훈) iOS에서는 네이티브 터치 이벤트(touchType 'stylus')로
@@ -158,14 +158,14 @@ function paintShareTextBox(
 
   const boxHeight = lines.length * lineHeight + padding * 2
   ctx.fillStyle = 'rgba(255, 255, 255, 0.75)'
-  ctx.strokeStyle = 'rgba(86, 140, 71, 0.25)'
+  ctx.strokeStyle = 'rgba(160, 156, 51, 0.25)'
   ctx.lineWidth = 1 * exportScale
   ctx.beginPath()
   ctx.roundRect(x, y, box.width * canvasWidth, boxHeight, 8 * exportScale)
   ctx.fill()
   ctx.stroke()
 
-  ctx.fillStyle = '#2c2722'
+  ctx.fillStyle = '#3a3626'
   lines.forEach((line, index) => {
     ctx.fillText(line, x + padding, y + padding + index * lineHeight)
   })
@@ -644,7 +644,7 @@ function PageOverlay({
                     <button
                       type="button"
                       onPointerDown={(event) => startMoveTextBox(event, box)}
-                      className="cursor-grab rounded-full bg-rose-accent px-2.5 py-1 text-xs font-bold text-white active:cursor-grabbing"
+                      className="cursor-grab rounded-full bg-rose-accent-deep px-2.5 py-1 text-xs font-bold text-white active:cursor-grabbing"
                     >
                       이동
                     </button>
@@ -792,7 +792,7 @@ function PdfThumbnail({
       <canvas ref={canvasRef} className="block h-full w-full bg-white object-contain" />
       <span
         className={`absolute bottom-1 right-1 rounded-full px-1.5 py-0.5 text-[9px] font-black shadow-sm ${
-          active ? 'bg-rose-accent text-white' : 'bg-white/90 text-rose-key'
+          active ? 'bg-rose-accent-deep text-white' : 'bg-white/90 text-rose-key'
         }`}
       >
         {pageNumber}
@@ -1347,7 +1347,7 @@ export default function BinderPage() {
                       }}
                       className={`group relative flex shrink-0 flex-col items-center justify-between overflow-hidden rounded-md rounded-b-sm border px-1.5 py-2.5 transition ${
                         active
-                          ? '-translate-y-1.5 border-rose-accent bg-rose-accent text-white shadow-lg shadow-rose-accent/30'
+                          ? '-translate-y-1.5 border-rose-accent-deep bg-rose-accent-deep text-white shadow-lg shadow-rose-accent/30'
                           : 'border-rose-line bg-rose-bg text-rose-key hover:-translate-y-1 hover:border-rose-accent/50 hover:text-rose-accent'
                       }`}
                       style={{ width: 42, height: 132 }}
@@ -1383,7 +1383,7 @@ export default function BinderPage() {
               <button
                 type="button"
                 onClick={addBookmark}
-                className="rounded-full bg-rose-chip px-2.5 py-1 text-xs font-bold text-rose-accent transition hover:bg-rose-accent hover:text-white"
+                className="rounded-full bg-rose-chip px-2.5 py-1 text-xs font-bold text-rose-accent transition hover:bg-rose-accent-deep hover:text-white"
               >
                 + 책갈피
               </button>
@@ -1495,7 +1495,7 @@ export default function BinderPage() {
             <button
               type="button"
               onClick={openShare}
-              className="flex shrink-0 items-center gap-1 rounded-full bg-rose-accent px-3 py-1.5 text-[13px] font-bold text-white shadow-sm shadow-rose-accent/30 transition active:scale-95"
+              className="flex shrink-0 items-center gap-1 rounded-full bg-rose-accent-deep px-3 py-1.5 text-[13px] font-bold text-white shadow-sm shadow-rose-accent/30 transition active:scale-95"
             >
               <span aria-hidden>📤</span> 공유
             </button>
@@ -1547,7 +1547,7 @@ export default function BinderPage() {
                   max={14}
                   value={inkSize}
                   onChange={(event) => setInkSize(Number(event.target.value))}
-                  className="w-14 accent-rose-accent sm:w-20"
+                  className="w-14 accent-rose-accent-deep sm:w-20"
                   aria-label="펜 굵기"
                 />
                 <span className="mx-0.5 hidden h-4 w-px bg-rose-line sm:block" />
@@ -1767,7 +1767,7 @@ export default function BinderPage() {
               <button
                 type="button"
                 onClick={addShareExtraPage}
-                className="rounded-full bg-rose-chip px-3 py-1.5 text-[13px] font-bold text-rose-accent transition hover:bg-rose-accent hover:text-white"
+                className="rounded-full bg-rose-chip px-3 py-1.5 text-[13px] font-bold text-rose-accent transition hover:bg-rose-accent-deep hover:text-white"
               >
                 + 다른 쪽 추가
               </button>
@@ -1780,7 +1780,7 @@ export default function BinderPage() {
               type="button"
               onClick={sharePages}
               disabled={shareBusy || shareSelected.length === 0}
-              className="mt-3 w-full rounded-full bg-rose-accent px-4 py-3 text-[15px] font-extrabold text-white shadow-sm shadow-rose-accent/30 transition active:scale-[0.99] disabled:opacity-50"
+              className="mt-3 w-full rounded-full bg-rose-accent-deep px-4 py-3 text-[15px] font-extrabold text-white shadow-sm shadow-rose-accent/30 transition active:scale-[0.99] disabled:opacity-50"
             >
               {shareBusy ? '이미지 만드는 중...' : 'JPG로 공유'}
             </button>
