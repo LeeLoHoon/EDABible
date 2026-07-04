@@ -84,6 +84,7 @@ function GuideModal({ onClose }: { onClose: () => void }) {
 
           <Section icon="📖" title="본문 선택">
             <p>성경과 장/편을 고르면 위에 본문이 나와요. 본문을 읽으며 아래 칸에 필사하세요.</p>
+            <p>본문 구절을 탭하면 <b>형광 밑줄</b>로 표시해 둘 수 있어요. 다시 탭하면 지워집니다.</p>
           </Section>
 
           <Section icon="🖊️" title="필사 — 손글씨 · 타이핑">

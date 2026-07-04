@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Entry, Field, FieldMode } from '../types'
 import ModeToggle from '../components/ModeToggle'
 import BiblePicker, { type PassageInfo } from '../components/BiblePicker'
@@ -15,6 +15,21 @@ export default function TranscribeSection({ entry, update, FieldEditor }: Props)
   const mode = entry.transcription.mode
   const setMode = (m: FieldMode) =>
     update({ transcription: { ...entry.transcription, mode: m } })
+
+  // 구절 하이라이트(형광 밑줄) 토글 — 저장은 기존 debounce+flush 파이프라인 그대로
+  const toggleVerse = useCallback(
+    (verseKey: string) =>
+      update((e) => {
+        const current = e.highlightedVerses ?? []
+        return {
+          ...e,
+          highlightedVerses: current.includes(verseKey)
+            ? current.filter((k) => k !== verseKey)
+            : [...current, verseKey],
+        }
+      }),
+    [update],
+  )
 
   // 현재 본문 + 펼침 상태
   const [passage, setPassage] = useState<PassageInfo | null>(null)
@@ -266,12 +281,23 @@ export default function TranscribeSection({ entry, update, FieldEditor }: Props)
                 }
                 style={{ animation: 'fadeIn 0.3s ease' }}
               >
-                <PassageText text={passage!.text} />
+                <PassageText
+                  text={passage!.text}
+                  startChapter={passage!.chapter}
+                  highlights={entry.highlightedVerses}
+                  onToggleVerse={toggleVerse}
+                />
                 {/* 접힘 상태일 때 아래쪽 페이드로 '더 있음' 암시 */}
                 {!open && (
                   <div className="pointer-events-none absolute inset-x-0 bottom-0 h-6 bg-gradient-to-t from-rose-card to-transparent" />
                 )}
               </div>
+            )}
+            {/* 첫 사용자 힌트 — 하이라이트가 하나라도 생기면 사라진다 */}
+            {open && !passage!.loading && !editingPassage && (entry.highlightedVerses?.length ?? 0) === 0 && (
+              <p className="mt-2 border-t border-rose-line/60 pt-1.5 text-[11px] text-rose-key/70">
+                구절을 탭하면 형광 밑줄로 표시됩니다
+              </p>
             )}
           </div>
         </div>

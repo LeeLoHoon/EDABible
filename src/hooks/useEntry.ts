@@ -109,5 +109,7 @@ function normalizeEntry(entry: Entry): Entry {
     ...entry,
     questionSet: entry.questionSet ?? DEFAULT_QUESTION_SET_ID,
     temptationVictory,
+    // 로드 시 한 번만 backfill — 렌더마다 새 배열을 만들면 PassageText memo가 깨진다
+    highlightedVerses: entry.highlightedVerses ?? [],
   }
 }
