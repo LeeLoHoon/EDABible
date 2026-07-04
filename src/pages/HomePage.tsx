@@ -104,8 +104,8 @@ export default function HomePage() {
         <p className="mt-4 font-serif text-base tracking-wide text-rose-key">EDABible</p>
 
         <blockquote className="mt-10 max-w-xs font-serif text-[15px] leading-7 text-rose-ink/80">
-          “주의 말씀은 내 발에 등이요
-          <br />내 길에 빛이니이다”
+          “주의 말씀은 <span className="verse-mark">내 발에 등</span>이요
+          <br />내 <span className="verse-mark">길에 빛</span>이니이다”
           <footer className="mt-2.5 text-sm text-rose-key">— 시편 119:105</footer>
         </blockquote>
 
@@ -131,7 +131,7 @@ export default function HomePage() {
             <button
               type="button"
               onClick={removeAll}
-              className="shrink-0 rounded-lg px-2 py-1 text-xs font-medium text-zinc-400 hover:bg-rose-chip hover:text-rose-accent"
+              className="shrink-0 rounded-lg px-2 py-1 text-xs font-medium text-rose-key/70 hover:bg-rose-chip/60 hover:text-rose-accent"
             >
               전체 삭제
             </button>
@@ -139,11 +139,11 @@ export default function HomePage() {
         </header>
 
         {loading ? (
-          <p className="py-12 text-center text-zinc-400">불러오는 중…</p>
+          <p className="py-12 text-center text-rose-key/70">불러오는 중…</p>
         ) : entries.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-rose-line bg-rose-card/60 py-16 text-center">
-            <p className="text-zinc-500">아직 묵상 기록이 없어요.</p>
-            <p className="mt-1 text-sm text-zinc-400">아래 버튼으로 오늘의 묵상을 시작해보세요.</p>
+            <p className="text-rose-key">아직 묵상 기록이 없어요.</p>
+            <p className="mt-1 text-sm text-rose-key/70">아래 버튼으로 오늘의 묵상을 시작해보세요.</p>
           </div>
         ) : (
           <ul className="space-y-3">
@@ -153,7 +153,7 @@ export default function HomePage() {
               <li
                 key={e.id}
                 onClick={() => navigate(`/entry/${e.id}`)}
-                className="group flex cursor-pointer items-center justify-between rounded-2xl border border-rose-line bg-rose-card px-4 py-3.5 shadow-sm transition hover:border-rose-accent"
+                className="group flex cursor-pointer items-center justify-between rounded-2xl border border-rose-line bg-rose-card px-4 py-3.5 transition hover:border-rose-accent"
               >
                 <div className="min-w-0">
                   <p className="font-serif text-[17px] font-bold text-rose-ink">{formatDate(e.date)}</p>
@@ -162,12 +162,16 @@ export default function HomePage() {
                   </p>
                 </div>
                 <div className="flex items-center gap-3">
-                  <span className="rounded-full bg-rose-chip px-2.5 py-1 text-xs font-medium text-rose-ink">
+                  <span
+                    className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+                      p.done === p.total ? 'bg-leaf-pale/70 font-bold text-leaf-deep' : 'bg-rose-chip text-rose-ink'
+                    }`}
+                  >
                     {p.done}/{p.total}
                   </span>
                   <button
                     onClick={(ev) => remove(e.id, ev)}
-                    className="-mr-2 flex h-12 w-12 items-center justify-center rounded-full text-2xl text-zinc-300 hover:bg-rose-chip hover:text-rose-accent"
+                    className="-mr-2 flex h-12 w-12 items-center justify-center rounded-full text-2xl text-rose-key/50 hover:bg-rose-chip/60 hover:text-rose-accent"
                     aria-label="삭제"
                   >
                     ✕
@@ -190,7 +194,7 @@ export default function HomePage() {
         onClick={startNew}
         className="safe-pad fixed inset-x-0 bottom-0 mx-auto flex max-w-2xl items-center justify-center"
       >
-        <span className="mb-5 w-[calc(100%-2rem)] rounded-2xl bg-rose-accent-deep py-4 text-center text-lg font-bold text-white shadow-lg shadow-rose-accent/30 active:scale-[0.99]">
+        <span className="mb-5 w-[calc(100%-2rem)] rounded-full bg-rose-accent-deep py-4 text-center text-lg font-bold text-white shadow-lift active:scale-[0.99]">
           ✏️ 오늘 묵상 시작
         </span>
       </button>

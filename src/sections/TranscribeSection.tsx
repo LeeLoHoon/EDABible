@@ -146,7 +146,13 @@ export default function TranscribeSection({ entry, update, FieldEditor }: Props)
                     {passage!.ref}
                   </span>
                   {!passage!.loading && (
-                    <span className="shrink-0 rounded bg-white/70 px-1.5 py-0.5 font-sans text-[10px] font-bold uppercase tracking-wide text-rose-key">
+                    <span
+                      className={`shrink-0 rounded px-1.5 py-0.5 font-sans text-[10px] font-bold uppercase tracking-wide ${
+                        passage!.sourceQuality === 'verified'
+                          ? 'bg-leaf-pale/60 text-leaf-deep'
+                          : 'bg-white/70 text-rose-key'
+                      }`}
+                    >
                       {passage!.sourceQuality === 'verified' ? 'V' : 'F'}
                     </span>
                   )}
@@ -177,9 +183,9 @@ export default function TranscribeSection({ entry, update, FieldEditor }: Props)
                     본문 수정
                   </button>
                   {showPassageFormatHelp && (
-                    <div className="absolute right-0 top-9 z-20 w-[min(19rem,calc(100vw-2rem))] rounded-xl border border-rose-line bg-white p-3 text-left text-xs leading-relaxed text-zinc-700 shadow-lg">
+                    <div className="absolute right-0 top-9 z-20 w-[min(19rem,calc(100vw-2rem))] rounded-xl border border-rose-line bg-white p-3 text-left text-xs leading-relaxed text-rose-ink shadow-lg">
                       <p className="font-bold text-rose-accent">본문 수정 방법</p>
-                      <div className="mt-2 rounded-lg bg-rose-bg/70 p-2 font-mono text-[11px] leading-relaxed text-zinc-700">
+                      <div className="mt-2 rounded-lg bg-rose-bg/70 p-2 font-mono text-[11px] leading-relaxed text-rose-ink">
                         <p>[[제목]]</p>
                         <p>(1-3) 본문 내용...</p>
                         <p>(4-6) 본문 내용...</p>
@@ -196,7 +202,7 @@ export default function TranscribeSection({ entry, update, FieldEditor }: Props)
                 </div>
               )}
               {!passage!.loading && passage!.isFinalized && (
-                <span className="shrink-0 rounded-lg bg-rose-chip px-2.5 py-1 text-xs font-bold text-rose-key">
+                <span className="shrink-0 rounded-lg bg-leaf-pale/70 px-2.5 py-1 text-xs font-bold text-leaf-deep">
                   완료됨
                 </span>
               )}
@@ -217,7 +223,7 @@ export default function TranscribeSection({ entry, update, FieldEditor }: Props)
                   autoCapitalize="off"
                   autoCorrect="off"
                   spellCheck={false}
-                  className="min-h-[12rem] w-full rounded-xl border border-rose-line bg-white px-3 py-2 font-serif text-[15px] leading-[1.75] text-zinc-700 outline-none focus:border-rose-accent"
+                  className="min-h-[12rem] w-full rounded-xl border border-rose-line bg-white px-3 py-2 font-serif text-[15px] leading-[1.75] text-rose-ink outline-none focus:border-rose-accent"
                   aria-label={`${passage!.ref} 본문 수정`}
                 />
                 {passageSaveError && <p className="text-xs text-red-500">{passageSaveError}</p>}
@@ -227,7 +233,7 @@ export default function TranscribeSection({ entry, update, FieldEditor }: Props)
                       type="button"
                       onClick={completePassageEdit}
                       disabled={savingPassage || finalizingPassage}
-                      className="rounded-lg border border-rose-accent bg-white px-3 py-2 text-xs font-bold text-rose-accent disabled:opacity-50"
+                      className="rounded-full border border-rose-accent/60 bg-white px-3 py-2 text-xs font-bold text-rose-accent transition active:scale-[0.98] disabled:opacity-50"
                     >
                       {finalizingPassage ? '완료 중' : '저장 후 완료'}
                     </button>
@@ -236,7 +242,7 @@ export default function TranscribeSection({ entry, update, FieldEditor }: Props)
                     type="button"
                     onClick={cancelPassageEdit}
                     disabled={savingPassage || finalizingPassage}
-                    className="rounded-lg border border-rose-line bg-white px-3 py-2 text-xs font-bold text-rose-key disabled:opacity-50"
+                    className="rounded-full border border-rose-line bg-white px-3 py-2 text-xs font-bold text-rose-key transition hover:border-rose-accent/50 hover:text-rose-accent active:scale-[0.98] disabled:opacity-50"
                   >
                     취소
                   </button>
@@ -244,7 +250,7 @@ export default function TranscribeSection({ entry, update, FieldEditor }: Props)
                     type="button"
                     onClick={savePassageEdit}
                     disabled={savingPassage || finalizingPassage}
-                    className="rounded-lg bg-rose-accent-deep px-3 py-2 text-xs font-bold text-white disabled:opacity-50"
+                    className="rounded-full bg-rose-accent-deep px-3 py-2 text-xs font-bold text-white shadow-sm shadow-rose-accent/25 transition active:scale-[0.98] disabled:opacity-50"
                   >
                     {savingPassage ? '저장 중' : '저장'}
                   </button>
@@ -273,8 +279,12 @@ export default function TranscribeSection({ entry, update, FieldEditor }: Props)
 
       {/* 필사 */}
       <div>
-        <div className="mb-2 flex items-center justify-between">
-          <h3 className="text-lg font-bold text-zinc-700">필사</h3>
+        <div className="mb-2 flex items-center gap-3">
+          <h3 className="flex shrink-0 items-center gap-2 text-[13px] font-black tracking-[0.14em] text-rose-ink">
+            <span aria-hidden className="h-3.5 w-[3px] rounded-full bg-rose-accent" />
+            필사
+          </h3>
+          <span aria-hidden className="h-px min-w-6 flex-1 bg-rose-line" />
           <ModeToggle mode={mode} onChange={setMode} />
         </div>
         <FieldEditor

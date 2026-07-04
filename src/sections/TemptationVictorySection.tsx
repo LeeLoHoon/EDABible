@@ -124,17 +124,19 @@ export default function TemptationVictorySection({ entry, update, FieldEditor }:
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="rounded-2xl bg-rose-chip px-4 py-2">
-          <h3 className="font-bold text-rose-ink">7가지 단계</h3>
-        </div>
+      <div className="flex items-center gap-3">
+        <h3 className="flex shrink-0 items-center gap-2 text-[13px] font-black tracking-[0.14em] text-rose-ink">
+          <span aria-hidden className="h-3.5 w-[3px] rounded-full bg-rose-accent" />
+          7가지 단계
+        </h3>
+        <span aria-hidden className="h-px min-w-6 flex-1 bg-rose-line" />
         <ModeToggle mode={mode} onChange={setMode} />
       </div>
 
       <section className="space-y-3">
         <div>
-          <p className="mb-2 text-[17px] font-semibold text-zinc-700">나의 죄</p>
-          <p className="mb-2 text-sm text-zinc-500">
+          <p className="mb-2 text-[17px] font-semibold text-rose-ink">나의 죄</p>
+          <p className="mb-2 text-sm text-rose-key">
             승리하고 싶은 죄 한가지를 떠올려 자세히 적어주세요.
           </p>
           <FieldEditor
@@ -149,8 +151,8 @@ export default function TemptationVictorySection({ entry, update, FieldEditor }:
 
       <section className="space-y-3">
         <div>
-          <p className="text-[17px] font-semibold text-zinc-700">나의 상태</p>
-          <p className="text-sm text-zinc-500">
+          <p className="text-[17px] font-semibold text-rose-ink">나의 상태</p>
+          <p className="text-sm text-rose-key">
             7가지 단계 중 내가 해당하는 상태를 선택하고, 현재 상태를 자세히 적어주세요.
           </p>
         </div>
@@ -166,14 +168,14 @@ export default function TemptationVictorySection({ entry, update, FieldEditor }:
                 className={`w-full rounded-2xl border p-4 text-left transition ${
                   selected
                     ? 'border-rose-accent bg-rose-chip text-rose-ink'
-                    : 'border-rose-line bg-rose-card text-zinc-700'
+                    : 'border-rose-line bg-rose-card text-rose-ink'
                 }`}
               >
                 <span className="mb-1 flex items-center gap-2 font-bold">
                   <span
                     className={`grid h-5 w-5 place-items-center rounded-full border text-xs ${
                       selected
-                        ? 'border-rose-accent-deep bg-rose-accent-deep text-white'
+                        ? 'border-leaf-deep bg-leaf-deep text-white'
                         : 'border-rose-line text-transparent'
                     }`}
                   >
@@ -196,13 +198,17 @@ export default function TemptationVictorySection({ entry, update, FieldEditor }:
       </section>
 
       <section className="space-y-5">
-        <div className="rounded-2xl bg-rose-chip px-4 py-2">
-          <h3 className="font-bold text-rose-ink">죄로부터 승리</h3>
+        <div className="flex items-center gap-3">
+          <h3 className="flex shrink-0 items-center gap-2 text-[13px] font-black tracking-[0.14em] text-rose-ink">
+            <span aria-hidden className="h-3.5 w-[3px] rounded-full bg-rose-accent" />
+            죄로부터 승리
+          </h3>
+          <span aria-hidden className="h-px min-w-6 flex-1 bg-rose-line" />
         </div>
         {VICTORY_FIELDS.map((item) => (
           <div key={item.key}>
-            <p className="mb-1 text-[17px] font-semibold text-zinc-700">{item.title}</p>
-            <p className="mb-2 text-sm text-zinc-500">{item.description}</p>
+            <p className="mb-1 text-[17px] font-semibold text-rose-ink">{item.title}</p>
+            <p className="mb-2 text-sm text-rose-key">{item.description}</p>
             <FieldEditor
               field={worksheet[item.key]}
               onChange={(v) => setField(item.key, v)}

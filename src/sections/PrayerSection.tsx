@@ -38,7 +38,7 @@ function PrayerSet({
             <button
               type="button"
               onClick={onRemoveSet}
-              className="text-sm text-zinc-400 hover:text-rose-accent"
+              className="text-sm text-rose-key/70 hover:text-rose-accent"
             >
               세트 삭제
             </button>
@@ -48,12 +48,16 @@ function PrayerSet({
 
       {/* 기도제목 */}
       <div>
-        <div className="mb-2 flex items-center justify-between rounded-2xl bg-rose-chip px-4 py-2">
-          <h3 className="font-bold text-rose-ink">기도 제목</h3>
+        <div className="mb-2 flex items-center gap-3">
+          <h3 className="flex shrink-0 items-center gap-2 text-[13px] font-black tracking-[0.14em] text-rose-ink">
+            <span aria-hidden className="h-3.5 w-[3px] rounded-full bg-rose-accent" />
+            기도 제목
+          </h3>
+          <span aria-hidden className="h-px min-w-6 flex-1 bg-rose-line" />
           <button
             type="button"
             onClick={onAddTopic}
-            className="rounded-full bg-rose-accent-deep px-3 py-1 text-sm font-medium text-white"
+            className="rounded-full bg-rose-accent-deep px-3 py-1 text-sm font-bold text-white shadow-sm shadow-rose-accent/25 transition active:scale-[0.98]"
           >
             + 추가
           </button>
@@ -67,7 +71,7 @@ function PrayerSet({
                   <button
                     type="button"
                     onClick={() => onRemoveTopic(i)}
-                    className="text-sm text-zinc-400 hover:text-rose-accent"
+                    className="text-sm text-rose-key/70 hover:text-rose-accent"
                   >
                     삭제
                   </button>
@@ -87,8 +91,12 @@ function PrayerSet({
 
       {/* 배우자 기도 */}
       <div>
-        <div className="mb-2 rounded-2xl bg-rose-chip px-4 py-2">
-          <h3 className="font-bold text-rose-ink">배우자 기도</h3>
+        <div className="mb-2 flex items-center gap-3">
+          <h3 className="flex shrink-0 items-center gap-2 text-[13px] font-black tracking-[0.14em] text-rose-ink">
+            <span aria-hidden className="h-3.5 w-[3px] rounded-full bg-rose-accent" />
+            배우자 기도
+          </h3>
+          <span aria-hidden className="h-px min-w-6 flex-1 bg-rose-line" />
         </div>
         <FieldEditor
           field={spouse}

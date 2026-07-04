@@ -69,11 +69,11 @@ export default function EntryPage() {
   }
 
   if (loading) {
-    return <div className="p-8 text-center text-zinc-400">불러오는 중…</div>
+    return <div className="p-8 text-center text-rose-key/70">불러오는 중…</div>
   }
   if (!entry) {
     return (
-      <div className="p-8 text-center text-zinc-500">
+      <div className="p-8 text-center text-rose-key">
         묵상을 찾을 수 없어요.
         <button onClick={() => navigate('/')} className="ml-2 text-rose-accent underline">
           홈으로
@@ -88,7 +88,7 @@ export default function EntryPage() {
       <header className="sticky top-0 z-10 flex items-center justify-between border-b border-rose-line bg-rose-bg/90 px-4 py-3 backdrop-blur">
         <button
           onClick={() => navigate('/')}
-          className="shrink-0 text-sm text-zinc-500 hover:text-rose-accent"
+          className="shrink-0 text-sm text-rose-key hover:text-rose-accent"
         >
           ← 목록
         </button>
@@ -104,7 +104,7 @@ export default function EntryPage() {
             type="button"
             onClick={() => setShareOpen((v) => !v)}
             disabled={shareState === 'working'}
-            className="flex items-center gap-1.5 rounded-full bg-rose-accent-deep px-3.5 py-1.5 text-sm font-semibold text-white shadow-sm shadow-rose-accent/30 transition active:scale-95 disabled:opacity-60"
+            className="flex items-center gap-1.5 rounded-full bg-rose-accent-deep px-3.5 py-1.5 text-sm font-semibold text-white shadow-sm shadow-rose-accent/25 transition active:scale-95 disabled:opacity-60"
           >
             <span aria-hidden>📤</span>
             {shareState === 'working' ? '생성 중…' : '공유'}
@@ -119,7 +119,7 @@ export default function EntryPage() {
                   ['questions', '5가지 질문'],
                   ['victory', '승리'],
                 ].map(([key, label]) => (
-                  <label key={key} className="flex items-center gap-2 text-zinc-700">
+                  <label key={key} className="flex items-center gap-2 text-rose-ink">
                     <input
                       type="checkbox"
                       checked={shareSections[key as keyof ShareSections]}
@@ -139,7 +139,7 @@ export default function EntryPage() {
                 type="button"
                 onClick={shareEntry}
                 disabled={!canShare || shareState === 'working'}
-                className="mt-3 w-full rounded-lg bg-rose-accent-deep px-3 py-2 font-semibold text-white disabled:opacity-50"
+                className="mt-3 w-full rounded-full bg-rose-accent-deep px-3 py-2 font-bold text-white shadow-sm shadow-rose-accent/25 transition active:scale-[0.98] disabled:opacity-50"
               >
                 JPG 공유
               </button>
@@ -171,7 +171,7 @@ export default function EntryPage() {
             key={t.key}
             onClick={() => setTab(t.key)}
             className={`flex flex-col items-center gap-0.5 py-2.5 text-sm font-medium transition ${
-              tab === t.key ? 'text-rose-accent' : 'text-zinc-400'
+              tab === t.key ? 'text-rose-accent' : 'text-rose-key/70'
             }`}
           >
             <span className="text-lg">{t.icon}</span>

@@ -44,10 +44,10 @@ export default function ReadonlyField({ field, minHeight = 96 }: Props) {
   if (hasText || (!hasInk && field.mode === 'text')) {
     return (
       <div
-        className="min-h-24 whitespace-pre-wrap rounded-xl border border-rose-line bg-white px-4 py-3 text-[16px] leading-relaxed text-zinc-700"
+        className="min-h-24 whitespace-pre-wrap rounded-xl border border-rose-line bg-white px-4 py-3 text-[16px] leading-relaxed text-rose-ink"
         style={{ minHeight }}
       >
-        {hasText ? field.text : <span className="text-zinc-300">작성된 내용이 없습니다.</span>}
+        {hasText ? field.text : <span className="text-rose-key/50">작성된 내용이 없습니다.</span>}
       </div>
     )
   }

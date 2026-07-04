@@ -55,8 +55,8 @@ function LabeledField({
 }) {
   return (
     <div className="break-inside-avoid">
-      <p className="mb-2 text-[16px] font-bold text-zinc-700">{label}</p>
-      {description && <p className="mb-2 text-[13px] leading-relaxed text-zinc-500">{description}</p>}
+      <p className="mb-2 text-[16px] font-bold text-rose-ink">{label}</p>
+      {description && <p className="mb-2 text-[13px] leading-relaxed text-rose-key">{description}</p>}
       <ReadonlyField field={field} minHeight={minHeight} />
     </div>
   )
@@ -77,7 +77,7 @@ export default function EntryShareCard({
   }
 
   return (
-    <article className="w-[920px] bg-rose-bg p-10 text-zinc-700">
+    <article className="w-[920px] bg-rose-bg p-10 text-rose-ink">
       <header className="mb-8 border-b border-rose-line pb-5">
         <p className="font-serif text-[34px] font-extrabold text-rose-ink">EDABible</p>
         <div className="mt-2 flex items-end justify-between gap-6">
@@ -156,8 +156,8 @@ export default function EntryShareCard({
                 minHeight={120}
               />
               <div className="rounded-xl border border-rose-line bg-white px-4 py-3">
-                <p className="mb-2 text-[16px] font-bold text-zinc-700">나의 상태</p>
-                <p className="text-[15px] text-zinc-700">
+                <p className="mb-2 text-[16px] font-bold text-rose-ink">나의 상태</p>
+                <p className="text-[15px] text-rose-ink">
                   {worksheet.stage ? STAGE_TITLES[worksheet.stage - 1] : '선택된 단계가 없습니다.'}
                 </p>
               </div>

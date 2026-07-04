@@ -12,10 +12,26 @@
   --color-rose-key: #8b8672;         /* 보조 텍스트 */
   --color-rose-line: #e3dcc9;        /* 구분선/테두리 */
   --color-rose-highlight: #d9cb6a;   /* 말씀 하이라이트 */
+  /* 그린 스케일(옅어지는 4단계) — 진행·완료·성장 상태 전용 보조 팔레트.
+     브랜드 포인트는 올리빈(rose-accent)을 유지하고, 그린은 상태 표시에만 아껴 쓴다. */
+  --color-leaf-deep: #348a44;        /* 완료 텍스트·체크마크 */
+  --color-leaf: #62a36b;             /* 진행바 채움 */
+  --color-leaf-soft: #92bfa0;        /* 보조 상태 강조 */
+  --color-leaf-pale: #c3dbcc;        /* 완료 배지 배경 */
+  --shadow-lift: 0 14px 36px rgba(44, 39, 34, 0.12); /* 떠 있는 표면(모달·플로팅 CTA·PDF 캔버스) 전용 */
   /* 글씨체 통일: 전체 나눔명조 (sans 토큰도 동일 폰트를 가리킴) */
   --font-sans: 'Nanum Myeongjo', 'Apple SD Gothic Neo', serif;
   --font-serif: 'Nanum Myeongjo', 'Apple SD Gothic Neo', serif;
 }
+
+/* ── 버튼 규격 (컴포넌트 추출 대신 클래스 문자열 통일 — 새 버튼은 아래 조합을 따를 것) ──
+   Primary : rounded-full bg-rose-accent-deep font-bold text-white shadow-sm shadow-rose-accent/25
+             transition active:scale-[0.98] disabled:opacity-50
+   Outline : rounded-full border border-rose-line bg-white font-bold text-rose-key
+             hover:border-rose-accent/50 hover:text-rose-accent  (강조판: border-rose-accent/60 text-rose-accent, 화면당 1개 이하)
+   Ghost   : text-rose-key/70 hover:bg-rose-chip/60 hover:text-rose-accent  (원형 아이콘은 rounded-full)
+   Soft    : rounded-full bg-rose-chip font-bold text-rose-accent hover:bg-rose-accent-deep hover:text-white
+   예외    : dashed adder(점선 추가 버튼)는 rounded-xl 유지, 칩 배경 위 Soft는 bg-white 사용 */
 
 /* 바인더 타깃 — 색상은 note와 동일한 올리빈 팔레트를 공유하고,
    폰트만 SPL PDF와 같은 모던 고딕으로 재정의한다
@@ -81,21 +97,52 @@ body.ink-active .selectable-text {
   margin-top: 0;
 }
 
+/* 절 번호 — 인쇄 성경의 위첨자 숫자 느낌 (칩 장식 없이 올리빈 맨 숫자) */
 .passage-verse {
-  display: inline-flex;
-  min-width: 1.85rem;
-  margin-right: 0.45rem;
-  transform: translateY(-0.08rem);
-  justify-content: center;
-  border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--color-rose-accent) 36%, transparent);
-  background: color-mix(in srgb, var(--color-rose-chip) 58%, white);
+  display: inline-block;
+  min-width: 1.2rem;
+  margin-right: 0.35rem;
   color: var(--color-rose-accent);
   font-family: var(--font-sans);
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   font-weight: 800;
-  line-height: 1.35rem;
-  vertical-align: baseline;
+  vertical-align: 0.18em;
+}
+
+/* ── 말씀 하이라이트: 형광 마커 밑줄 (#d9cb6a = --color-rose-highlight) ──
+   text-decoration 방식 — 줄바꿈 시 각 줄에 개별 적용되고 레이아웃을 밀지 않으며
+   html-to-image 캡처와 호환된다(color-mix 미사용). 홈 표지 인용구도 공유. */
+.verse-mark {
+  text-decoration-line: underline;
+  text-decoration-color: #d9cb6a;
+  text-decoration-thickness: 0.34em;
+  text-underline-offset: 0.08em;
+  text-decoration-skip-ink: none;
+  transition: text-decoration-color 150ms ease;
+}
+
+/* 탭 가능한 구절 — 포인터 기기에서만 은은한 마커 프리뷰 */
+.verse-tap {
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .verse-tap:hover > .verse-body:not(.verse-mark) {
+    text-decoration-line: underline;
+    text-decoration-color: rgba(217, 203, 106, 0.4);
+    text-decoration-thickness: 0.34em;
+    text-underline-offset: 0.08em;
+    text-decoration-skip-ink: none;
+  }
+}
+
+/* 탭 직후 짧은 피드백 — 터치 기기 공용 */
+.verse-tap:active > .verse-body {
+  text-decoration-line: underline;
+  text-decoration-color: rgba(217, 203, 106, 0.55);
+  text-decoration-thickness: 0.34em;
+  text-underline-offset: 0.08em;
+  text-decoration-skip-ink: none;
 }
 
 /* 손글씨 캔버스: 펜 입력 중 스크롤/제스처/선택/콜아웃 방지 */

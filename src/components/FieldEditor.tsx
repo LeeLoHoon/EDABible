@@ -11,7 +11,7 @@ interface Props {
   inkHeight?: number
 }
 
-const PEN_COLORS = ['#3a3626', '#be185d', '#2563eb', '#7e7a28', '#d97706']
+const PEN_COLORS = ['#3a3626', '#be185d', '#2563eb', '#7e7a28', '#348a44', '#d97706']
 
 export default function FieldEditor({
   field,
@@ -43,10 +43,10 @@ export default function FieldEditor({
   const canvasHeight = Math.max(inkHeight + extra, autoGrown)
 
   return (
-    <div className="rounded-2xl border border-rose-line bg-rose-card p-2 shadow-sm">
+    <div className="rounded-2xl border border-rose-line bg-rose-card p-2">
       {field.mode === 'text' ? (
         <textarea
-          className="w-full resize-y rounded-xl border border-rose-line bg-white p-3 text-[17px] leading-relaxed text-zinc-700 outline-none focus:border-rose-accent"
+          className="w-full resize-y rounded-xl border border-rose-line bg-white p-3 text-[17px] leading-relaxed text-rose-ink outline-none focus:border-rose-accent"
           rows={rows}
           placeholder={placeholder}
           value={field.text}
@@ -59,14 +59,14 @@ export default function FieldEditor({
             <button
               type="button"
               onClick={() => setTool('pen')}
-              className={`rounded-lg px-2.5 py-1 text-sm ${tool === 'pen' ? 'bg-rose-chip text-rose-ink' : 'text-zinc-500'}`}
+              className={`rounded-lg px-2.5 py-1 text-sm transition ${tool === 'pen' ? 'bg-rose-chip text-rose-ink' : 'text-rose-key/70 hover:bg-rose-chip/60 hover:text-rose-accent'}`}
             >
               ✏️ 펜
             </button>
             <button
               type="button"
               onClick={() => setTool('eraser')}
-              className={`rounded-lg px-2.5 py-1 text-sm ${tool === 'eraser' ? 'bg-rose-chip text-rose-ink' : 'text-zinc-500'}`}
+              className={`rounded-lg px-2.5 py-1 text-sm transition ${tool === 'eraser' ? 'bg-rose-chip text-rose-ink' : 'text-rose-key/70 hover:bg-rose-chip/60 hover:text-rose-accent'}`}
             >
               🧽 지우개
             </button>
@@ -103,7 +103,7 @@ export default function FieldEditor({
               type="button"
               onClick={() => setStrokes(field.strokes.slice(0, -1))}
               disabled={field.strokes.length === 0}
-              className="rounded-lg px-2.5 py-1 text-sm text-zinc-500 disabled:opacity-40"
+              className="rounded-lg px-2.5 py-1 text-sm text-rose-key/70 transition hover:bg-rose-chip/60 hover:text-rose-accent disabled:opacity-40"
             >
               ↩️ 취소
             </button>
@@ -111,7 +111,7 @@ export default function FieldEditor({
               type="button"
               onClick={() => setStrokes([])}
               disabled={field.strokes.length === 0}
-              className="rounded-lg px-2.5 py-1 text-sm text-zinc-500 disabled:opacity-40"
+              className="rounded-lg px-2.5 py-1 text-sm text-rose-key/70 transition hover:bg-rose-chip/60 hover:text-rose-accent disabled:opacity-40"
             >
               전체 지우기
             </button>

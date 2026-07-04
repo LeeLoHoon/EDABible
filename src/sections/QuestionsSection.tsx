@@ -71,19 +71,21 @@ export default function QuestionsSection({ entry, update, FieldEditor }: Props) 
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="rounded-2xl bg-rose-chip px-4 py-2">
-          <h3 className="font-bold text-rose-ink">5가지 질문</h3>
-        </div>
+      <div className="flex flex-wrap items-center gap-3">
+        <h3 className="flex shrink-0 items-center gap-2 text-[13px] font-black tracking-[0.14em] text-rose-ink">
+          <span aria-hidden className="h-3.5 w-[3px] rounded-full bg-rose-accent" />
+          5가지 질문
+        </h3>
+        <span aria-hidden className="h-px min-w-6 flex-1 bg-rose-line" />
         <ModeToggle mode={mode} onChange={setMode} />
       </div>
       <SetToggle value={set.id} onChange={setQuestionSet} />
       {set.questions.map((q, i) => (
         <div key={i}>
-          <p className="mb-2 text-[17px] font-semibold text-zinc-700">
+          <p className="mb-2 text-[17px] font-semibold text-rose-ink">
             <span className="mr-1 text-rose-accent">{i + 1}.</span>
             <Question text={q.text} keyword={q.keyword} />
-            {q.hint && <span className="ml-1 text-[13px] font-normal text-zinc-400">({q.hint})</span>}
+            {q.hint && <span className="ml-1 text-[13px] font-normal text-rose-key/70">({q.hint})</span>}
           </p>
           <FieldEditor
             field={entry.answers[i]}

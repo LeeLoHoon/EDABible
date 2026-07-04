@@ -21,7 +21,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl
 type PdfDocument = Awaited<ReturnType<typeof pdfjsLib.getDocument>['promise']>
 type InkTool = 'pen' | 'eraser'
 
-const PEN_COLORS = ['#3a3626', '#7e7a28', '#2563eb', '#d97706', '#be185d']
+const PEN_COLORS = ['#3a3626', '#7e7a28', '#348a44', '#2563eb', '#d97706', '#be185d']
 
 // iPadOS Safari는 빠른 연속 필기에서 펜 "포인터" 이벤트를 간헐적으로 흘리므로
 // (노트 앱과 동일한 교훈) iOS에서는 네이티브 터치 이벤트(touchType 'stylus')로
@@ -720,7 +720,7 @@ function PageOverlay({
       )}
       <canvas
         ref={canvasRef}
-        className={`absolute inset-0 h-full w-full rounded-[16px] ${mode === 'ink' ? 'pointer-events-auto' : 'pointer-events-none'}`}
+        className={`absolute inset-0 h-full w-full rounded-2xl ${mode === 'ink' ? 'pointer-events-auto' : 'pointer-events-none'}`}
         style={{ touchAction: 'none' }}
         onPointerDown={startStroke}
       />
@@ -868,8 +868,8 @@ function PdfPage({
   }, [pdfDocument, pageNumber])
 
   return (
-    <div className="relative w-full rounded-[16px] shadow-[0_8px_28px_rgba(44,39,34,0.14)]">
-      <canvas ref={canvasRef} className="block w-full rounded-[16px] bg-white" />
+    <div className="relative w-full rounded-2xl shadow-lift">
+      <canvas ref={canvasRef} className="block w-full rounded-2xl bg-white" />
       <PageOverlay
         field={field}
         textBoxes={textBoxes}
@@ -1297,7 +1297,7 @@ export default function BinderPage() {
 
       <main className="mx-auto flex max-w-6xl flex-col gap-5 px-4 py-5 xl:grid xl:grid-cols-[15rem_minmax(0,1fr)] xl:items-start">
         <aside className="order-2 space-y-4 xl:order-1 xl:sticky xl:top-[66px] xl:self-start">
-          <section className="relative overflow-hidden rounded-[20px] border border-rose-line bg-rose-card p-5 pl-7 shadow-sm">
+          <section className="relative overflow-hidden rounded-2xl border border-rose-line bg-rose-card p-5 pl-7">
             <div className="pointer-events-none absolute inset-y-0 left-0 w-2 bg-rose-accent" />
             <div className="flex items-center justify-between">
               <p className="text-[11px] font-black tracking-[0.3em] text-rose-key/80">EDA · SPL</p>
@@ -1310,21 +1310,24 @@ export default function BinderPage() {
               <div className="flex items-baseline justify-between text-xs font-bold text-rose-key">
                 <span>입력한 쪽</span>
                 <span className="tabular-nums">
-                  <span className="text-rose-accent">{completedPages}</span> / {pageCount}
+                  <span className="text-leaf-deep">{completedPages}</span> / {pageCount}
                 </span>
               </div>
-              <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-rose-chip">
+              <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-rose-chip">
                 <div
-                  className="h-full rounded-full bg-rose-accent transition-[width] duration-300"
+                  className="h-full rounded-full bg-leaf transition-[width] duration-300"
                   style={{ width: `${pageCount ? Math.min(100, (completedPages / pageCount) * 100) : 0}%` }}
                 />
               </div>
             </div>
           </section>
 
-          <section className="overflow-hidden rounded-[18px] border border-rose-line bg-rose-card shadow-sm">
+          <section className="overflow-hidden rounded-2xl border border-rose-line bg-rose-card">
             <div className="flex items-center justify-between px-4 pb-1 pt-3">
-              <h2 className="font-serif text-base font-extrabold">권 선택</h2>
+              <h2 className="flex items-center gap-2 font-serif text-base font-extrabold">
+                <span aria-hidden className="h-3.5 w-[3px] rounded-full bg-rose-accent" />
+                권 선택
+              </h2>
               <span className="text-xs font-bold text-rose-key/80">{binderBooks.length}권</span>
             </div>
             <div className="px-3 pb-3 pt-2">
@@ -1347,7 +1350,7 @@ export default function BinderPage() {
                       }}
                       className={`group relative flex shrink-0 flex-col items-center justify-between overflow-hidden rounded-md rounded-b-sm border px-1.5 py-2.5 transition ${
                         active
-                          ? '-translate-y-1.5 border-rose-accent-deep bg-rose-accent-deep text-white shadow-lg shadow-rose-accent/30'
+                          ? '-translate-y-1.5 border-rose-accent-deep bg-rose-accent-deep text-white shadow-lg shadow-rose-accent/25'
                           : 'border-rose-line bg-rose-bg text-rose-key hover:-translate-y-1 hover:border-rose-accent/50 hover:text-rose-accent'
                       }`}
                       style={{ width: 42, height: 132 }}
@@ -1373,13 +1376,16 @@ export default function BinderPage() {
                   )
                 })}
               </div>
-              <div className="h-1.5 rounded-full bg-rose-chip shadow-inner" />
+              <div className="h-1.5 rounded-full bg-rose-chip" />
             </div>
           </section>
 
-          <section className="rounded-[18px] border border-rose-line bg-rose-card p-3 shadow-sm">
+          <section className="rounded-2xl border border-rose-line bg-rose-card p-3">
             <div className="mb-2 flex items-center justify-between px-1.5">
-              <h2 className="font-serif text-base font-extrabold">체크포인트</h2>
+              <h2 className="flex items-center gap-2 font-serif text-base font-extrabold">
+                <span aria-hidden className="h-3.5 w-[3px] rounded-full bg-rose-accent" />
+                체크포인트
+              </h2>
               <button
                 type="button"
                 onClick={addBookmark}
@@ -1404,7 +1410,7 @@ export default function BinderPage() {
                   >
                     <span className="flex min-w-0 items-center gap-2">
                       <span
-                        className={`h-1.5 w-1.5 shrink-0 rounded-full ${active ? 'bg-rose-accent' : 'bg-rose-line'}`}
+                        className={`h-1.5 w-1.5 shrink-0 rounded-full ${active ? 'bg-leaf' : 'bg-rose-line'}`}
                       />
                       <span className="truncate">{checkpoint.label}</span>
                     </span>
@@ -1417,7 +1423,10 @@ export default function BinderPage() {
             </div>
             <div className="mt-3 border-t border-rose-line pt-2.5">
               <div className="mb-1.5 flex items-center justify-between px-1.5">
-                <h3 className="text-sm font-extrabold text-rose-ink">내 책갈피</h3>
+                <h3 className="flex items-center gap-2 text-sm font-extrabold text-rose-ink">
+                  <span aria-hidden className="h-3 w-[3px] rounded-full bg-rose-accent" />
+                  내 책갈피
+                </h3>
                 {currentPageBookmarked && <span className="text-xs font-bold text-rose-accent">현재 쪽</span>}
               </div>
               {bookmarks.length === 0 ? (
@@ -1468,7 +1477,7 @@ export default function BinderPage() {
         </aside>
 
         <section className="order-1 min-w-0 space-y-3 xl:order-2">
-          <div className="sticky top-[52px] z-10 flex flex-wrap items-center gap-2 rounded-[18px] border border-rose-line bg-rose-card/95 px-3.5 py-2.5 shadow-sm backdrop-blur">
+          <div className="sticky top-[52px] z-10 flex flex-wrap items-center gap-2 rounded-2xl border border-rose-line bg-rose-card/95 px-3.5 py-2.5 shadow-sm backdrop-blur">
             {/* 제목은 폰에서 숨김(헤더에 앱 이름이 있고, 툴바를 한 줄로 유지하기 위해) */}
             <h2 className="hidden min-w-0 flex-1 truncate font-serif text-lg font-extrabold sm:block">
               {selected.title}
@@ -1495,7 +1504,7 @@ export default function BinderPage() {
             <button
               type="button"
               onClick={openShare}
-              className="flex shrink-0 items-center gap-1 rounded-full bg-rose-accent-deep px-3 py-1.5 text-[13px] font-bold text-white shadow-sm shadow-rose-accent/30 transition active:scale-95"
+              className="flex shrink-0 items-center gap-1 rounded-full bg-rose-accent-deep px-3 py-1.5 text-[13px] font-bold text-white shadow-sm shadow-rose-accent/25 transition active:scale-95"
             >
               <span aria-hidden>📤</span> 공유
             </button>
@@ -1575,7 +1584,7 @@ export default function BinderPage() {
 
           {/* 근처 쪽 미리보기 필름스트립 — 드래그로 훑고, 탭하면 그 쪽으로 이동 */}
           <div
-            className={`flex h-[92px] select-none items-center justify-center gap-1.5 overflow-hidden rounded-[18px] border border-rose-line bg-rose-card px-2 py-2 shadow-sm sm:h-[120px] ${
+            className={`flex h-[92px] select-none items-center justify-center gap-1.5 overflow-hidden rounded-2xl border border-rose-line bg-rose-card px-2 py-2 shadow-sm sm:h-[120px] ${
               previewDragging ? 'cursor-grabbing' : 'cursor-grab'
             }`}
             style={{ touchAction: 'none' }}
@@ -1600,7 +1609,7 @@ export default function BinderPage() {
           </div>
 
           <article
-            className="relative rounded-[22px] border border-rose-line bg-rose-chip/50 p-2.5 sm:p-3"
+            className="relative rounded-3xl border border-rose-line bg-rose-chip/50 p-2.5 sm:p-3"
             style={{ touchAction: 'pan-y' }}
             onTouchStart={(event) => {
               // 폰에서는 스와이프 넘김 비활성, 손글씨 모드에서는 획 오인 방지
@@ -1613,7 +1622,7 @@ export default function BinderPage() {
             }}
           >
             {loadingPdf ? (
-              <div className="grid min-h-[56vh] place-items-center rounded-[18px] bg-rose-card text-rose-key">
+              <div className="grid min-h-[56vh] place-items-center rounded-2xl bg-rose-card text-rose-key">
                 바인더를 펼치는 중...
               </div>
             ) : document ? (
@@ -1630,7 +1639,7 @@ export default function BinderPage() {
                 onTextBoxesChange={updatePageTextBoxes}
               />
             ) : (
-              <div className="grid min-h-[56vh] place-items-center rounded-[18px] bg-rose-card text-rose-key">
+              <div className="grid min-h-[56vh] place-items-center rounded-2xl bg-rose-card text-rose-key">
                 PDF를 불러오지 못했습니다.
               </div>
             )}
@@ -1780,7 +1789,7 @@ export default function BinderPage() {
               type="button"
               onClick={sharePages}
               disabled={shareBusy || shareSelected.length === 0}
-              className="mt-3 w-full rounded-full bg-rose-accent-deep px-4 py-3 text-[15px] font-extrabold text-white shadow-sm shadow-rose-accent/30 transition active:scale-[0.99] disabled:opacity-50"
+              className="mt-3 w-full rounded-full bg-rose-accent-deep px-4 py-3 text-[15px] font-extrabold text-white shadow-sm shadow-rose-accent/25 transition active:scale-[0.99] disabled:opacity-50"
             >
               {shareBusy ? '이미지 만드는 중...' : 'JPG로 공유'}
             </button>

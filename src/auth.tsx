@@ -160,12 +160,12 @@ export function RequireGoogleLogin({ children }: { children: React.ReactNode }) 
         />
 
         <div className="w-full max-w-[24rem]" style={{ animation: 'fadeIn 0.5s ease both' }}>
-          <div className="rounded-[28px] border border-rose-line bg-rose-card px-7 py-9 text-center shadow-[0_18px_50px_rgba(44,39,34,0.10)]">
+          <div className="rounded-[28px] border border-rose-line bg-rose-card px-7 py-9 text-center shadow-lift">
             {/* 바인더 스택 일러스트 */}
             <div className="relative mx-auto mb-7 h-[148px] w-36">
               <div className="absolute left-0 top-4 h-[124px] w-[88px] -rotate-6 rounded-lg rounded-l-sm border border-rose-line bg-rose-chip/80 shadow-sm" />
               <div className="absolute right-0 top-3 h-[124px] w-[88px] rotate-[5deg] rounded-lg rounded-l-sm border border-rose-line bg-rose-bg shadow-sm" />
-              <div className="absolute left-1/2 top-0 h-[148px] w-[108px] -translate-x-1/2 overflow-hidden rounded-xl rounded-l-md border border-rose-line bg-white shadow-[0_14px_30px_rgba(44,39,34,0.18)]">
+              <div className="absolute left-1/2 top-0 h-[148px] w-[108px] -translate-x-1/2 overflow-hidden rounded-xl rounded-l-md border border-rose-line bg-white shadow-lift">
                 <span className="pointer-events-none absolute inset-y-0 left-0 w-3 bg-rose-accent" />
                 {/* 바인더 링 */}
                 {[18, 42, 66, 84].map((top) => (
@@ -207,7 +207,7 @@ export function RequireGoogleLogin({ children }: { children: React.ReactNode }) 
                 <button
                   type="button"
                   onClick={() => openInExternalBrowser(inAppBrowser)}
-                  className="mt-3 w-full rounded-full bg-rose-accent-deep px-4 py-3.5 text-[15px] font-extrabold text-white shadow-sm shadow-rose-accent/30 transition active:scale-[0.99]"
+                  className="mt-3 w-full rounded-full bg-rose-accent-deep px-4 py-3.5 text-[15px] font-extrabold text-white shadow-sm shadow-rose-accent/25 transition active:scale-[0.99]"
                 >
                   기본 브라우저로 열기
                 </button>

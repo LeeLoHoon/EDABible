@@ -64,7 +64,7 @@ function GuideModal({ onClose }: { onClose: () => void }) {
             type="button"
             onClick={onClose}
             aria-label="닫기"
-            className="flex h-9 w-9 items-center justify-center rounded-full text-xl text-zinc-400 hover:bg-rose-chip hover:text-rose-accent"
+            className="flex h-9 w-9 items-center justify-center rounded-full text-xl text-rose-key/70 hover:bg-rose-chip/60 hover:text-rose-accent"
           >
             ✕
           </button>
@@ -139,7 +139,7 @@ export default function GuideButton({ className = '' }: { className?: string }) 
         type="button"
         aria-label="사용 가이드 열기"
         onClick={() => setOpen(true)}
-        className={`flex items-center gap-1 rounded-full bg-rose-chip/80 px-2.5 py-1 text-[13px] font-semibold text-rose-key shadow-sm transition active:scale-95 ${className}`}
+        className={`flex items-center gap-1 rounded-full bg-rose-chip/80 px-2.5 py-1 text-[13px] font-semibold text-rose-key transition active:scale-95 ${className}`}
       >
         <HelpIcon />
         사용법
