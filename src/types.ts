@@ -31,9 +31,10 @@ export interface Entry {
   /** @deprecated 구 "구절 전체 탭 토글" 데이터. 기능은 제거됐고, useEntry의
       normalizeEntry가 로드 시 gold 전체 range(highlightRanges)로 마이그레이션한다. */
   highlightedVerses?: string[]
-  /** 형광펜으로 칠한 하이라이트. key 포맷 '<장 카운터>:<절 라벨>' (예: '3:12') —
-      장 카운터는 본문 시작 장에서 출발해 절 번호가 리셋될 때마다 +1 되는 논리 값이라
-      다장·다권 본문에서도 유일하다(PassageText가 동일 규칙으로 재계산). 본문 편집으로
+  /** 형광펜으로 칠한 하이라이트. key 포맷: 절 마커 있는 문단은 '<장 카운터>:<절 라벨>'
+      (예: '3:12') — 장 카운터는 본문 시작 장에서 출발해 절 번호가 리셋될 때마다 +1 되는
+      논리 값이라 다장·다권 본문에서도 유일하다. 절 마커 없는 문단은 'p<블록 인덱스>'
+      (스캔 전사본 대응). PassageText가 동일 규칙으로 재계산하며, 본문 편집으로
       어긋난 range는 렌더에서 clamp/무시된다(orphan 허용). */
   highlightRanges?: VerseHighlight[]
   createdAt: number

@@ -35,8 +35,9 @@ type Block =
       type: 'segment'
       label: string | null
       text: string
-      /** '<장 카운터>:<절 라벨>' — 라벨 없는 세그먼트(도입부·다권 ref 라인)는 null */
-      verseKey: string | null
+      /** 절 마커 있으면 '<장 카운터>:<절 라벨>', 없으면 위치 기반 'p<블록 인덱스>' —
+          스캔 전사본은 절 마커 없는 문단이 많아(365개 장) 모든 문단이 칠해질 수 있어야 한다 */
+      verseKey: string
     }
 
 function splitPassage(text: string): Segment[] {
@@ -84,7 +85,7 @@ function splitBlocks(text: string, startChapter: number): Block[] {
     }
 
     for (const segment of splitPassage(line)) {
-      let verseKey: string | null = null
+      let verseKey: string
       if (segment.label) {
         const nums = segment.label.split('-').map(Number)
         const first = nums[0]
@@ -92,6 +93,10 @@ function splitBlocks(text: string, startChapter: number): Block[] {
         if (prevVerseEnd > 0 && first < prevVerseEnd) chapter += 1
         prevVerseEnd = last
         verseKey = `${chapter}:${segment.label}`
+      } else {
+        // 마커 없는 문단(도입부·스캔 전사 누락 등)도 위치 키로 칠할 수 있게 —
+        // 본문 편집으로 인덱스가 밀리면 orphan(렌더에서 무시)으로 수용
+        verseKey = `p${blocks.length}`
       }
       blocks.push({ type: 'segment', ...segment, verseKey })
     }
@@ -316,6 +321,8 @@ function DragHighlighter({
     }
 
     const onDown = (e: PointerEvent) => {
+      // 손바닥·두 번째 손가락 같은 보조 터치는 무시 — 진행 중인 획을 죽이면 안 됨
+      if (!e.isPrimary) return
       // 이전 up/cancel이 유실돼 세션이 남아 있으면(iOS의 간헐적 포인터 이벤트
       // 드랍 — InkCanvas에서 확인된 패턴) 버리고 새로 시작한다.
       // "한번 안 되면 계속 안 됨" 고착 방지.
@@ -343,8 +350,23 @@ function DragHighlighter({
     // iOS Safari는 touch-action: pan-y를 무시하거나 뒤늦게 pan으로 판정해
     // pointercancel로 칠하기를 끊는 경우가 있다 — 칠하기로 결정된 제스처의
     // touchmove는 직접 preventDefault해 스크롤 하이재킹을 차단한다(비-passive 필수).
+    // 스크롤 판정이 시작되면 pointermove가 아예 안 올 수 있으므로,
+    // 방향(intent) 결정도 touchmove에서 먼저 시도한다.
     const onTouchMove = (e: TouchEvent) => {
-      if (session?.intent === 'paint') e.preventDefault()
+      if (!session) return
+      if (!session.intent) {
+        const touch = e.touches[0]
+        if (!touch) return
+        const dx = Math.abs(touch.clientX - session.startX)
+        const dy = Math.abs(touch.clientY - session.startY)
+        if (dx < DRAG_THRESHOLD && dy < DRAG_THRESHOLD) return
+        session.intent = dx >= dy ? 'paint' : 'scroll'
+        if (session.intent === 'scroll') {
+          finish(false)
+          return
+        }
+      }
+      if (session.intent === 'paint') e.preventDefault()
     }
 
     // 드래그 중 앱 전환·백그라운드 진입 시 세션이 고착되지 않게 정리
@@ -447,14 +469,12 @@ function PassageText({
             )
           }
 
-          const parts = block.verseKey
-            ? segmentParts(block.text, rangesByKey.get(block.verseKey))
-            : null
+          const parts = segmentParts(block.text, rangesByKey.get(block.verseKey))
 
           return (
             <p key={`${block.label ?? 'intro'}-${index}`} className="passage-segment">
               {block.label && <span className="passage-verse">{block.label}</span>}
-              <span className="verse-body" data-vk={block.verseKey ?? undefined}>
+              <span className="verse-body" data-vk={block.verseKey}>
                 {parts
                   ? parts.map((part, i) =>
                       part.color && part.range ? (
@@ -462,7 +482,7 @@ function PassageText({
                           key={i}
                           className={markClass(part.color)}
                           data-hl={`${part.range.start}-${part.range.end}`}
-                          onClick={() => handleRemove(block.verseKey!, part.range!)}
+                          onClick={() => handleRemove(block.verseKey, part.range!)}
                         >
                           {part.text}
                         </span>
