@@ -121,28 +121,19 @@ body.ink-active .selectable-text {
   transition: text-decoration-color 150ms ease;
 }
 
-/* 탭 가능한 구절 — 포인터 기기에서만 은은한 마커 프리뷰 */
-.verse-tap {
+/* 형광펜 모드 — 텍스트 선택·복사 콜아웃을 원천 차단하고, 세로 팬(스크롤)만 남긴다.
+   가로로 긋기 시작한 제스처는 브라우저가 pan을 포기하므로 하이라이트 드래그가 된다. */
+.hl-pen {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  touch-action: pan-y;
+  cursor: crosshair;
+}
+
+/* 칠해진 파트는 탭해서 지울 수 있음 */
+[data-hl] {
   cursor: pointer;
-}
-
-@media (hover: hover) {
-  .verse-tap:hover > .verse-body:not(.verse-mark) {
-    text-decoration-line: underline;
-    text-decoration-color: rgba(217, 203, 106, 0.4);
-    text-decoration-thickness: 0.34em;
-    text-underline-offset: 0.08em;
-    text-decoration-skip-ink: none;
-  }
-}
-
-/* 탭 직후 짧은 피드백 — 터치 기기 공용 */
-.verse-tap:active > .verse-body {
-  text-decoration-line: underline;
-  text-decoration-color: rgba(217, 203, 106, 0.55);
-  text-decoration-thickness: 0.34em;
-  text-underline-offset: 0.08em;
-  text-decoration-skip-ink: none;
 }
 
 /* ── 부분 하이라이트 색 변형 — 두께·오프셋은 .verse-mark 그대로, 색만 교체.

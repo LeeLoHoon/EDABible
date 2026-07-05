@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { Entry, Field, FieldMode, VerseHighlight } from '../types'
+import type { Entry, Field, FieldMode, HighlightColor, VerseHighlight } from '../types'
 import ModeToggle from '../components/ModeToggle'
 import BiblePicker, { type PassageInfo } from '../components/BiblePicker'
 import PassageText from '../components/PassageText'
-import { applyRanges, removeRange } from '../highlights'
+import { applyRanges, HIGHLIGHT_COLORS, removeRange } from '../highlights'
 
 interface Props {
   entry: Entry
@@ -17,22 +17,8 @@ export default function TranscribeSection({ entry, update, FieldEditor }: Props)
   const setMode = (m: FieldMode) =>
     update({ transcription: { ...entry.transcription, mode: m } })
 
-  // 구절 하이라이트(형광 밑줄) 토글 — 저장은 기존 debounce+flush 파이프라인 그대로
-  const toggleVerse = useCallback(
-    (verseKey: string) =>
-      update((e) => {
-        const current = e.highlightedVerses ?? []
-        return {
-          ...e,
-          highlightedVerses: current.includes(verseKey)
-            ? current.filter((k) => k !== verseKey)
-            : [...current, verseKey],
-        }
-      }),
-    [update],
-  )
-
-  // 드래그 선택 부분 하이라이트 — 겹침 절단·같은 색 병합은 applyRanges가 처리
+  // 형광펜 드래그 하이라이트 — 겹침 절단·같은 색 병합은 applyRanges가 처리,
+  // 저장은 기존 debounce+flush 파이프라인 그대로
   const applyHighlights = useCallback(
     (adds: VerseHighlight[]) =>
       update((e) => ({ ...e, highlightRanges: applyRanges(e.highlightRanges ?? [], adds) })),
@@ -43,6 +29,9 @@ export default function TranscribeSection({ entry, update, FieldEditor }: Props)
       update((e) => ({ ...e, highlightRanges: removeRange(e.highlightRanges ?? [], key, start, end) })),
     [update],
   )
+
+  // 형광펜 상태 — null이면 꺼짐(본문 선택·복사 가능)
+  const [penColor, setPenColor] = useState<HighlightColor | null>(null)
 
   // 현재 본문 + 펼침 상태
   const [passage, setPassage] = useState<PassageInfo | null>(null)
@@ -236,6 +225,39 @@ export default function TranscribeSection({ entry, update, FieldEditor }: Props)
               )}
             </div>
 
+            {/* 형광펜 툴바 — 켜면 본문을 긋는 대로 칠해진다 (선택·복사 메뉴 없음) */}
+            {!passage!.loading && !editingPassage && open && (
+              <div className="mt-2 flex items-center justify-end gap-1.5">
+                {penColor &&
+                  HIGHLIGHT_COLORS.map((c) => (
+                    <button
+                      key={c.color}
+                      type="button"
+                      aria-label={`${c.label} 형광펜`}
+                      onClick={() => setPenColor(c.color)}
+                      className={`h-6 w-6 rounded-full border border-black/10 transition active:scale-90 ${
+                        penColor === c.color
+                          ? 'ring-2 ring-rose-accent-deep ring-offset-1 ring-offset-rose-card'
+                          : ''
+                      }`}
+                      style={{ background: c.hex }}
+                    />
+                  ))}
+                <button
+                  type="button"
+                  aria-pressed={!!penColor}
+                  onClick={() => setPenColor(penColor ? null : 'gold')}
+                  className={`ml-1 rounded-full px-2.5 py-1 text-xs font-bold transition active:scale-[0.98] ${
+                    penColor
+                      ? 'bg-rose-accent-deep text-white shadow-sm shadow-rose-accent/25'
+                      : 'bg-rose-chip text-rose-accent hover:bg-rose-accent-deep hover:text-white'
+                  }`}
+                >
+                  🖍 형광펜
+                </button>
+              </div>
+            )}
+
             {passage!.loading ? (
               <div className="mt-2 animate-pulse space-y-2.5 py-0.5" aria-label="본문 불러오는 중">
                 <div className="h-3 w-full rounded bg-rose-line/50" />
@@ -297,11 +319,10 @@ export default function TranscribeSection({ entry, update, FieldEditor }: Props)
                 <PassageText
                   text={passage!.text}
                   startChapter={passage!.chapter}
-                  highlights={entry.highlightedVerses}
-                  onToggleVerse={toggleVerse}
                   highlightRanges={entry.highlightRanges}
                   onApplyRanges={applyHighlights}
                   onRemoveRange={removeHighlight}
+                  penColor={penColor}
                 />
                 {/* 접힘 상태일 때 아래쪽 페이드로 '더 있음' 암시 */}
                 {!open && (
@@ -313,10 +334,9 @@ export default function TranscribeSection({ entry, update, FieldEditor }: Props)
             {open &&
               !passage!.loading &&
               !editingPassage &&
-              (entry.highlightedVerses?.length ?? 0) === 0 &&
               (entry.highlightRanges?.length ?? 0) === 0 && (
                 <p className="mt-2 border-t border-rose-line/60 pt-1.5 text-[11px] text-rose-key/70">
-                  구절을 탭하면 형광 밑줄, 드래그로 선택하면 원하는 부분만 색칠할 수 있어요
+                  🖍 형광펜을 켜고 본문을 가로로 그으면 칠해져요 · 칠한 부분은 탭하면 지워집니다
                 </p>
               )}
           </div>

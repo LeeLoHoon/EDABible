@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { DEFAULT_QUESTION_SET_ID, emptyTemptationVictory, type Entry } from '../types'
 import { getEntry, putEntry } from '../db'
 import { registerSaveFlush } from '../saveFlush'
+import { applyRanges } from '../highlights'
 
 type SaveState = 'idle' | 'saving' | 'saved'
 
@@ -105,12 +106,23 @@ function normalizeEntry(entry: Entry): Entry {
     ...(entry.temptationVictory ?? {}),
   }
 
+  // 구 "구절 전체 탭 토글" 데이터는 gold 전체 range로 마이그레이션한다.
+  // end는 MAX_SAFE_INTEGER — 렌더의 orphan clamp가 구절 길이에 맞춰 자른다.
+  // legacy를 base로 두고 기존 부분 range를 위에 적용해 이전 시각 결과를 보존.
+  const ranges = entry.highlightRanges ?? []
+  const legacy = (entry.highlightedVerses ?? []).map((key) => ({
+    key,
+    start: 0,
+    end: Number.MAX_SAFE_INTEGER,
+    color: 'gold' as const,
+  }))
+
   return {
     ...entry,
     questionSet: entry.questionSet ?? DEFAULT_QUESTION_SET_ID,
     temptationVictory,
-    // 로드 시 한 번만 backfill — 렌더마다 새 배열을 만들면 PassageText memo가 깨진다
-    highlightedVerses: entry.highlightedVerses ?? [],
-    highlightRanges: entry.highlightRanges ?? [],
+    // 로드 시 한 번만 계산 — 렌더마다 새 배열을 만들면 PassageText memo가 깨진다
+    highlightedVerses: [],
+    highlightRanges: legacy.length ? applyRanges(legacy, ranges) : ranges,
   }
 }

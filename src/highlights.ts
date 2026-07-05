@@ -1,4 +1,11 @@
-import type { VerseHighlight } from './types'
+import type { HighlightColor, VerseHighlight } from './types'
+
+/** 형광펜 색 정의 — index.css의 .verse-mark(--green/--pink)와 동기 유지할 것 */
+export const HIGHLIGHT_COLORS: { color: HighlightColor; hex: string; label: string }[] = [
+  { color: 'gold', hex: '#d9cb6a', label: '골드' },
+  { color: 'green', hex: '#92bfa0', label: '그린' },
+  { color: 'pink', hex: '#e8a7b7', label: '핑크' },
+]
 
 /* 부분 하이라이트 range 산술 — PassageText가 렌더하고 TranscribeSection이
    functional update에 사용하는 순수 함수. (컴포넌트 파일에서 분리 — Fast Refresh 규칙) */

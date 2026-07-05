@@ -1,33 +1,25 @@
 import { memo, useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
 import type { HighlightColor, VerseHighlight } from '../types'
+import { HIGHLIGHT_COLORS } from '../highlights'
 
 interface Props {
   text: string
   /** 하이라이트 키 계산의 시작 장 — 생략 시 1 */
   startChapter?: number
-  /** 구절 전체 하이라이트 키 목록 — 안정 참조 필수(normalizeEntry가 보장) */
-  highlights?: readonly string[]
-  /** 구절 탭 토글 콜백 — 생략하면 비인터랙티브 렌더 */
-  onToggleVerse?: (verseKey: string) => void
-  /** 부분(드래그 선택) 하이라이트 목록 — 안정 참조 필수 */
+  /** 형광펜 하이라이트 목록 — 안정 참조 필수(normalizeEntry가 보장) */
   highlightRanges?: readonly VerseHighlight[]
-  /** 드래그 선택 범위에 색 적용 — 생략하면 팔레트 비활성 */
+  /** 형광펜 드래그 결과 적용 — 생략하면 형광펜 비활성 */
   onApplyRanges?: (adds: VerseHighlight[]) => void
-  /** 부분 하이라이트 파트 탭 삭제 */
+  /** 칠해진 파트 탭 삭제 */
   onRemoveRange?: (key: string, start: number, end: number) => void
+  /** 형광펜 색 — null/생략이면 형광펜 꺼짐(일반 텍스트 선택·복사 가능) */
+  penColor?: HighlightColor | null
 }
 
 const VERSE_MARKER = /\((\d{1,3}(?:[-~]\d{1,3})?)\)\s*/g
 const HEADING_MARKER = /^\[\[(.+)\]\]$/
 const PAREN_HEADING = /^\((?!\d{1,3}(?:[-~]\d{1,3})?\))(.{2,80})\)$/
-
-/** 팔레트 점 버튼 색 — index.css의 .verse-mark(--green/--pink)와 동기 유지할 것 */
-const HIGHLIGHT_COLORS: { color: HighlightColor; hex: string; label: string }[] = [
-  { color: 'gold', hex: '#d9cb6a', label: '골드' },
-  { color: 'green', hex: '#92bfa0', label: '그린' },
-  { color: 'pink', hex: '#e8a7b7', label: '핑크' },
-]
 
 interface Segment {
   label: string | null
@@ -108,24 +100,19 @@ function splitBlocks(text: string, startChapter: number): Block[] {
   return blocks
 }
 
-/* ── 파트 분할 — 부분 range가 있는 구절만 텍스트를 경계로 쪼갠다.
-   whole(구절 전체 gold)과 공존 시 gold를 filler 파트로 평탄화한다:
-   파트당 text-decoration이 정확히 1겹이라 부모-자식 밑줄 페인트 순서에
-   의존하지 않고, html-to-image 캡처에서도 결정적으로 그려진다. ── */
+/* ── 파트 분할 — 하이라이트가 있는 구절만 텍스트를 range 경계로 쪼갠다.
+   파트당 text-decoration이 정확히 1겹이라 밑줄 렌더가 결정적이고
+   html-to-image 캡처에서도 동일하게 그려진다. ── */
 
 interface Part {
   text: string
   /** null이면 밑줄 없는 일반 텍스트 */
   color: HighlightColor | null
-  /** 부분 range에서 온 파트만 좌표 보유 — 탭 삭제 대상 식별(data-hl) */
+  /** 하이라이트 파트만 좌표 보유 — 탭 삭제 대상 식별(data-hl) */
   range: { start: number; end: number } | null
 }
 
-function segmentParts(
-  text: string,
-  ranges: readonly VerseHighlight[] | undefined,
-  whole: boolean,
-): Part[] | null {
+function segmentParts(text: string, ranges: readonly VerseHighlight[] | undefined): Part[] | null {
   if (!ranges || ranges.length === 0) return null
   // 본문 편집으로 어긋난 range는 clamp/drop (orphan 허용 — 데이터는 보존)
   const valid = ranges
@@ -133,15 +120,14 @@ function segmentParts(
     .filter((r) => r.start < r.end && r.start < text.length)
   if (valid.length === 0) return null
 
-  const fillerColor: HighlightColor | null = whole ? 'gold' : null
   const parts: Part[] = []
   let pos = 0
   for (const r of valid) {
-    if (pos < r.start) parts.push({ text: text.slice(pos, r.start), color: fillerColor, range: null })
+    if (pos < r.start) parts.push({ text: text.slice(pos, r.start), color: null, range: null })
     parts.push({ text: text.slice(r.start, r.end), color: r.color, range: { start: r.start, end: r.end } })
     pos = r.end
   }
-  if (pos < text.length) parts.push({ text: text.slice(pos), color: fillerColor, range: null })
+  if (pos < text.length) parts.push({ text: text.slice(pos), color: null, range: null })
   return parts
 }
 
@@ -149,20 +135,7 @@ function markClass(color: HighlightColor): string {
   return color === 'gold' ? 'verse-mark' : `verse-mark verse-mark--${color}`
 }
 
-/* ── 드래그 선택 → 플로팅 색 팔레트.
-   PassageText 본체와 분리된 형제 컴포넌트가 selection 상태를 소유해서,
-   선택 핸들을 드래그하는 동안 본문 블록이 재렌더되지 않는다(획 입력 성능 보호). ── */
-
-interface PaletteState {
-  left: number
-  top: number
-  adds: Omit<VerseHighlight, 'color'>[]
-}
-
-const PALETTE_WIDTH = 132
-const PALETTE_HEIGHT = 44
-
-/** selection 범위를 각 구절(verse-body[data-vk]) 내부 문자 오프셋으로 변환.
+/** 드래그 Range를 각 구절(verse-body[data-vk]) 내부 문자 오프셋으로 변환.
     verse-body 서브트리는 텍스트 노드(+파트 span)뿐이라 toString().length가
     곧 문자 오프셋이다(세그먼트 텍스트에 개행 없음 — splitBlocks가 보장). */
 function collectAdds(root: HTMLElement, selRange: Range): Omit<VerseHighlight, 'color'>[] {
@@ -188,91 +161,172 @@ function collectAdds(root: HTMLElement, selRange: Range): Omit<VerseHighlight, '
   return adds
 }
 
-function SelectionPalette({
+/* ── 형광펜 드래그.
+   네이티브 텍스트 선택을 쓰지 않아 iOS/Android 복사 메뉴가 아예 뜨지 않는다.
+   .hl-pen(touch-action: pan-y) 덕에 세로 드래그는 스크롤, 가로 시작 드래그만
+   여기로 온다. 본체와 분리된 형제 컴포넌트라 드래그 중 본문 블록은 재렌더되지
+   않는다(획 입력 성능 보호). ── */
+
+interface Caret {
+  node: Node
+  offset: number
+}
+
+function caretFromPoint(x: number, y: number): Caret | null {
+  const doc = document as Document & {
+    caretRangeFromPoint?: (x: number, y: number) => Range | null
+    caretPositionFromPoint?: (x: number, y: number) => { offsetNode: Node; offset: number } | null
+  }
+  if (doc.caretRangeFromPoint) {
+    const range = doc.caretRangeFromPoint(x, y)
+    return range ? { node: range.startContainer, offset: range.startOffset } : null
+  }
+  if (doc.caretPositionFromPoint) {
+    const pos = doc.caretPositionFromPoint(x, y)
+    return pos ? { node: pos.offsetNode, offset: pos.offset } : null
+  }
+  return null
+}
+
+/** 두 캐럿으로 방향 정규화된 Range 구성 */
+function rangeBetween(a: Caret, b: Caret): Range {
+  const probe = document.createRange()
+  probe.setStart(a.node, a.offset)
+  probe.collapse(true)
+  const reversed = probe.comparePoint(b.node, b.offset) < 0
+  const range = document.createRange()
+  if (reversed) {
+    range.setStart(b.node, b.offset)
+    range.setEnd(a.node, a.offset)
+  } else {
+    range.setStart(a.node, a.offset)
+    range.setEnd(b.node, b.offset)
+  }
+  return range
+}
+
+const DRAG_THRESHOLD = 6
+
+function DragHighlighter({
   rootRef,
+  color,
   onApply,
+  justDraggedRef,
 }: {
   rootRef: RefObject<HTMLDivElement | null>
+  color: HighlightColor
   onApply: (adds: VerseHighlight[]) => void
+  /** 드래그 직후 플래그 — 뒤따르는 click이 파트 삭제로 오인되지 않게 PassageText와 공유 */
+  justDraggedRef: RefObject<boolean>
 }) {
-  const [state, setState] = useState<PaletteState | null>(null)
+  const [rects, setRects] = useState<DOMRect[] | null>(null)
 
   useEffect(() => {
-    let timer: ReturnType<typeof setTimeout> | null = null
+    const root = rootRef.current
+    if (!root) return
 
-    const compute = () => {
-      const root = rootRef.current
-      const selection = window.getSelection()
-      if (!root || !selection || selection.isCollapsed || selection.rangeCount === 0) {
-        setState(null)
-        return
-      }
-      const range = selection.getRangeAt(0)
-      if (!root.contains(range.commonAncestorContainer)) {
-        setState(null)
-        return
-      }
-      // iOS는 팔레트 버튼을 누르는 순간 selection을 먼저 해제하므로
-      // 오프셋은 지금(표시 시점) 계산해 저장해 둔다
-      const adds = collectAdds(root, range)
-      if (adds.length === 0) {
-        setState(null)
-        return
-      }
-      const rect = range.getBoundingClientRect()
-      const left = Math.min(
-        Math.max(rect.left + rect.width / 2 - PALETTE_WIDTH / 2, 8),
-        window.innerWidth - PALETTE_WIDTH - 8,
-      )
-      // 기본은 선택 아래(iOS 네이티브 콜아웃이 위쪽에 뜨므로 회피), 하단 부족 시 위
-      const below = rect.bottom + 8
-      const top =
-        below + PALETTE_HEIGHT > window.innerHeight - 8 ? rect.top - PALETTE_HEIGHT - 8 : below
-      setState({ left, top, adds })
+    let session: {
+      pointerId: number
+      startX: number
+      startY: number
+      anchor: Caret
+      moved: boolean
+      range: Range | null
+    } | null = null
+
+    // 메모리 v1.5.40 교훈: setPointerCapture 금지(iOS Safari 캡처 미해제 버그).
+    // pointerdown 시 window capture 단계에 pointerId 필터로 등록하는 수동 캡처 패턴.
+    const detach = () => {
+      window.removeEventListener('pointermove', onMove, true)
+      window.removeEventListener('pointerup', onUp, true)
+      window.removeEventListener('pointercancel', onCancel, true)
     }
 
-    const onSelectionChange = () => {
-      if (timer) clearTimeout(timer)
-      timer = setTimeout(compute, 250)
-    }
-    const hide = () => {
-      if (timer) clearTimeout(timer)
-      setState(null)
+    const finish = (apply: boolean) => {
+      const s = session
+      session = null
+      detach()
+      setRects(null)
+      if (!apply || !s?.moved || !s.range || s.range.collapsed) return
+      const adds = collectAdds(root, s.range)
+      if (adds.length === 0) return
+      onApply(adds.map((a) => ({ ...a, color })))
+      justDraggedRef.current = true
+      setTimeout(() => {
+        justDraggedRef.current = false
+      }, 400)
     }
 
-    document.addEventListener('selectionchange', onSelectionChange)
-    // capture: 본문 카드의 내부 스크롤 컨테이너는 window로 버블되지 않는다
-    window.addEventListener('scroll', hide, true)
-    window.addEventListener('resize', hide)
+    const onMove = (e: PointerEvent) => {
+      if (!session || e.pointerId !== session.pointerId) return
+      if (!session.moved) {
+        const dx = Math.abs(e.clientX - session.startX)
+        const dy = Math.abs(e.clientY - session.startY)
+        if (dx < DRAG_THRESHOLD && dy < DRAG_THRESHOLD) return
+        session.moved = true
+      }
+      const focus = caretFromPoint(e.clientX, e.clientY)
+      if (!focus || !root.contains(focus.node)) return
+      const range = rangeBetween(session.anchor, focus)
+      session.range = range
+      setRects([...range.getClientRects()])
+    }
+
+    const onUp = (e: PointerEvent) => {
+      if (!session || e.pointerId !== session.pointerId) return
+      finish(true)
+    }
+
+    // 세로 팬(스크롤)으로 넘어가면 브라우저가 cancel을 보낸다 — 프리뷰만 정리
+    const onCancel = (e: PointerEvent) => {
+      if (!session || e.pointerId !== session.pointerId) return
+      finish(false)
+    }
+
+    const onDown = (e: PointerEvent) => {
+      if (session) return
+      if (e.pointerType === 'mouse' && e.button !== 0) return
+      const target = e.target as HTMLElement
+      if (!target.closest?.('[data-vk]')) return
+      const anchor = caretFromPoint(e.clientX, e.clientY)
+      if (!anchor || !root.contains(anchor.node)) return
+      session = {
+        pointerId: e.pointerId,
+        startX: e.clientX,
+        startY: e.clientY,
+        anchor,
+        moved: false,
+        range: null,
+      }
+      window.addEventListener('pointermove', onMove, true)
+      window.addEventListener('pointerup', onUp, true)
+      window.addEventListener('pointercancel', onCancel, true)
+    }
+
+    root.addEventListener('pointerdown', onDown)
     return () => {
-      if (timer) clearTimeout(timer)
-      document.removeEventListener('selectionchange', onSelectionChange)
-      window.removeEventListener('scroll', hide, true)
-      window.removeEventListener('resize', hide)
+      root.removeEventListener('pointerdown', onDown)
+      detach()
     }
-  }, [rootRef])
+  }, [rootRef, color, onApply, justDraggedRef])
 
-  if (!state) return null
+  if (!rects || rects.length === 0) return null
 
+  const hex = HIGHLIGHT_COLORS.find((c) => c.color === color)!.hex
   return createPortal(
-    <div
-      role="toolbar"
-      aria-label="하이라이트 색 선택"
-      className="fixed z-50 flex items-center gap-2 rounded-full border border-rose-line bg-rose-card px-2.5 py-2 shadow-lift"
-      style={{ left: state.left, top: state.top }}
-      onPointerDown={(e) => e.preventDefault()}
-    >
-      {HIGHLIGHT_COLORS.map((c) => (
-        <button
-          key={c.color}
-          type="button"
-          aria-label={`${c.label} 하이라이트`}
-          className="h-7 w-7 rounded-full border border-black/10 transition active:scale-90"
-          style={{ background: c.hex }}
-          onClick={() => {
-            onApply(state.adds.map((a) => ({ ...a, color: c.color })))
-            window.getSelection()?.removeAllRanges()
-            setState(null)
+    <div aria-hidden className="pointer-events-none fixed inset-0 z-40">
+      {rects.map((r, i) => (
+        <div
+          key={i}
+          style={{
+            position: 'fixed',
+            left: r.left,
+            top: r.top,
+            width: r.width,
+            height: r.height,
+            background: hex,
+            opacity: 0.35,
+            borderRadius: 2,
           }}
         />
       ))}
@@ -283,19 +337,18 @@ function SelectionPalette({
 
 // memo: 손글씨 획이 커밋될 때마다 EntryPage 전체가 재렌더되는데, 그때마다
 // 장 전체를 재파싱·재렌더하면 다음 획 입력 처리가 밀린다. props가 같으면 건너뛴다.
-// (highlights·highlightRanges·콜백 모두 안정 참조여야 효과가 유지된다)
+// (highlightRanges·콜백 모두 안정 참조여야 효과가 유지된다)
 function PassageText({
   text,
   startChapter = 1,
-  highlights,
-  onToggleVerse,
   highlightRanges,
   onApplyRanges,
   onRemoveRange,
+  penColor,
 }: Props) {
   const rootRef = useRef<HTMLDivElement>(null)
+  const justDraggedRef = useRef(false)
   const blocks = useMemo(() => splitBlocks(text, startChapter), [text, startChapter])
-  const highlightSet = useMemo(() => new Set(highlights ?? []), [highlights])
   const rangesByKey = useMemo(() => {
     const map = new Map<string, VerseHighlight[]>()
     for (const r of highlightRanges ?? []) {
@@ -307,29 +360,25 @@ function PassageText({
     return map
   }, [highlightRanges])
 
-  const interactive = !!(onToggleVerse || onRemoveRange)
-
-  const handleTap = (verseKey: string, e: React.MouseEvent) => {
-    // 펜 필기 중(ink-active) 손바닥·펜 오탭으로 토글되는 것을 방지
+  const handleRemove = (verseKey: string, range: { start: number; end: number }) => {
+    if (!onRemoveRange) return
+    // 펜 필기 중(ink-active) 오탭 방지
     if (document.body.classList.contains('ink-active')) return
-    // 본문 드래그 선택(복사·팔레트) 직후의 click은 토글로 치지 않는다
+    // 형광펜 드래그 직후 따라오는 click은 삭제로 치지 않는다
+    if (justDraggedRef.current) return
+    // 텍스트 드래그 선택(복사) 직후의 click도 무시
     const selection = window.getSelection()
     if (selection && !selection.isCollapsed) return
-    // 부분 하이라이트 파트를 탭하면 그 range만 지운다 (구절 전체 토글로 흐르지 않음)
-    const hl = (e.target as HTMLElement).closest?.('[data-hl]')
-    if (hl && onRemoveRange) {
-      const [start, end] = (hl.getAttribute('data-hl') ?? '').split('-').map(Number)
-      if (Number.isFinite(start) && Number.isFinite(end)) onRemoveRange(verseKey, start, end)
-      return
-    }
-    onToggleVerse?.(verseKey)
+    onRemoveRange(verseKey, range.start, range.end)
   }
 
   return (
     <>
       <div
         ref={rootRef}
-        className="selectable-text passage-text font-serif text-[15px] leading-[1.75] text-rose-ink"
+        className={`selectable-text passage-text font-serif text-[15px] leading-[1.75] text-rose-ink${
+          penColor ? ' hl-pen' : ''
+        }`}
       >
         {blocks.map((block, index) => {
           if (block.type === 'heading') {
@@ -343,52 +392,43 @@ function PassageText({
             )
           }
 
-          const whole = !!block.verseKey && highlightSet.has(block.verseKey)
           const parts = block.verseKey
-            ? segmentParts(block.text, rangesByKey.get(block.verseKey), whole)
+            ? segmentParts(block.text, rangesByKey.get(block.verseKey))
             : null
 
           return (
-            <p
-              key={`${block.label ?? 'intro'}-${index}`}
-              className={`passage-segment${interactive && block.verseKey ? ' verse-tap' : ''}`}
-              onClick={
-                interactive && block.verseKey
-                  ? (e) => handleTap(block.verseKey!, e)
-                  : undefined
-              }
-            >
+            <p key={`${block.label ?? 'intro'}-${index}`} className="passage-segment">
               {block.label && <span className="passage-verse">{block.label}</span>}
-              {parts ? (
-                // 파트 평탄화: verse-body 자체엔 밑줄을 긋지 않는다(중첩 decoration 방지)
-                <span className="verse-body" data-vk={block.verseKey!}>
-                  {parts.map((part, i) =>
-                    part.color ? (
-                      <span
-                        key={i}
-                        className={markClass(part.color)}
-                        data-hl={part.range ? `${part.range.start}-${part.range.end}` : undefined}
-                      >
-                        {part.text}
-                      </span>
-                    ) : (
-                      part.text
-                    ),
-                  )}
-                </span>
-              ) : (
-                <span
-                  className={`verse-body${whole ? ' verse-mark' : ''}`}
-                  data-vk={block.verseKey ?? undefined}
-                >
-                  {block.text}
-                </span>
-              )}
+              <span className="verse-body" data-vk={block.verseKey ?? undefined}>
+                {parts
+                  ? parts.map((part, i) =>
+                      part.color && part.range ? (
+                        <span
+                          key={i}
+                          className={markClass(part.color)}
+                          data-hl={`${part.range.start}-${part.range.end}`}
+                          onClick={() => handleRemove(block.verseKey!, part.range!)}
+                        >
+                          {part.text}
+                        </span>
+                      ) : (
+                        part.text
+                      ),
+                    )
+                  : block.text}
+              </span>
             </p>
           )
         })}
       </div>
-      {onApplyRanges && <SelectionPalette rootRef={rootRef} onApply={onApplyRanges} />}
+      {penColor && onApplyRanges && (
+        <DragHighlighter
+          rootRef={rootRef}
+          color={penColor}
+          onApply={onApplyRanges}
+          justDraggedRef={justDraggedRef}
+        />
+      )}
     </>
   )
 }
