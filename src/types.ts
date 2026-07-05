@@ -33,8 +33,23 @@ export interface Entry {
       다장·다권 본문에서도 유일하다(PassageText가 동일 규칙으로 재계산). 본문 편집으로
       키가 어긋난 항목은 렌더에서 매칭되지 않아 조용히 무시된다(orphan 허용). */
   highlightedVerses?: string[]
+  /** 드래그 선택으로 칠한 부분 하이라이트 — 구절 전체 토글(highlightedVerses)과 독립 레이어 */
+  highlightRanges?: VerseHighlight[]
   createdAt: number
   updatedAt: number
+}
+
+export type HighlightColor = 'gold' | 'green' | 'pink'
+
+/** 구절 내 부분 하이라이트 — start/end는 해당 구절 세그먼트 텍스트(트림된 한 줄,
+    PassageText의 block.text)의 문자 오프셋 [start, end). key 규칙은 highlightedVerses와
+    동일. 본문 편집으로 어긋난 range는 렌더에서 clamp/무시된다(orphan 허용). 같은 key
+    안에서 range끼리 겹치지 않는 불변식은 PassageText의 applyRanges가 유지한다. */
+export interface VerseHighlight {
+  key: string
+  start: number
+  end: number
+  color: HighlightColor
 }
 
 export interface TemptationVictory {
@@ -140,6 +155,7 @@ export function createEntry(now: Date): Entry {
     prayerTopics: [emptyField()],
     temptationVictory: emptyTemptationVictory(),
     highlightedVerses: [],
+    highlightRanges: [],
     createdAt: ts,
     updatedAt: ts,
   }

@@ -145,6 +145,18 @@ body.ink-active .selectable-text {
   text-decoration-skip-ink: none;
 }
 
+/* ── 부분 하이라이트 색 변형 — 두께·오프셋은 .verse-mark 그대로, 색만 교체.
+   리터럴 hex 유지(html-to-image 캡처 호환 — color-mix 금지).
+   green #92bfa0 = --color-leaf-soft, pink는 동일 명도대의 파스텔 로즈.
+   PassageText.tsx의 HIGHLIGHT_COLORS 점 버튼 hex와 동기 유지할 것. */
+.verse-mark--green {
+  text-decoration-color: #92bfa0;
+}
+
+.verse-mark--pink {
+  text-decoration-color: #e8a7b7;
+}
+
 /* 손글씨 캔버스: 펜 입력 중 스크롤/제스처/선택/콜아웃 방지 */
 .ink-surface {
   touch-action: none;

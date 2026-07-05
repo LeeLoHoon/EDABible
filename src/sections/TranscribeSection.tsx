@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { Entry, Field, FieldMode } from '../types'
+import type { Entry, Field, FieldMode, VerseHighlight } from '../types'
 import ModeToggle from '../components/ModeToggle'
 import BiblePicker, { type PassageInfo } from '../components/BiblePicker'
 import PassageText from '../components/PassageText'
+import { applyRanges, removeRange } from '../highlights'
 
 interface Props {
   entry: Entry
@@ -28,6 +29,18 @@ export default function TranscribeSection({ entry, update, FieldEditor }: Props)
             : [...current, verseKey],
         }
       }),
+    [update],
+  )
+
+  // 드래그 선택 부분 하이라이트 — 겹침 절단·같은 색 병합은 applyRanges가 처리
+  const applyHighlights = useCallback(
+    (adds: VerseHighlight[]) =>
+      update((e) => ({ ...e, highlightRanges: applyRanges(e.highlightRanges ?? [], adds) })),
+    [update],
+  )
+  const removeHighlight = useCallback(
+    (key: string, start: number, end: number) =>
+      update((e) => ({ ...e, highlightRanges: removeRange(e.highlightRanges ?? [], key, start, end) })),
     [update],
   )
 
@@ -286,6 +299,9 @@ export default function TranscribeSection({ entry, update, FieldEditor }: Props)
                   startChapter={passage!.chapter}
                   highlights={entry.highlightedVerses}
                   onToggleVerse={toggleVerse}
+                  highlightRanges={entry.highlightRanges}
+                  onApplyRanges={applyHighlights}
+                  onRemoveRange={removeHighlight}
                 />
                 {/* 접힘 상태일 때 아래쪽 페이드로 '더 있음' 암시 */}
                 {!open && (
@@ -294,11 +310,15 @@ export default function TranscribeSection({ entry, update, FieldEditor }: Props)
               </div>
             )}
             {/* 첫 사용자 힌트 — 하이라이트가 하나라도 생기면 사라진다 */}
-            {open && !passage!.loading && !editingPassage && (entry.highlightedVerses?.length ?? 0) === 0 && (
-              <p className="mt-2 border-t border-rose-line/60 pt-1.5 text-[11px] text-rose-key/70">
-                구절을 탭하면 형광 밑줄로 표시됩니다
-              </p>
-            )}
+            {open &&
+              !passage!.loading &&
+              !editingPassage &&
+              (entry.highlightedVerses?.length ?? 0) === 0 &&
+              (entry.highlightRanges?.length ?? 0) === 0 && (
+                <p className="mt-2 border-t border-rose-line/60 pt-1.5 text-[11px] text-rose-key/70">
+                  구절을 탭하면 형광 밑줄, 드래그로 선택하면 원하는 부분만 색칠할 수 있어요
+                </p>
+              )}
           </div>
         </div>
       )}
