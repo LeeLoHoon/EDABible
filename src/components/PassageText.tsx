@@ -230,8 +230,11 @@ function DragHighlighter({
       startX: number
       startY: number
       anchor: Caret
-      moved: boolean
+      /** 첫 유의미한 이동 방향으로 결정 — 가로 우세=칠하기, 세로 우세=스크롤 양보 */
+      intent: 'paint' | 'scroll' | null
       range: Range | null
+      raf: number
+      pendingPoint: { x: number; y: number } | null
     } | null = null
 
     // 메모리 v1.5.40 교훈: setPointerCapture 금지(iOS Safari 캡처 미해제 버그).
@@ -246,8 +249,9 @@ function DragHighlighter({
       const s = session
       session = null
       detach()
+      if (s?.raf) cancelAnimationFrame(s.raf)
       setRects(null)
-      if (!apply || !s?.moved || !s.range || s.range.collapsed) return
+      if (!apply || !s || s.intent !== 'paint' || !s.range || s.range.collapsed) return
       const adds = collectAdds(root, s.range)
       if (adds.length === 0) return
       onApply(adds.map((a) => ({ ...a, color })))
@@ -257,34 +261,65 @@ function DragHighlighter({
       }, 400)
     }
 
+    // 캐럿 히트테스트(레이아웃 비용)는 프레임당 1회로 스로틀 — 저사양 폰에서
+    // 고주파 pointermove가 메인스레드를 포화시키는 것을 방지
+    const processPoint = () => {
+      if (!session) return
+      session.raf = 0
+      const point = session.pendingPoint
+      if (!point) return
+      session.pendingPoint = null
+      // 앵커 노드가 리렌더로 교체됐으면(직전 apply 직후 등) 세션을 조용히 버린다
+      if (!root.contains(session.anchor.node)) {
+        finish(false)
+        return
+      }
+      try {
+        const focus = caretFromPoint(point.x, point.y)
+        if (!focus || !root.contains(focus.node)) return
+        const range = rangeBetween(session.anchor, focus)
+        session.range = range
+        setRects([...range.getClientRects()])
+      } catch {
+        // Range 경계 예외(노드 교체 경합 등) — 이번 프레임만 건너뛴다
+      }
+    }
+
     const onMove = (e: PointerEvent) => {
       if (!session || e.pointerId !== session.pointerId) return
-      if (!session.moved) {
+      if (!session.intent) {
         const dx = Math.abs(e.clientX - session.startX)
         const dy = Math.abs(e.clientY - session.startY)
         if (dx < DRAG_THRESHOLD && dy < DRAG_THRESHOLD) return
-        session.moved = true
+        session.intent = dx >= dy ? 'paint' : 'scroll'
+        if (session.intent === 'scroll') {
+          // 세로 우세 — 스크롤에 양보하고 세션 종료(브라우저 pan과 무관하게 확정)
+          finish(false)
+          return
+        }
       }
-      const focus = caretFromPoint(e.clientX, e.clientY)
-      if (!focus || !root.contains(focus.node)) return
-      const range = rangeBetween(session.anchor, focus)
-      session.range = range
-      setRects([...range.getClientRects()])
+      session.pendingPoint = { x: e.clientX, y: e.clientY }
+      if (!session.raf) session.raf = requestAnimationFrame(processPoint)
     }
 
     const onUp = (e: PointerEvent) => {
       if (!session || e.pointerId !== session.pointerId) return
+      // 마지막 지점까지 반영하고 종료
+      processPoint()
       finish(true)
     }
 
-    // 세로 팬(스크롤)으로 넘어가면 브라우저가 cancel을 보낸다 — 프리뷰만 정리
+    // 브라우저가 제스처를 가져가면(핀치줌·시스템 제스처 등) 프리뷰만 정리
     const onCancel = (e: PointerEvent) => {
       if (!session || e.pointerId !== session.pointerId) return
       finish(false)
     }
 
     const onDown = (e: PointerEvent) => {
-      if (session) return
+      // 이전 up/cancel이 유실돼 세션이 남아 있으면(iOS의 간헐적 포인터 이벤트
+      // 드랍 — InkCanvas에서 확인된 패턴) 버리고 새로 시작한다.
+      // "한번 안 되면 계속 안 됨" 고착 방지.
+      if (session) finish(false)
       if (e.pointerType === 'mouse' && e.button !== 0) return
       const target = e.target as HTMLElement
       if (!target.closest?.('[data-vk]')) return
@@ -295,18 +330,38 @@ function DragHighlighter({
         startX: e.clientX,
         startY: e.clientY,
         anchor,
-        moved: false,
+        intent: null,
         range: null,
+        raf: 0,
+        pendingPoint: null,
       }
       window.addEventListener('pointermove', onMove, true)
       window.addEventListener('pointerup', onUp, true)
       window.addEventListener('pointercancel', onCancel, true)
     }
 
+    // iOS Safari는 touch-action: pan-y를 무시하거나 뒤늦게 pan으로 판정해
+    // pointercancel로 칠하기를 끊는 경우가 있다 — 칠하기로 결정된 제스처의
+    // touchmove는 직접 preventDefault해 스크롤 하이재킹을 차단한다(비-passive 필수).
+    const onTouchMove = (e: TouchEvent) => {
+      if (session?.intent === 'paint') e.preventDefault()
+    }
+
+    // 드래그 중 앱 전환·백그라운드 진입 시 세션이 고착되지 않게 정리
+    const onHidden = () => {
+      if (document.visibilityState === 'hidden') finish(false)
+    }
+
     root.addEventListener('pointerdown', onDown)
+    root.addEventListener('touchmove', onTouchMove, { passive: false })
+    document.addEventListener('visibilitychange', onHidden)
     return () => {
       root.removeEventListener('pointerdown', onDown)
+      root.removeEventListener('touchmove', onTouchMove)
+      document.removeEventListener('visibilitychange', onHidden)
       detach()
+      if (session?.raf) cancelAnimationFrame(session.raf)
+      session = null
     }
   }, [rootRef, color, onApply, justDraggedRef])
 
