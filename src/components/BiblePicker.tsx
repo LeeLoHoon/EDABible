@@ -42,9 +42,15 @@ interface Selection {
   endChapter: number | ''
 }
 
+/**
+ * 성경 책을 한 권으로 고정한다 (index.json의 order 기준, 19 = 시편).
+ * null이면 사용자가 드롭다운으로 직접 고른다 — 다시 선택식으로 되돌리려면 null만 넣으면 된다.
+ */
+const FIXED_BOOK_ORDER: number | null = 19
+
 const emptySelection = (): Selection => ({
   id: crypto.randomUUID(),
-  order: '',
+  order: FIXED_BOOK_ORDER ?? '',
   chapter: '',
   endChapter: '',
 })
@@ -85,7 +91,7 @@ export default function BiblePicker({ value, onChange, onPassage }: Props) {
               const meta = idx.find((b) => b.book === ref.book)
               return {
                 id: crypto.randomUUID(),
-                order: meta?.order ?? '',
+                order: meta?.order ?? FIXED_BOOK_ORDER ?? '',
                 chapter: ref.chapter,
                 endChapter: ref.endChapter,
               }
@@ -168,6 +174,12 @@ export default function BiblePicker({ value, onChange, onPassage }: Props) {
 
         if (typeof next.chapter === 'number' && maxChapter > 0) {
           next.chapter = Math.min(Math.max(next.chapter, 1), maxChapter)
+        }
+
+        // 책이 고정되면 order 변경 이벤트가 없으므로, 끝 장은 시작 장 선택을 따라간다
+        if (patch.chapter !== undefined) {
+          if (next.chapter === '') next.endChapter = ''
+          else if (next.endChapter === '') next.endChapter = next.chapter
         }
 
         if (typeof next.chapter === 'number' && typeof next.endChapter === 'number') {
@@ -309,7 +321,7 @@ export default function BiblePicker({ value, onChange, onPassage }: Props) {
     <div className="rounded-2xl bg-rose-chip px-4 py-3">
       <div className="mb-2 flex items-center justify-between gap-3">
         <label className="block text-sm font-semibold text-rose-ink">
-          오늘의 본문 (성경·장/편 선택)
+          {FIXED_BOOK_ORDER === null ? '오늘의 본문 (성경·장/편 선택)' : '오늘의 본문 (장/편 선택)'}
         </label>
         <button
           type="button"
@@ -339,23 +351,29 @@ export default function BiblePicker({ value, onChange, onPassage }: Props) {
               key={selection.id}
               className="grid grid-cols-[minmax(0,1fr)_5.75rem_auto_5.75rem_auto] items-center gap-2"
             >
-              <select
-                value={selection.order}
-                onChange={(e) =>
-                  updateSelection(selection.id, {
-                    order: e.target.value ? Number(e.target.value) : '',
-                  })
-                }
-                className="min-w-0 rounded-xl border border-rose-line bg-white px-3 py-2 text-base font-medium text-rose-ink outline-none focus:border-rose-accent"
-                aria-label={`본문 ${rowIndex + 1} 성경`}
-              >
-                <option value="">성경 선택</option>
-                {index.map((book) => (
-                  <option key={book.order} value={book.order}>
-                    {book.book}
-                  </option>
-                ))}
-              </select>
+              {FIXED_BOOK_ORDER === null ? (
+                <select
+                  value={selection.order}
+                  onChange={(e) =>
+                    updateSelection(selection.id, {
+                      order: e.target.value ? Number(e.target.value) : '',
+                    })
+                  }
+                  className="min-w-0 rounded-xl border border-rose-line bg-white px-3 py-2 text-base font-medium text-rose-ink outline-none focus:border-rose-accent"
+                  aria-label={`본문 ${rowIndex + 1} 성경`}
+                >
+                  <option value="">성경 선택</option>
+                  {index.map((book) => (
+                    <option key={book.order} value={book.order}>
+                      {book.book}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <div className="min-w-0 truncate rounded-xl border border-rose-line bg-white/60 px-3 py-2 text-base font-medium text-rose-ink">
+                  {meta?.book ?? '…'}
+                </div>
+              )}
 
               <select
                 value={selection.chapter}
