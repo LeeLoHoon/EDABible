@@ -11,6 +11,43 @@ interface Props {
   FieldEditor: typeof import('../components/FieldEditor').default
 }
 
+/**
+ * 개발자 모드 — '완료됨' 배지를 연속 7번 탭하면 켜지고, 7번 더 탭하면 꺼진다.
+ * 켜져 있는 동안에만 완료 해제 버튼이 보인다. 일반 사용자가 완료본을 실수로
+ * 덮어쓰는 것을 막는 장치이지 보안 경계는 아니다 (노트 앱은 로그인이 없다).
+ */
+const DEV_MODE_KEY = 'edabible:devMode'
+const DEV_MODE_TAPS = 7
+/** 탭 간격이 이보다 벌어지면 카운터를 리셋해 우연한 누적을 막는다 */
+const DEV_MODE_TAP_RESET_MS = 2000
+
+// 사파리 프라이빗 모드 등에서 localStorage 접근이 던질 수 있다
+function readDevMode(): boolean {
+  try {
+    return localStorage.getItem(DEV_MODE_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+function writeDevMode(on: boolean): void {
+  try {
+    if (on) localStorage.setItem(DEV_MODE_KEY, '1')
+    else localStorage.removeItem(DEV_MODE_KEY)
+  } catch {
+    // 저장에 실패하면 이번 세션 동안만 켜진 상태로 둔다
+  }
+}
+
+/** Supabase 오류는 Error가 아닌 평범한 객체라 String()이 '[object Object]'가 된다 */
+function errorText(e: unknown): string {
+  if (e instanceof Error) return e.message
+  if (e && typeof e === 'object' && 'message' in e) {
+    return String((e as { message: unknown }).message)
+  }
+  return String(e)
+}
+
 export default function TranscribeSection({ entry, update, FieldEditor }: Props) {
   const setTranscription = (transcription: Field) => update({ transcription })
   const mode = entry.transcription.mode
@@ -43,6 +80,12 @@ export default function TranscribeSection({ entry, update, FieldEditor }: Props)
   const [passageSaveError, setPassageSaveError] = useState<string | null>(null)
   const [showPassageFormatHelp, setShowPassageFormatHelp] = useState(false)
   const previousPassageKeyRef = useRef('')
+
+  // 히든 개발자 모드 — '완료됨' 배지 연속 탭으로만 토글된다
+  const [devMode, setDevMode] = useState(readDevMode)
+  const [unfinalizingPassage, setUnfinalizingPassage] = useState(false)
+  const devTapCountRef = useRef(0)
+  const devTapTimerRef = useRef<number | null>(null)
   const hasPassage = !!passage && (passage.loading || !!passage.text)
   const passageKey = passage
     ? `${passage.book}:${passage.chapter}:${passage.endChapter}:${passage.ref}`
@@ -100,9 +143,61 @@ export default function TranscribeSection({ entry, update, FieldEditor }: Props)
       setPassage((prev) => (prev ? { ...prev, text: passageDraft } : prev))
       setEditingPassage(false)
     } catch (e) {
-      setPassageSaveError(String(e instanceof Error ? e.message : e))
+      setPassageSaveError(errorText(e))
     } finally {
       setSavingPassage(false)
+    }
+  }
+
+  useEffect(
+    () => () => {
+      if (devTapTimerRef.current) window.clearTimeout(devTapTimerRef.current)
+    },
+    [],
+  )
+
+  const countDevModeTap = () => {
+    if (devTapTimerRef.current) window.clearTimeout(devTapTimerRef.current)
+    devTapCountRef.current += 1
+
+    if (devTapCountRef.current >= DEV_MODE_TAPS) {
+      devTapCountRef.current = 0
+      const next = !devMode
+      setDevMode(next)
+      writeDevMode(next)
+      return
+    }
+
+    devTapTimerRef.current = window.setTimeout(() => {
+      devTapCountRef.current = 0
+    }, DEV_MODE_TAP_RESET_MS)
+  }
+
+  const unfinalizePassage = async () => {
+    if (!passage?.canUnfinalize) return
+    if (!confirm(`${passage.ref} 본문의 완료를 해제할까요?\n해제하면 다시 수정할 수 있습니다.`)) {
+      return
+    }
+
+    setUnfinalizingPassage(true)
+    setPassageSaveError(null)
+    try {
+      await passage.unfinalize()
+      setPassage((prev) =>
+        prev
+          ? {
+              ...prev,
+              isFinalized: false,
+              canEdit: true,
+              canFinalize: true,
+              canUnfinalize: false,
+            }
+          : prev,
+      )
+    } catch (e) {
+      setPassageSaveError(errorText(e))
+    } finally {
+      setUnfinalizingPassage(false)
     }
   }
 
@@ -132,7 +227,7 @@ export default function TranscribeSection({ entry, update, FieldEditor }: Props)
       )
       setEditingPassage(false)
     } catch (e) {
-      setPassageSaveError(String(e instanceof Error ? e.message : e))
+      setPassageSaveError(errorText(e))
     } finally {
       setFinalizingPassage(false)
     }
@@ -219,11 +314,34 @@ export default function TranscribeSection({ entry, update, FieldEditor }: Props)
                 </div>
               )}
               {!passage!.loading && passage!.isFinalized && (
-                <span className="shrink-0 rounded-lg bg-leaf-pale/70 px-2.5 py-1 text-xs font-bold text-leaf-deep">
-                  완료됨
-                </span>
+                <div className="flex shrink-0 items-center gap-1.5">
+                  {devMode && passage!.canUnfinalize && (
+                    <button
+                      type="button"
+                      onClick={unfinalizePassage}
+                      disabled={unfinalizingPassage}
+                      className="rounded-full border border-rose-accent/60 bg-white px-2.5 py-1 text-xs font-bold text-rose-accent transition active:scale-[0.98] disabled:opacity-50"
+                    >
+                      {unfinalizingPassage ? '해제 중' : '완료 해제'}
+                    </button>
+                  )}
+                  {/* 연속 7번 탭이 개발자 모드를 토글한다 — 겉보기는 그대로 배지 */}
+                  <button
+                    type="button"
+                    onClick={countDevModeTap}
+                    aria-label="완료됨"
+                    className="touch-manipulation rounded-lg bg-leaf-pale/70 px-2.5 py-1 text-xs font-bold text-leaf-deep"
+                  >
+                    완료됨
+                  </button>
+                </div>
               )}
             </div>
+
+            {/* 완료 해제 실패 등, 편집 중이 아닐 때 생기는 오류 */}
+            {passageSaveError && !editingPassage && (
+              <p className="mt-1 text-right text-xs text-red-500">{passageSaveError}</p>
+            )}
 
             {/* 형광펜 툴바 — 켜면 본문을 긋는 대로 칠해진다 (선택·복사 메뉴 없음) */}
             {!passage!.loading && !editingPassage && open && (

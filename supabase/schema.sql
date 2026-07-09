@@ -88,6 +88,26 @@ to anon, authenticated
 using (not is_finalized)
 with check (true);
 
+-- 완료 해제. 위 UPDATE 정책은 완료된 행을 아예 보이지 않게 하므로 플래그를 되돌리는
+-- UPDATE조차 스스로에게 막힌다. RLS를 우회하는 security definer 함수로만 푼다.
+-- 정책을 느슨하게 푸는 대신 함수로 두는 이유: 같은 UPDATE 문에서 text까지 덮어쓰는 것을
+-- 막아 '해제 후 수정'이라는 두 단계를 강제하기 위함.
+create or replace function public.unfinalize_bible_chapter(p_book_order int, p_chapter int)
+returns void
+language sql
+security definer
+set search_path = public
+as $$
+  update public.bible_chapters
+     set is_finalized = false,
+         finalized_at = null
+   where book_order = p_book_order
+     and chapter = p_chapter;
+$$;
+
+revoke all on function public.unfinalize_bible_chapter(int, int) from public;
+grant execute on function public.unfinalize_bible_chapter(int, int) to anon, authenticated;
+
 drop policy if exists "public read bible edits" on public.bible_chapter_edits;
 create policy "public read bible edits"
 on public.bible_chapter_edits for select

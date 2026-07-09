@@ -1,7 +1,12 @@
 /** 메시지 성경 로더. IndexedDB 캐시를 우선 사용하고, 없으면 public/bible/ 에서 가져온다. */
 
 import { db } from './db'
-import { finalizeRemoteChapter, loadRemoteBook, saveRemoteChapterText } from './remoteBible'
+import {
+  finalizeRemoteChapter,
+  loadRemoteBook,
+  saveRemoteChapterText,
+  unfinalizeRemoteChapter,
+} from './remoteBible'
 
 export interface BookMeta {
   order: number
@@ -165,6 +170,33 @@ export async function finalizeBibleChapter(file: string, chapter: number): Promi
 
   const chapters = doc.chapters.map((item) =>
     item.chapter === chapter ? { ...item, isFinalized: true } : item,
+  )
+  const nextDoc: BookDoc = { ...doc, chapters }
+  await db.bibleBooks.put({
+    file,
+    build: BUILD,
+    doc: nextDoc,
+    updatedAt: new Date().toISOString(),
+  })
+  bookCache.set(file, Promise.resolve(nextDoc))
+  return nextDoc
+}
+
+/** 완료 처리를 되돌려 다시 수정할 수 있게 한다 (개발자 전용 경로). */
+export async function unfinalizeBibleChapter(file: string, chapter: number): Promise<BookDoc> {
+  const doc = await loadBook(file)
+  const existing = doc.chapters.find((item) => item.chapter === chapter)
+
+  if (!existing) {
+    throw new Error('해제할 본문을 찾지 못했습니다')
+  }
+
+  if (existing.isFinalized) {
+    await unfinalizeRemoteChapter({ doc, chapter })
+  }
+
+  const chapters = doc.chapters.map((item) =>
+    item.chapter === chapter ? { ...item, isFinalized: false } : item,
   )
   const nextDoc: BookDoc = { ...doc, chapters }
   await db.bibleBooks.put({

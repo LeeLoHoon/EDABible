@@ -91,6 +91,24 @@ export async function finalizeRemoteChapter(params: {
   if (error) throw error
 }
 
+/**
+ * 완료 표시를 되돌린다. RLS가 완료된 행의 UPDATE를 막으므로 직접 update 하지 못하고,
+ * 플래그만 뒤집는 security definer 함수(unfinalize_bible_chapter)를 통해 푼다.
+ */
+export async function unfinalizeRemoteChapter(params: {
+  doc: BookDoc
+  chapter: number
+}): Promise<void> {
+  if (!supabase) return
+
+  const { error } = await supabase.rpc('unfinalize_bible_chapter', {
+    p_book_order: params.doc.order,
+    p_chapter: params.chapter,
+  })
+
+  if (error) throw error
+}
+
 export async function saveRemoteChapterText(params: {
   file: string
   doc: BookDoc

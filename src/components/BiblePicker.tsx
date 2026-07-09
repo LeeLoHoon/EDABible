@@ -7,6 +7,7 @@ import {
   makeRef,
   parseRefs,
   saveBibleChapterText,
+  unfinalizeBibleChapter,
   type BookMeta,
   type BookDoc,
 } from '../bible'
@@ -21,9 +22,12 @@ export interface PassageInfo {
   loading: boolean
   canEdit: boolean
   canFinalize: boolean
+  /** 완료 해제 가능 여부 — 개발자 모드에서만 노출된다 */
+  canUnfinalize: boolean
   isFinalized: boolean
   saveText: (text: string) => Promise<void>
   finalize: () => Promise<void>
+  unfinalize: () => Promise<void>
 }
 
 interface Props {
@@ -277,15 +281,17 @@ export default function BiblePicker({ value, onChange, onPassage }: Props) {
     }
 
     const first = selectedPassages[0]
-    const canEdit =
+    const activeDoc = typeof first.order === 'number' ? docs.get(first.order) : null
+    // 편집·완료·해제 모두 '단일 장을 지금 다 읽어둔 상태'를 전제로 한다
+    const isSingleChapter =
       selectedPassages.length === 1 &&
       !loading &&
       typeof first.order === 'number' &&
       !!first.file &&
-      first.chapter === first.endChapter &&
-      !first.isFinalized
-    const activeDoc = typeof first.order === 'number' ? docs.get(first.order) : null
+      first.chapter === first.endChapter
+    const canEdit = isSingleChapter && !first.isFinalized
     const canFinalize = canEdit && !!activeDoc?.supportsFinalize
+    const canUnfinalize = isSingleChapter && first.isFinalized && !!activeDoc?.supportsFinalize
 
     onPassage({
       book: first.book,
@@ -297,6 +303,7 @@ export default function BiblePicker({ value, onChange, onPassage }: Props) {
       loading,
       canEdit,
       canFinalize,
+      canUnfinalize,
       isFinalized: first.isFinalized,
       saveText: async (text: string) => {
         if (!canEdit || typeof first.order !== 'number') return
@@ -310,6 +317,15 @@ export default function BiblePicker({ value, onChange, onPassage }: Props) {
       finalize: async () => {
         if (!canFinalize || typeof first.order !== 'number') return
         const nextDoc = await finalizeBibleChapter(first.file, first.chapter)
+        setDocs((prev) => {
+          const next = new Map(prev)
+          next.set(first.order, nextDoc)
+          return next
+        })
+      },
+      unfinalize: async () => {
+        if (!canUnfinalize || typeof first.order !== 'number') return
+        const nextDoc = await unfinalizeBibleChapter(first.file, first.chapter)
         setDocs((prev) => {
           const next = new Map(prev)
           next.set(first.order, nextDoc)
