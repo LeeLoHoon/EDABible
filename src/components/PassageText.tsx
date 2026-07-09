@@ -77,7 +77,7 @@ function splitBlocks(chunks: readonly PassageChunk[], startChapter: number): Blo
   const blocks: Block[] = []
   let chapter = startChapter
   let prevVerseEnd = 0
-  let labeledChunks = 0
+  const chapterStarts: { index: number; label: string }[] = []
 
   for (const chunk of chunks) {
     const chunkStart = blocks.length
@@ -117,9 +117,13 @@ function splitBlocks(chunks: readonly PassageChunk[], startChapter: number): Blo
     }
 
     if (!chunk.label || blocks.length === chunkStart) continue
-    labeledChunks += 1
-    // 첫 장 앞에는 구분선을 두지 않는다 — 헤더가 이미 '시편 13~18편'을 보여준다
-    if (labeledChunks > 1) blocks[chunkStart].chapterLabel = chunk.label
+    chapterStarts.push({ index: chunkStart, label: chunk.label })
+  }
+
+  // 단일 장이면 구분선을 넣지 않는다 — 헤더가 이미 '시편 147편'을 보여준다.
+  // 여러 장이면 시작 장까지 포함해 전부 표시한다.
+  if (chapterStarts.length > 1) {
+    for (const start of chapterStarts) blocks[start.index].chapterLabel = start.label
   }
 
   return blocks
@@ -435,10 +439,11 @@ function DragHighlighter({
 // memo: 손글씨 획이 커밋될 때마다 EntryPage 전체가 재렌더되는데, 그때마다
 // 장 전체를 재파싱·재렌더하면 다음 획 입력 처리가 밀린다. props가 같으면 건너뛴다.
 // (highlightRanges·콜백 모두 안정 참조여야 효과가 유지된다)
+// first:mt-0 — 첫 장 구분선이 접힘 미리보기(max-h-[3.4rem])를 잡아먹지 않게 한다
 function ChapterDivider({ label }: { label: string }) {
   return (
-    <div className="mb-2 mt-5 flex items-center gap-2" data-chapter-divider>
-      <span className="shrink-0 font-serif text-xs font-bold tracking-wide text-rose-accent">
+    <div className="mb-1.5 mt-6 flex items-center gap-2.5 first:mt-0" data-chapter-divider>
+      <span className="shrink-0 font-serif text-base font-bold tracking-wide text-rose-accent">
         {label}
       </span>
       <span aria-hidden className="h-px flex-1 bg-rose-line" />
