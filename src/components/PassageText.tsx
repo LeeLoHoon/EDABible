@@ -1,10 +1,12 @@
-import { memo, useEffect, useMemo, useRef, useState, type RefObject } from 'react'
+import { Fragment, memo, useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
 import type { HighlightColor, VerseHighlight } from '../types'
+import type { PassageChunk } from './BiblePicker'
 import { HIGHLIGHT_COLORS } from '../highlights'
 
 interface Props {
-  text: string
+  /** 장 단위로 쪼갠 본문. 이어 붙이면 원래 본문 문자열이 된다 */
+  chunks: readonly PassageChunk[]
   /** 하이라이트 키 계산의 시작 장 — 생략 시 1 */
   startChapter?: number
   /** 형광펜 하이라이트 목록 — 안정 참조 필수(normalizeEntry가 보장) */
@@ -26,19 +28,26 @@ interface Segment {
   text: string
 }
 
-type Block =
-  | {
-      type: 'heading'
-      text: string
-    }
-  | {
-      type: 'segment'
-      label: string | null
-      text: string
-      /** 절 마커 있으면 '<장 카운터>:<절 라벨>', 없으면 위치 기반 'p<블록 인덱스>' —
-          스캔 전사본은 절 마커 없는 문단이 많아(365개 장) 모든 문단이 칠해질 수 있어야 한다 */
-      verseKey: string
-    }
+/** 장이 바뀌는 첫 블록에만 붙는다 — 이 값이 있으면 블록 앞에 구분선을 그린다 */
+interface ChapterMark {
+  chapterLabel?: string
+}
+
+type Block = ChapterMark &
+  (
+    | {
+        type: 'heading'
+        text: string
+      }
+    | {
+        type: 'segment'
+        label: string | null
+        text: string
+        /** 절 마커 있으면 '<장 카운터>:<절 라벨>', 없으면 위치 기반 'p<블록 인덱스>' —
+            스캔 전사본은 절 마커 없는 문단이 많아(365개 장) 모든 문단이 칠해질 수 있어야 한다 */
+        verseKey: string
+      }
+  )
 
 function splitPassage(text: string): Segment[] {
   const segments: Segment[] = []
@@ -58,48 +67,59 @@ function splitPassage(text: string): Segment[] {
   return segments.length > 0 ? segments : [{ label: null, text }]
 }
 
-/* 다장 본문은 장 텍스트가 경계 표시 없이 이어 붙으므로, 절 번호가 리셋되면
-   (선두 숫자 < 직전 라벨의 말미 숫자) 다음 장으로 간주해 카운터를 올린다.
-   같은 본문에서 항상 동일하게 재계산되므로 키가 결정적이다.
-   ※ 실제 book:chapter 기반 키가 필요해지면 BiblePicker가 장별 텍스트를
-   내려주도록 확장하는 것이 정도(正道) — 후속 업그레이드 경로. */
-function splitBlocks(text: string, startChapter: number): Block[] {
+/* 장 경계는 chunk가 알려주지만, 하이라이트 키의 '장 카운터'는 예전 그대로
+   절 번호 리셋(선두 숫자 < 직전 라벨의 말미 숫자)으로 추론한다. 이미 칠해둔
+   하이라이트를 하나도 잃지 않기 위해서다 — 이 카운터는 화면에 나오지 않는
+   고유 ID일 뿐이라(types.ts) 실제 장 번호와 달라도 무방하다.
+   chunk를 가로질러 blocks·chapter·prevVerseEnd가 이어지므로, 이어 붙인 문자열
+   하나를 파싱하던 예전과 블록 시퀀스도 verseKey도 완전히 동일하다. */
+function splitBlocks(chunks: readonly PassageChunk[], startChapter: number): Block[] {
   const blocks: Block[] = []
   let chapter = startChapter
   let prevVerseEnd = 0
+  let labeledChunks = 0
 
-  for (const rawLine of text.split('\n')) {
-    const line = rawLine.trim()
-    if (!line) continue
+  for (const chunk of chunks) {
+    const chunkStart = blocks.length
 
-    const heading = line.match(HEADING_MARKER)
-    if (heading) {
-      blocks.push({ type: 'heading', text: heading[1].trim() })
-      continue
-    }
+    for (const rawLine of chunk.text.split('\n')) {
+      const line = rawLine.trim()
+      if (!line) continue
 
-    const parentheticalHeading = line.match(PAREN_HEADING)
-    if (parentheticalHeading) {
-      blocks.push({ type: 'heading', text: parentheticalHeading[1].trim() })
-      continue
-    }
-
-    for (const segment of splitPassage(line)) {
-      let verseKey: string
-      if (segment.label) {
-        const nums = segment.label.split('-').map(Number)
-        const first = nums[0]
-        const last = nums[nums.length - 1]
-        if (prevVerseEnd > 0 && first < prevVerseEnd) chapter += 1
-        prevVerseEnd = last
-        verseKey = `${chapter}:${segment.label}`
-      } else {
-        // 마커 없는 문단(도입부·스캔 전사 누락 등)도 위치 키로 칠할 수 있게 —
-        // 본문 편집으로 인덱스가 밀리면 orphan(렌더에서 무시)으로 수용
-        verseKey = `p${blocks.length}`
+      const heading = line.match(HEADING_MARKER)
+      if (heading) {
+        blocks.push({ type: 'heading', text: heading[1].trim() })
+        continue
       }
-      blocks.push({ type: 'segment', ...segment, verseKey })
+
+      const parentheticalHeading = line.match(PAREN_HEADING)
+      if (parentheticalHeading) {
+        blocks.push({ type: 'heading', text: parentheticalHeading[1].trim() })
+        continue
+      }
+
+      for (const segment of splitPassage(line)) {
+        let verseKey: string
+        if (segment.label) {
+          const nums = segment.label.split('-').map(Number)
+          const first = nums[0]
+          const last = nums[nums.length - 1]
+          if (prevVerseEnd > 0 && first < prevVerseEnd) chapter += 1
+          prevVerseEnd = last
+          verseKey = `${chapter}:${segment.label}`
+        } else {
+          // 마커 없는 문단(도입부·스캔 전사 누락 등)도 위치 키로 칠할 수 있게 —
+          // 본문 편집으로 인덱스가 밀리면 orphan(렌더에서 무시)으로 수용
+          verseKey = `p${blocks.length}`
+        }
+        blocks.push({ type: 'segment', ...segment, verseKey })
+      }
     }
+
+    if (!chunk.label || blocks.length === chunkStart) continue
+    labeledChunks += 1
+    // 첫 장 앞에는 구분선을 두지 않는다 — 헤더가 이미 '시편 13~18편'을 보여준다
+    if (labeledChunks > 1) blocks[chunkStart].chapterLabel = chunk.label
   }
 
   return blocks
@@ -415,8 +435,19 @@ function DragHighlighter({
 // memo: 손글씨 획이 커밋될 때마다 EntryPage 전체가 재렌더되는데, 그때마다
 // 장 전체를 재파싱·재렌더하면 다음 획 입력 처리가 밀린다. props가 같으면 건너뛴다.
 // (highlightRanges·콜백 모두 안정 참조여야 효과가 유지된다)
+function ChapterDivider({ label }: { label: string }) {
+  return (
+    <div className="mb-2 mt-5 flex items-center gap-2" data-chapter-divider>
+      <span className="shrink-0 font-serif text-xs font-bold tracking-wide text-rose-accent">
+        {label}
+      </span>
+      <span aria-hidden className="h-px flex-1 bg-rose-line" />
+    </div>
+  )
+}
+
 function PassageText({
-  text,
+  chunks,
   startChapter = 1,
   highlightRanges,
   onApplyRanges,
@@ -425,7 +456,7 @@ function PassageText({
 }: Props) {
   const rootRef = useRef<HTMLDivElement>(null)
   const justDraggedRef = useRef(false)
-  const blocks = useMemo(() => splitBlocks(text, startChapter), [text, startChapter])
+  const blocks = useMemo(() => splitBlocks(chunks, startChapter), [chunks, startChapter])
   const rangesByKey = useMemo(() => {
     const map = new Map<string, VerseHighlight[]>()
     for (const r of highlightRanges ?? []) {
@@ -458,41 +489,46 @@ function PassageText({
         }`}
       >
         {blocks.map((block, index) => {
+          const divider = block.chapterLabel ? <ChapterDivider label={block.chapterLabel} /> : null
+
           if (block.type === 'heading') {
             return (
-              <h4
-                key={`heading-${block.text}-${index}`}
-                className="mb-1.5 mt-4 font-sans text-[0.82rem] font-black text-rose-ink first:mt-0"
-              >
-                {block.text}
-              </h4>
+              <Fragment key={`heading-${block.text}-${index}`}>
+                {divider}
+                <h4 className="mb-1.5 mt-4 font-sans text-[0.82rem] font-black text-rose-ink first:mt-0">
+                  {block.text}
+                </h4>
+              </Fragment>
             )
           }
 
           const parts = segmentParts(block.text, rangesByKey.get(block.verseKey))
 
           return (
-            <p key={`${block.label ?? 'intro'}-${index}`} className="passage-segment">
-              {block.label && <span className="passage-verse">{block.label}</span>}
-              <span className="verse-body" data-vk={block.verseKey}>
-                {parts
-                  ? parts.map((part, i) =>
-                      part.color && part.range ? (
-                        <span
-                          key={i}
-                          className={markClass(part.color)}
-                          data-hl={`${part.range.start}-${part.range.end}`}
-                          onClick={() => handleRemove(block.verseKey, part.range!)}
-                        >
-                          {part.text}
-                        </span>
-                      ) : (
-                        part.text
-                      ),
-                    )
-                  : block.text}
-              </span>
-            </p>
+            <Fragment key={`${block.label ?? 'intro'}-${index}`}>
+              {divider}
+              <p className="passage-segment">
+                {block.label && <span className="passage-verse">{block.label}</span>}
+                <span className="verse-body" data-vk={block.verseKey}>
+                  {parts
+                    ? parts.map((part, i) =>
+                        part.color && part.range ? (
+                          <span
+                            key={i}
+                            className={markClass(part.color)}
+                            data-hl={`${part.range.start}-${part.range.end}`}
+                            onClick={() => handleRemove(block.verseKey, part.range!)}
+                          >
+                            {part.text}
+                          </span>
+                        ) : (
+                          part.text
+                        ),
+                      )
+                    : block.text}
+                </span>
+              </p>
+            </Fragment>
           )
         })}
       </div>

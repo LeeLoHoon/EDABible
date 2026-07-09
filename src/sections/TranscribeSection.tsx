@@ -422,7 +422,7 @@ export default function TranscribeSection({ entry, update, FieldEditor }: Props)
                 style={{ animation: 'fadeIn 0.3s ease' }}
               >
                 <PassageText
-                  text={passage!.text}
+                  chunks={passage!.chunks}
                   startChapter={passage!.chapter}
                   highlightRanges={entry.highlightRanges}
                   onApplyRanges={applyHighlights}

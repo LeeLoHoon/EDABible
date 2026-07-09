@@ -12,12 +12,20 @@ import {
   type BookDoc,
 } from '../bible'
 
+/** 본문을 이루는 한 조각. label이 있으면 그 장의 시작이다 ('14편'). */
+export interface PassageChunk {
+  label: string | null
+  text: string
+}
+
 export interface PassageInfo {
   book: string
   chapter: number
   endChapter: number
   ref: string
   text: string
+  /** text를 장 단위로 쪼갠 것 — 장 구분선 렌더용 */
+  chunks: PassageChunk[]
   sourceQuality: 'verified' | 'fallback'
   loading: boolean
   canEdit: boolean
@@ -217,13 +225,19 @@ export default function BiblePicker({ value, onChange, onPassage }: Props) {
 
         const ref = makeRef(book, selection.chapter, selection.endChapter)
         const texts: string[] = []
+        // 장 경계를 렌더까지 살려 보낸다 — 이어 붙인 문자열만으로는 알 수 없다
+        // (절 마커가 아예 없는 장이 시편만 61개라 절 번호 리셋으로는 추론 불가)
+        const chunks: PassageChunk[] = []
         const sourceQualities: Array<'verified' | 'fallback'> = []
         let isFinalized = false
         if (doc) {
           for (let current = selection.chapter; current <= selection.endChapter; current += 1) {
             const chapter = doc.chapters.find((c) => c.chapter === current)
             const text = chapter?.text ?? chapterText(doc, current)
-            if (text) texts.push(text)
+            if (text) {
+              texts.push(text)
+              chunks.push({ label: `${current}${chapterUnit(book)}`, text })
+            }
             sourceQualities.push(chapter?.sourceQuality === 'verified' ? 'verified' : 'fallback')
             if (chapter?.isFinalized) isFinalized = true
           }
@@ -242,6 +256,7 @@ export default function BiblePicker({ value, onChange, onPassage }: Props) {
           chapter: selection.chapter,
           endChapter: selection.endChapter,
           text: texts.join('\n\n'),
+          chunks,
           sourceQuality,
           loading: !doc,
           isFinalized,
@@ -261,6 +276,19 @@ export default function BiblePicker({ value, onChange, onPassage }: Props) {
         .map((passage) => [selectedPassages.length > 1 ? passage.ref : '', passage.text].filter(Boolean).join('\n'))
         .filter(Boolean)
         .join('\n\n'),
+    [selectedPassages],
+  )
+
+  /* passageText와 같은 줄 시퀀스를 조각으로 쪼갠 것. 이어 붙이면 passageText와
+     같은 줄들이 나오므로 PassageText의 블록 인덱스(=하이라이트 p<N> 키)가 보존된다.
+     ref 줄도 본문 여러 개일 때만 넣어 순서를 그대로 맞춘다. */
+  const passageChunks = useMemo(
+    () =>
+      selectedPassages.flatMap((passage) =>
+        selectedPassages.length > 1
+          ? [{ label: null, text: passage.ref }, ...passage.chunks]
+          : passage.chunks,
+      ),
     [selectedPassages],
   )
 
@@ -299,6 +327,7 @@ export default function BiblePicker({ value, onChange, onPassage }: Props) {
       endChapter: first.endChapter,
       ref: nextValue,
       text: passageText,
+      chunks: passageChunks,
       sourceQuality: first.sourceQuality,
       loading,
       canEdit,
