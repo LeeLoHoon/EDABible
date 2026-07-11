@@ -1,6 +1,6 @@
 import { readFileSync, rmSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { defineConfig, type ResolvedConfig } from 'vite'
+import { defineConfig, type Plugin, type ResolvedConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
@@ -9,6 +9,9 @@ import { VitePWA } from 'vite-plugin-pwa'
 const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8'))
 const base = process.env.VERCEL === '1' ? '/' : '/EDABible/'
 const appTarget = process.env.APP_TARGET === 'binder' || process.env.APP_TARGET === 'all' ? process.env.APP_TARGET : 'note'
+// 1.5.74 이하의 autoUpdate 클라이언트는 waiting SW에 SKIP_WAITING을 보내지 못한다.
+// prompt 방식으로 넘어가는 첫 빌드만 즉시 활성화하고, 이후 버전부터 안내를 기다린다.
+const promptUpdateMigrationBuild = '1.5.75'
 const appMeta = {
   note: {
     name: '말씀 묵상 노트',
@@ -27,6 +30,19 @@ const appMeta = {
   },
 }[appTarget]
 const targetAppEntry = resolve(process.cwd(), `src/targetApp.${appTarget}.tsx`)
+
+function emitVersionFile(): Plugin {
+  return {
+    name: 'emit-version-file',
+    generateBundle() {
+      this.emitFile({
+        type: 'asset',
+        fileName: 'version.json',
+        source: `${JSON.stringify({ version: pkg.version, target: appTarget }, null, 2)}\n`,
+      })
+    },
+  }
+}
 
 function pruneUnusedPublicAssets() {
   let config: ResolvedConfig
@@ -60,9 +76,10 @@ export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
+    emitVersionFile(),
     pruneUnusedPublicAssets(),
     VitePWA({
-      registerType: 'autoUpdate',
+      registerType: 'prompt',
       injectRegister: null,
       manifest: {
         name: appMeta.name,
@@ -85,7 +102,7 @@ export default defineConfig({
         ],
       },
       workbox: {
-        skipWaiting: true,
+        skipWaiting: pkg.version === promptUpdateMigrationBuild,
         clientsClaim: true,
         cleanupOutdatedCaches: true,
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
