@@ -13,8 +13,8 @@ interface Props {
 
 /**
  * 따라쓰기 가이드 — 본문 카드가 위로 스크롤돼 사라져도, 지금 옮겨 적을 구절
- * 하나를 필사 입력칸 바로 위에 보여준다. sticky 고정 없이 일반 흐름에 놓여
- * 페이지 스크롤과 겹치지 않는다.
+ * 하나를 필사 입력칸 바로 위에 보여준다. 손글씨 캔버스가 아래로 길어져도
+ * 현재 구절과 쓰는 위치가 멀어지지 않도록 필사 구간 안에서 상단을 따라온다.
  */
 
 const HIDDEN_KEY = 'edabible:transcribeGuide:hidden'
@@ -110,7 +110,10 @@ export default function TranscribeGuide({ chunks, startChapter, storageKey }: Pr
   }
 
   return (
-    <div className="mb-2 rounded-xl border border-rose-line bg-rose-card px-3.5 py-2.5 shadow-sm">
+    <div
+      data-transcribe-guide
+      className="sticky top-[4.25rem] z-[8] mb-2 rounded-xl border border-rose-line bg-rose-card px-3.5 py-2.5 shadow-sm"
+    >
       <div className="flex items-center justify-between gap-2">
         <span className="text-xs font-bold text-rose-key">
           📖 따라쓰기 · {clamped + 1} / {steps.length}
