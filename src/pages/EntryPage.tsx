@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useEntry } from '../hooks/useEntry'
 import FieldEditor from '../components/FieldEditor'
@@ -12,6 +12,7 @@ import {
   createEntryImageFile,
   shareOrDownloadEntryImage,
 } from '../shareImage'
+import { getVirtualKeyboard } from '../virtualKeyboard'
 
 type Tab = 'transcribe' | 'questions' | 'prayer' | 'temptationVictory'
 
@@ -47,6 +48,20 @@ export default function EntryPage() {
   // 막던 문제) — 공유를 누를 때만 잠깐 DOM에 올려 캡처한다.
   const [showShareCard, setShowShareCard] = useState(false)
   const canShare = Object.values(shareSections).some(Boolean)
+
+  useEffect(() => {
+    const keyboard = getVirtualKeyboard()
+    if (!keyboard) return
+
+    // Galaxy Chrome·Samsung Internet: 키보드가 viewport를 줄이며 페이지를
+    // 밀어 올리지 않고 콘텐츠 위에 겹치게 한다. 활성 textarea의 위치 보정은
+    // useDockedTextarea가 맡고, 미지원 브라우저는 기존 동작을 그대로 쓴다.
+    const previous = keyboard.overlaysContent
+    keyboard.overlaysContent = true
+    return () => {
+      keyboard.overlaysContent = previous
+    }
+  }, [])
 
   const shareEntry = async () => {
     if (!entry || shareState === 'working' || !canShare) return

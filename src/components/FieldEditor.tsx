@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import type { Field, Stroke } from '../types'
 import InkCanvas, { type InkTool } from './InkCanvas'
+import { useDockedTextarea } from '../hooks/useDockedTextarea'
 
 interface Props {
   field: Field
@@ -25,6 +26,14 @@ export default function FieldEditor({
   const [size, setSize] = useState(3)
   // 사용자가 '공간 늘리기'로 추가한 높이(px)
   const [extra, setExtra] = useState(0)
+  const {
+    textareaRef,
+    textareaStyle,
+    slotStyle,
+    handlePointerDown,
+    handleFocus,
+    handleBlur,
+  } = useDockedTextarea()
 
   const setStrokes = (strokes: Stroke[]) => onChange({ ...field, strokes })
 
@@ -45,13 +54,20 @@ export default function FieldEditor({
   return (
     <div className="rounded-2xl border border-rose-line bg-rose-card p-2">
       {field.mode === 'text' ? (
-        <textarea
-          className="w-full resize-y rounded-xl border border-rose-line bg-white p-3 text-[17px] leading-relaxed text-rose-ink outline-none focus:border-rose-accent"
-          rows={rows}
-          placeholder={placeholder}
-          value={field.text}
-          onChange={(e) => onChange({ ...field, text: e.target.value })}
-        />
+        <div style={slotStyle}>
+          <textarea
+            ref={textareaRef}
+            style={textareaStyle}
+            onPointerDown={handlePointerDown}
+            onFocus={handleFocus}
+            onBlur={handleBlur}
+            className="block w-full resize-y rounded-xl border border-rose-line bg-white p-3 text-[17px] leading-relaxed text-rose-ink outline-none focus:border-rose-accent"
+            rows={rows}
+            placeholder={placeholder}
+            value={field.text}
+            onChange={(e) => onChange({ ...field, text: e.target.value })}
+          />
+        </div>
       ) : (
         <div>
           {/* 손글씨 툴바 */}

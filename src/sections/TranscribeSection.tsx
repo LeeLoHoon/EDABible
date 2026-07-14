@@ -4,6 +4,7 @@ import ModeToggle from '../components/ModeToggle'
 import BiblePicker, { type PassageInfo } from '../components/BiblePicker'
 import PassageText from '../components/PassageText'
 import TranscribeGuide from '../components/TranscribeGuide'
+import { useDockedTextarea } from '../hooks/useDockedTextarea'
 import { applyRanges, HIGHLIGHT_COLORS, removeRange } from '../highlights'
 
 interface Props {
@@ -79,6 +80,14 @@ export default function TranscribeSection({ entry, update, FieldEditor }: Props)
   const [savingPassage, setSavingPassage] = useState(false)
   const [finalizingPassage, setFinalizingPassage] = useState(false)
   const [passageSaveError, setPassageSaveError] = useState<string | null>(null)
+  const {
+    textareaRef: passageTextareaRef,
+    textareaStyle: passageTextareaStyle,
+    slotStyle: passageTextareaSlotStyle,
+    handlePointerDown: handlePassagePointerDown,
+    handleFocus: handlePassageFocus,
+    handleBlur: handlePassageBlur,
+  } = useDockedTextarea()
   const [showPassageFormatHelp, setShowPassageFormatHelp] = useState(false)
   const previousPassageKeyRef = useRef('')
 
@@ -371,16 +380,22 @@ export default function TranscribeSection({ entry, update, FieldEditor }: Props)
             </div>
           ) : editingPassage ? (
             <div className="mt-2 space-y-2">
-              <textarea
-                value={passageDraft}
-                onChange={(event) => setPassageDraft(event.target.value)}
-                autoFocus
-                autoCapitalize="off"
-                autoCorrect="off"
-                spellCheck={false}
-                className="min-h-[12rem] w-full rounded-xl border border-rose-line bg-white px-3 py-2 font-serif text-[15px] leading-[1.75] text-rose-ink outline-none focus:border-rose-accent"
-                aria-label={`${passage!.ref} 본문 수정`}
-              />
+              <div style={passageTextareaSlotStyle}>
+                <textarea
+                  ref={passageTextareaRef}
+                  style={passageTextareaStyle}
+                  onPointerDown={handlePassagePointerDown}
+                  onFocus={handlePassageFocus}
+                  onBlur={handlePassageBlur}
+                  value={passageDraft}
+                  onChange={(event) => setPassageDraft(event.target.value)}
+                  autoCapitalize="off"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  className="block min-h-[12rem] w-full rounded-xl border border-rose-line bg-white px-3 py-2 font-serif text-[16px] leading-[1.75] text-rose-ink outline-none focus:border-rose-accent"
+                  aria-label={`${passage!.ref} 본문 수정`}
+                />
+              </div>
               {passageSaveError && <p className="text-xs text-red-500">{passageSaveError}</p>}
               <div className="flex justify-end gap-2">
                 {passage!.canFinalize && (
