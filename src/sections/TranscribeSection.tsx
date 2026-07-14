@@ -3,6 +3,7 @@ import type { Entry, Field, FieldMode, HighlightColor, VerseHighlight } from '..
 import ModeToggle from '../components/ModeToggle'
 import BiblePicker, { type PassageInfo } from '../components/BiblePicker'
 import PassageText from '../components/PassageText'
+import TranscribeGuide from '../components/TranscribeGuide'
 import { applyRanges, HIGHLIGHT_COLORS, removeRange } from '../highlights'
 
 interface Props {
@@ -454,6 +455,14 @@ export default function TranscribeSection({ entry, update, FieldEditor }: Props)
           <span aria-hidden className="h-px min-w-6 flex-1 bg-rose-line" />
           <ModeToggle mode={mode} onChange={setMode} />
         </div>
+        {/* 따라쓰기 가이드 — 본문이 스크롤로 사라져도 지금 쓸 구절은 입력칸 위에 남는다 */}
+        {hasPassage && !passage!.loading && passage!.chunks.length > 0 && (
+          <TranscribeGuide
+            chunks={passage!.chunks}
+            startChapter={passage!.chapter}
+            storageKey={`${entry.id}:${passage!.ref}`}
+          />
+        )}
         <FieldEditor
           field={entry.transcription}
           onChange={setTranscription}
