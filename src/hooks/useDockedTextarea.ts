@@ -10,6 +10,78 @@ import { getVirtualKeyboard } from '../virtualKeyboard'
 
 const EDGE_GAP = 12
 const MIN_EDITOR_HEIGHT = 88
+const KEYBOARD_OPEN_TIMEOUT_MS = 2_000
+
+type BodyScrollLock = {
+  owner: object
+  scrollX: number
+  scrollY: number
+  bodyStyle: {
+    position: string
+    top: string
+    left: string
+    right: string
+    width: string
+    overflowY: string
+  }
+}
+
+let bodyScrollLock: BodyScrollLock | null = null
+
+/**
+ * Android Blink가 키보드를 띄우며 별도로 실행하는 caret reveal 스크롤의
+ * 대상에서 문서를 잠시 제외한다. body를 현재 화면과 같은 위치에 고정하므로
+ * native pointer/caret 동작을 취소하지 않고도 본문은 한 픽셀도 움직이지 않는다.
+ */
+function lockBodyScroll(owner: object) {
+  if (bodyScrollLock) {
+    // 키보드가 열린 채 다른 입력칸을 누르면 기존 화면 잠금은 유지하고,
+    // blur되는 이전 입력칸이 잠금을 풀지 못하도록 소유권만 넘긴다.
+    bodyScrollLock.owner = owner
+    return
+  }
+
+  const body = document.body
+  const scrollX = window.scrollX
+  const scrollY = window.scrollY
+  bodyScrollLock = {
+    owner,
+    scrollX,
+    scrollY,
+    bodyStyle: {
+      position: body.style.position,
+      top: body.style.top,
+      left: body.style.left,
+      right: body.style.right,
+      width: body.style.width,
+      overflowY: body.style.overflowY,
+    },
+  }
+
+  body.style.position = 'fixed'
+  body.style.top = `${-scrollY}px`
+  body.style.left = `${-scrollX}px`
+  body.style.right = '0'
+  body.style.width = '100%'
+  body.style.overflowY = 'hidden'
+}
+
+function unlockBodyScroll(owner: object) {
+  const lock = bodyScrollLock
+  if (!lock || lock.owner !== owner) return
+
+  const body = document.body
+  body.style.position = lock.bodyStyle.position
+  body.style.top = lock.bodyStyle.top
+  body.style.left = lock.bodyStyle.left
+  body.style.right = lock.bodyStyle.right
+  body.style.width = lock.bodyStyle.width
+  body.style.overflowY = lock.bodyStyle.overflowY
+  bodyScrollLock = null
+
+  // 스타일 복구와 같은 task에서 원래 문서 위치까지 돌려 paint 사이의 점프를 막는다.
+  window.scrollTo(lock.scrollX, lock.scrollY)
+}
 
 /**
  * 가상 키보드가 페이지를 덮는 동안 활성 textarea만 보이는 영역에 둔다.
@@ -19,6 +91,9 @@ export function useDockedTextarea() {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const anchorRectRef = useRef<DOMRect | null>(null)
   const scrollSnapshotRef = useRef({ top: 0, bottom: 0, caretAtEnd: true })
+  const bodyLockOwnerRef = useRef<object>({})
+  const keyboardOpenedRef = useRef(false)
+  const unlockTimerRef = useRef<number | null>(null)
   const [dock, setDock] = useState<{
     textareaStyle: CSSProperties
     slotHeight: number
@@ -35,18 +110,50 @@ export function useDockedTextarea() {
     }
   }, [])
 
+  const releaseBodyLock = useCallback(() => {
+    if (unlockTimerRef.current !== null) {
+      window.clearTimeout(unlockTimerRef.current)
+      unlockTimerRef.current = null
+    }
+    unlockBodyScroll(bodyLockOwnerRef.current)
+  }, [])
+
+  const holdBodyPosition = useCallback(() => {
+    lockBodyScroll(bodyLockOwnerRef.current)
+    if (unlockTimerRef.current !== null) window.clearTimeout(unlockTimerRef.current)
+    // 하드웨어 키보드처럼 geometrychange가 오지 않는 경우에는 문서가
+    // 잠긴 채 남지 않도록 자동 해제한다.
+    unlockTimerRef.current = window.setTimeout(() => {
+      unlockTimerRef.current = null
+      if (!keyboardOpenedRef.current) unlockBodyScroll(bodyLockOwnerRef.current)
+    }, KEYBOARD_OPEN_TIMEOUT_MS)
+  }, [])
+
   const syncWithKeyboard = useCallback(() => {
     const textarea = textareaRef.current
     const keyboard = getVirtualKeyboard()
-    if (
-      !textarea ||
-      !keyboard ||
-      document.activeElement !== textarea ||
-      keyboard.boundingRect.height <= 0
-    ) {
+    if (!textarea || !keyboard || document.activeElement !== textarea) {
       setDock(null)
       return
     }
+
+    if (keyboard.boundingRect.height <= 0) {
+      setDock(null)
+      if (keyboardOpenedRef.current) {
+        keyboardOpenedRef.current = false
+        anchorRectRef.current = null
+        releaseBodyLock()
+      }
+      return
+    }
+
+    keyboardOpenedRef.current = true
+    if (unlockTimerRef.current !== null) {
+      window.clearTimeout(unlockTimerRef.current)
+      unlockTimerRef.current = null
+    }
+    // pointerdown을 거치지 않은 프로그램 포커스에도 같은 안전장치를 둔다.
+    lockBodyScroll(bodyLockOwnerRef.current)
 
     const anchor = anchorRectRef.current ?? textarea.getBoundingClientRect()
     anchorRectRef.current = anchor
@@ -96,7 +203,7 @@ export function useDockedTextarea() {
         boxShadow: '0 18px 48px rgba(44, 39, 34, 0.24)',
       },
     })
-  }, [])
+  }, [releaseBodyLock])
 
   useEffect(() => {
     const keyboard = getVirtualKeyboard()
@@ -107,8 +214,10 @@ export function useDockedTextarea() {
     return () => {
       keyboard.removeEventListener('geometrychange', syncWithKeyboard)
       window.removeEventListener('resize', syncWithKeyboard)
+      keyboardOpenedRef.current = false
+      releaseBodyLock()
     }
-  }, [syncWithKeyboard])
+  }, [releaseBodyLock, syncWithKeyboard])
 
   useLayoutEffect(() => {
     const textarea = textareaRef.current
@@ -120,17 +229,35 @@ export function useDockedTextarea() {
     textarea.scrollTop = snapshot.caretAtEnd
       ? Math.max(0, textarea.scrollHeight - textarea.clientHeight - snapshot.bottom)
       : snapshot.top
-  }, [dock])
+    // 이 시점에는 같은 textarea DOM이 이미 fixed로 도킹되고 slot도 원래
+    // 높이를 차지한다. paint 전에 문서 잠금을 풀어 최초 점프는 막되,
+    // 키보드가 열린 뒤 사용자가 성경을 직접 스크롤하는 동작은 살린다.
+    releaseBodyLock()
+  }, [dock, releaseBodyLock])
+
+  const handlePointerDown = useCallback(() => {
+    const textarea = textareaRef.current
+    // 이미 도킹된 입력칸을 다시 누를 때는 원래 anchor를 작은 fixed rect로
+    // 덮지 않는다. 네이티브 기본 동작은 그대로 두어 탭한 곳에 커서가 놓인다.
+    if (!textarea || textarea.style.position === 'fixed') return
+    captureAnchor()
+    if (getVirtualKeyboard()) holdBodyPosition()
+  }, [captureAnchor, holdBodyPosition])
 
   const handleFocus = useCallback(() => {
-    captureAnchor()
+    // pointerdown에서 저장한 pre-focus rect가 있으면 브라우저의 reveal 이후
+    // 좌표로 덮지 않는다. 키보드·접근성 포커스에는 여기서 처음 저장한다.
+    if (!anchorRectRef.current) captureAnchor()
+    if (getVirtualKeyboard()) holdBodyPosition()
     requestAnimationFrame(syncWithKeyboard)
-  }, [captureAnchor, syncWithKeyboard])
+  }, [captureAnchor, holdBodyPosition, syncWithKeyboard])
 
   const handleBlur = useCallback(() => {
     setDock(null)
     anchorRectRef.current = null
-  }, [])
+    keyboardOpenedRef.current = false
+    releaseBodyLock()
+  }, [releaseBodyLock])
 
   return {
     textareaRef,
@@ -138,7 +265,7 @@ export function useDockedTextarea() {
     slotStyle: dock
       ? ({ height: dock.slotHeight } satisfies CSSProperties)
       : undefined,
-    handlePointerDown: captureAnchor,
+    handlePointerDown,
     handleFocus,
     handleBlur,
   }
