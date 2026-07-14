@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { Field, Stroke } from '../types'
 import InkCanvas, { type InkTool } from './InkCanvas'
 import { useDockedTextarea } from '../hooks/useDockedTextarea'
@@ -10,6 +10,9 @@ interface Props {
   /** 타이핑 textarea 줄 수 / 손글씨 캔버스 높이 비례 */
   rows?: number
   inkHeight?: number
+  /** 직접 작성해야 하는 필드에서 클립보드 붙여넣기와 텍스트 드롭을 막는다 */
+  disablePaste?: boolean
+  ariaDescribedBy?: string
 }
 
 const PEN_COLORS = ['#3a3626', '#be185d', '#2563eb', '#7e7a28', '#348a44', '#d97706']
@@ -20,6 +23,8 @@ export default function FieldEditor({
   placeholder,
   rows = 3,
   inkHeight = 220,
+  disablePaste = false,
+  ariaDescribedBy,
 }: Props) {
   const [tool, setTool] = useState<InkTool>('pen')
   const [color, setColor] = useState(PEN_COLORS[0])
@@ -34,6 +39,24 @@ export default function FieldEditor({
     handleFocus,
     handleBlur,
   } = useDockedTextarea()
+
+  useEffect(() => {
+    const textarea = textareaRef.current
+    if (!disablePaste || field.mode !== 'text' || !textarea) return
+
+    // React 19의 onBeforeInput은 네이티브 inputType을 그대로 전달하지 않는
+    // 경로가 있어 DOM listener로 삼성/Gboard 클립보드 삽입까지 한 번 더 막는다.
+    const preventClipboardInsert = (event: InputEvent) => {
+      if (
+        event.inputType.startsWith('insertFromPaste') ||
+        event.inputType === 'insertFromDrop'
+      ) {
+        event.preventDefault()
+      }
+    }
+    textarea.addEventListener('beforeinput', preventClipboardInsert)
+    return () => textarea.removeEventListener('beforeinput', preventClipboardInsert)
+  }, [disablePaste, field.mode, textareaRef])
 
   const setStrokes = (strokes: Stroke[]) => onChange({ ...field, strokes })
 
@@ -64,8 +87,11 @@ export default function FieldEditor({
             className="block w-full resize-y rounded-xl border border-rose-line bg-white p-3 text-[17px] leading-relaxed text-rose-ink outline-none focus:border-rose-accent"
             rows={rows}
             placeholder={placeholder}
+            aria-describedby={ariaDescribedBy}
             value={field.text}
             onChange={(e) => onChange({ ...field, text: e.target.value })}
+            onPaste={disablePaste ? (event) => event.preventDefault() : undefined}
+            onDrop={disablePaste ? (event) => event.preventDefault() : undefined}
           />
         </div>
       ) : (

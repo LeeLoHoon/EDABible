@@ -70,15 +70,8 @@ textarea {
   -webkit-touch-callout: default;
 }
 
-/* 성경 본문 등 읽기 전용 텍스트는 드래그 선택·복사 허용 */
-.selectable-text {
-  user-select: text;
-  -webkit-user-select: text;
-  -webkit-touch-callout: default;
-  cursor: text;
-}
-
-body.ink-active .selectable-text {
+/* 성경 본문은 필사를 위해 화면 선택·복사 콜아웃을 항상 차단한다. */
+.protected-bible-text {
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;

@@ -126,11 +126,11 @@ export default function TranscribeGuide({ chunks, startChapter, storageKey }: Pr
       </div>
 
       {step.type === 'heading' ? (
-        <p className="mt-1.5 font-sans text-[0.9rem] font-black leading-[1.7] text-rose-ink">
+        <p className="protected-bible-text mt-1.5 font-sans text-[0.9rem] font-black leading-[1.7] text-rose-ink">
           {step.text}
         </p>
       ) : (
-        <p className="mt-1.5 font-serif text-[15px] leading-[1.75] text-rose-ink">
+        <p className="protected-bible-text mt-1.5 font-serif text-[15px] leading-[1.75] text-rose-ink">
           {step.label && <span className="passage-verse">{step.label}</span>}
           {step.text}
         </p>

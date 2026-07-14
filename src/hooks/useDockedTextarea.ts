@@ -11,11 +11,130 @@ import { getVirtualKeyboard } from '../virtualKeyboard'
 const EDGE_GAP = 12
 const MIN_EDITOR_HEIGHT = 88
 const KEYBOARD_OPEN_TIMEOUT_MS = 2_000
+const MIN_INFERRED_KEYBOARD_HEIGHT = 120
+
+type ViewportMetrics = {
+  width: number
+  height: number
+  innerHeight: number
+  layoutHeight: number
+  offsetTop: number
+  offsetLeft: number
+  pageTop: number
+  pageLeft: number
+  scale: number
+}
+
+type KeyboardViewportSession = {
+  owner: object
+  baseline: ViewportMetrics
+  open: boolean
+}
+
+type KeyboardGeometry = {
+  visibleTop: number
+  visibleLeft: number
+  visibleWidth: number
+  keyboardTop: number
+}
+
+let keyboardViewportSession: KeyboardViewportSession | null = null
+
+function readViewportMetrics(): ViewportMetrics {
+  const viewport = window.visualViewport
+  const offsetTop = viewport?.offsetTop ?? 0
+  const offsetLeft = viewport?.offsetLeft ?? 0
+  return {
+    width: viewport?.width ?? document.documentElement.clientWidth,
+    height: viewport?.height ?? window.innerHeight,
+    innerHeight: window.innerHeight,
+    layoutHeight: document.documentElement.clientHeight,
+    offsetTop,
+    offsetLeft,
+    pageTop: viewport?.pageTop ?? window.scrollY + offsetTop,
+    pageLeft: viewport?.pageLeft ?? window.scrollX + offsetLeft,
+    scale: viewport?.scale ?? 1,
+  }
+}
+
+function managesAndroidKeyboard(): boolean {
+  if (getVirtualKeyboard()) return true
+  return typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent)
+}
+
+function beginKeyboardViewportSession(owner: object) {
+  const current = keyboardViewportSession
+  if (current?.owner === owner) return
+  if (current?.open) {
+    // 키보드가 열린 채 다음 입력칸으로 이동해도 축소되기 전 기준 높이는 유지한다.
+    current.owner = owner
+    return
+  }
+  keyboardViewportSession = { owner, baseline: readViewportMetrics(), open: false }
+}
+
+function endKeyboardViewportSession(owner: object) {
+  if (keyboardViewportSession?.owner === owner) keyboardViewportSession = null
+}
+
+function measureKeyboardGeometry(owner: object): KeyboardGeometry | null {
+  const session = keyboardViewportSession
+  if (!session || session.owner !== owner) return null
+
+  const viewport = readViewportMetrics()
+  const keyboard = getVirtualKeyboard()
+  if (keyboard && keyboard.boundingRect.height > 0) {
+    session.open = true
+    return {
+      visibleTop: viewport.offsetTop,
+      visibleLeft: viewport.offsetLeft,
+      visibleWidth: viewport.width,
+      keyboardTop:
+        keyboard.boundingRect.top > 0
+          ? keyboard.boundingRect.top
+          : viewport.offsetTop + viewport.height - keyboard.boundingRect.height,
+    }
+  }
+
+  const baseline = session.baseline
+  const sameWidth = Math.abs(viewport.width - baseline.width) < Math.max(24, baseline.width * 0.08)
+  const sameScale = Math.abs(viewport.scale - baseline.scale) < 0.02
+  if (!sameWidth || !sameScale) return null
+
+  const heightLoss = Math.max(
+    baseline.height - viewport.height,
+    baseline.innerHeight - viewport.innerHeight,
+    baseline.layoutHeight - viewport.layoutHeight,
+  )
+  const openThreshold = Math.max(
+    MIN_INFERRED_KEYBOARD_HEIGHT,
+    baseline.height * 0.2,
+  )
+  const closeThreshold = Math.max(60, baseline.height * 0.08)
+  if (heightLoss < (session.open ? closeThreshold : openThreshold)) return null
+
+  session.open = true
+  const visibleHeight = Math.min(
+    viewport.height,
+    viewport.innerHeight,
+    viewport.layoutHeight,
+  )
+  return {
+    visibleTop: viewport.offsetTop,
+    visibleLeft: viewport.offsetLeft,
+    visibleWidth: viewport.width,
+    keyboardTop: viewport.offsetTop + visibleHeight,
+  }
+}
 
 type BodyScrollLock = {
   owner: object
   scrollX: number
   scrollY: number
+  pageTop: number
+  pageLeft: number
+  viewportOffsetTop: number
+  viewportOffsetLeft: number
   bodyStyle: {
     position: string
     top: string
@@ -44,10 +163,15 @@ function lockBodyScroll(owner: object) {
   const body = document.body
   const scrollX = window.scrollX
   const scrollY = window.scrollY
+  const viewport = readViewportMetrics()
   bodyScrollLock = {
     owner,
     scrollX,
     scrollY,
+    pageTop: viewport.pageTop,
+    pageLeft: viewport.pageLeft,
+    viewportOffsetTop: viewport.offsetTop,
+    viewportOffsetLeft: viewport.offsetLeft,
     bodyStyle: {
       position: body.style.position,
       top: body.style.top,
@@ -66,6 +190,18 @@ function lockBodyScroll(owner: object) {
   body.style.overflowY = 'hidden'
 }
 
+function alignLockedBody(owner: object) {
+  const lock = bodyScrollLock
+  if (!lock || lock.owner !== owner) return
+  const viewport = readViewportMetrics()
+  document.body.style.top = `${
+    -lock.scrollY + (viewport.offsetTop - lock.viewportOffsetTop)
+  }px`
+  document.body.style.left = `${
+    -lock.scrollX + (viewport.offsetLeft - lock.viewportOffsetLeft)
+  }px`
+}
+
 function unlockBodyScroll(owner: object) {
   const lock = bodyScrollLock
   if (!lock || lock.owner !== owner) return
@@ -80,7 +216,11 @@ function unlockBodyScroll(owner: object) {
   bodyScrollLock = null
 
   // 스타일 복구와 같은 task에서 원래 문서 위치까지 돌려 paint 사이의 점프를 막는다.
-  window.scrollTo(lock.scrollX, lock.scrollY)
+  const viewport = readViewportMetrics()
+  window.scrollTo(
+    lock.pageLeft - viewport.offsetLeft,
+    lock.pageTop - viewport.offsetTop,
+  )
 }
 
 /**
@@ -125,24 +265,28 @@ export function useDockedTextarea() {
     // 잠긴 채 남지 않도록 자동 해제한다.
     unlockTimerRef.current = window.setTimeout(() => {
       unlockTimerRef.current = null
-      if (!keyboardOpenedRef.current) unlockBodyScroll(bodyLockOwnerRef.current)
+      if (!keyboardOpenedRef.current) {
+        unlockBodyScroll(bodyLockOwnerRef.current)
+        endKeyboardViewportSession(bodyLockOwnerRef.current)
+      }
     }, KEYBOARD_OPEN_TIMEOUT_MS)
   }, [])
 
   const syncWithKeyboard = useCallback(() => {
     const textarea = textareaRef.current
-    const keyboard = getVirtualKeyboard()
-    if (!textarea || !keyboard || document.activeElement !== textarea) {
+    if (!textarea || document.activeElement !== textarea) {
       setDock(null)
       return
     }
 
-    if (keyboard.boundingRect.height <= 0) {
+    const geometry = measureKeyboardGeometry(bodyLockOwnerRef.current)
+    if (!geometry) {
       setDock(null)
       if (keyboardOpenedRef.current) {
         keyboardOpenedRef.current = false
         anchorRectRef.current = null
         releaseBodyLock()
+        endKeyboardViewportSession(bodyLockOwnerRef.current)
       }
       return
     }
@@ -152,8 +296,10 @@ export function useDockedTextarea() {
       window.clearTimeout(unlockTimerRef.current)
       unlockTimerRef.current = null
     }
-    // pointerdown을 거치지 않은 프로그램 포커스에도 같은 안전장치를 둔다.
-    lockBodyScroll(bodyLockOwnerRef.current)
+    // pointerdown을 거치지 않은 프로그램 포커스에도 같은 안전장치를 두고,
+    // VisualViewport가 pan된 기기에서는 고정한 본문의 화면 좌표를 보정한다.
+    if (textarea.style.position !== 'fixed') lockBodyScroll(bodyLockOwnerRef.current)
+    alignLockedBody(bodyLockOwnerRef.current)
 
     const anchor = anchorRectRef.current ?? textarea.getBoundingClientRect()
     anchorRectRef.current = anchor
@@ -167,23 +313,26 @@ export function useDockedTextarea() {
       }
     }
 
-    const viewportWidth = document.documentElement.clientWidth
-    const viewportHeight = document.documentElement.clientHeight
-    const keyboardTop =
-      keyboard.boundingRect.top > 0
-        ? keyboard.boundingRect.top
-        : viewportHeight - keyboard.boundingRect.height
-    const usableBottom = Math.max(EDGE_GAP + MIN_EDITOR_HEIGHT, keyboardTop - EDGE_GAP)
-    const preferredTop = Math.max(EDGE_GAP, anchor.top)
+    const baseline = keyboardViewportSession?.baseline
+    const topOffset = baseline ? geometry.visibleTop - baseline.offsetTop : 0
+    const leftOffset = baseline ? geometry.visibleLeft - baseline.offsetLeft : 0
+    const visibleTop = geometry.visibleTop + EDGE_GAP
+    const usableBottom = Math.max(
+      visibleTop + MIN_EDITOR_HEIGHT,
+      geometry.keyboardTop - EDGE_GAP,
+    )
+    const preferredTop = Math.max(visibleTop, anchor.top + topOffset)
     // 원래 위치에 남는 세로 공간만큼 먼저 높이를 줄인다. 최소 높이조차
     // 나오지 않을 때에만 textarea 자체를 위로 옮기며, 문서는 움직이지 않는다.
     const heightAtAnchor = usableBottom - preferredTop
     const height = Math.min(anchor.height, Math.max(MIN_EDITOR_HEIGHT, heightAtAnchor))
-    const top = Math.max(EDGE_GAP, Math.min(preferredTop, usableBottom - height))
-    const width = Math.min(anchor.width, viewportWidth - EDGE_GAP * 2)
+    const top = Math.max(visibleTop, Math.min(preferredTop, usableBottom - height))
+    const width = Math.min(anchor.width, geometry.visibleWidth - EDGE_GAP * 2)
+    const visibleLeft = geometry.visibleLeft + EDGE_GAP
+    const visibleRight = geometry.visibleLeft + geometry.visibleWidth - EDGE_GAP
     const left = Math.max(
-      EDGE_GAP,
-      Math.min(anchor.left, viewportWidth - EDGE_GAP - width),
+      visibleLeft,
+      Math.min(anchor.left + leftOffset, visibleRight - width),
     )
 
     setDock({
@@ -207,15 +356,29 @@ export function useDockedTextarea() {
 
   useEffect(() => {
     const keyboard = getVirtualKeyboard()
-    if (!keyboard) return
-
-    keyboard.addEventListener('geometrychange', syncWithKeyboard)
-    window.addEventListener('resize', syncWithKeyboard)
-    return () => {
-      keyboard.removeEventListener('geometrychange', syncWithKeyboard)
-      window.removeEventListener('resize', syncWithKeyboard)
+    const viewport = window.visualViewport
+    const owner = bodyLockOwnerRef.current
+    const handleVisibilityChange = () => {
+      if (document.visibilityState !== 'hidden') return
       keyboardOpenedRef.current = false
       releaseBodyLock()
+      endKeyboardViewportSession(owner)
+    }
+
+    keyboard?.addEventListener('geometrychange', syncWithKeyboard)
+    viewport?.addEventListener('resize', syncWithKeyboard)
+    viewport?.addEventListener('scroll', syncWithKeyboard)
+    window.addEventListener('resize', syncWithKeyboard)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => {
+      keyboard?.removeEventListener('geometrychange', syncWithKeyboard)
+      viewport?.removeEventListener('resize', syncWithKeyboard)
+      viewport?.removeEventListener('scroll', syncWithKeyboard)
+      window.removeEventListener('resize', syncWithKeyboard)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      keyboardOpenedRef.current = false
+      releaseBodyLock()
+      endKeyboardViewportSession(owner)
     }
   }, [releaseBodyLock, syncWithKeyboard])
 
@@ -229,11 +392,9 @@ export function useDockedTextarea() {
     textarea.scrollTop = snapshot.caretAtEnd
       ? Math.max(0, textarea.scrollHeight - textarea.clientHeight - snapshot.bottom)
       : snapshot.top
-    // 이 시점에는 같은 textarea DOM이 이미 fixed로 도킹되고 slot도 원래
-    // 높이를 차지한다. paint 전에 문서 잠금을 풀어 최초 점프는 막되,
-    // 키보드가 열린 뒤 사용자가 성경을 직접 스크롤하는 동작은 살린다.
-    releaseBodyLock()
-  }, [dock, releaseBodyLock])
+    // 본문 잠금은 키보드가 닫힐 때까지 유지한다. Blink가 geometrychange 뒤에
+    // 늦게 caret reveal을 다시 실행해도 성경 화면은 움직이지 않는다.
+  }, [dock])
 
   const handlePointerDown = useCallback(() => {
     const textarea = textareaRef.current
@@ -241,14 +402,20 @@ export function useDockedTextarea() {
     // 덮지 않는다. 네이티브 기본 동작은 그대로 두어 탭한 곳에 커서가 놓인다.
     if (!textarea || textarea.style.position === 'fixed') return
     captureAnchor()
-    if (getVirtualKeyboard()) holdBodyPosition()
+    if (managesAndroidKeyboard()) {
+      beginKeyboardViewportSession(bodyLockOwnerRef.current)
+      holdBodyPosition()
+    }
   }, [captureAnchor, holdBodyPosition])
 
   const handleFocus = useCallback(() => {
     // pointerdown에서 저장한 pre-focus rect가 있으면 브라우저의 reveal 이후
     // 좌표로 덮지 않는다. 키보드·접근성 포커스에는 여기서 처음 저장한다.
     if (!anchorRectRef.current) captureAnchor()
-    if (getVirtualKeyboard()) holdBodyPosition()
+    if (managesAndroidKeyboard()) {
+      beginKeyboardViewportSession(bodyLockOwnerRef.current)
+      holdBodyPosition()
+    }
     requestAnimationFrame(syncWithKeyboard)
   }, [captureAnchor, holdBodyPosition, syncWithKeyboard])
 
@@ -256,7 +423,12 @@ export function useDockedTextarea() {
     setDock(null)
     anchorRectRef.current = null
     keyboardOpenedRef.current = false
-    releaseBodyLock()
+    // 키보드의 '다음'으로 다른 textarea에 이동할 때 새 hook이 같은 task에서
+    // session/lock 소유권을 넘겨받을 시간을 준다.
+    requestAnimationFrame(() => {
+      releaseBodyLock()
+      endKeyboardViewportSession(bodyLockOwnerRef.current)
+    })
   }, [releaseBodyLock])
 
   return {

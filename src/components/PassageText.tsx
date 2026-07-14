@@ -16,7 +16,7 @@ interface Props {
   onApplyRanges?: (adds: VerseHighlight[]) => void
   /** 칠해진 파트 탭 삭제 */
   onRemoveRange?: (key: string, start: number, end: number) => void
-  /** 형광펜 색 — null/생략이면 형광펜 꺼짐(일반 텍스트 선택·복사 가능) */
+  /** 형광펜 색 — null/생략이면 형광펜 꺼짐 */
   penColor?: HighlightColor | null
 }
 
@@ -370,7 +370,7 @@ function PassageText({
     if (document.body.classList.contains('ink-active')) return
     // 형광펜 드래그 직후 따라오는 click은 삭제로 치지 않는다
     if (justDraggedRef.current) return
-    // 텍스트 드래그 선택(복사) 직후의 click도 무시
+    // 브라우저/보조 기술이 만든 선택 영역이 남아 있으면 삭제로 오인하지 않는다
     const selection = window.getSelection()
     if (selection && !selection.isCollapsed) return
     onRemoveRange(verseKey, range.start, range.end)
@@ -380,7 +380,7 @@ function PassageText({
     <>
       <div
         ref={rootRef}
-        className={`selectable-text passage-text font-serif text-[15px] leading-[1.75] text-rose-ink${
+        className={`protected-bible-text passage-text font-serif text-[15px] leading-[1.75] text-rose-ink${
           penColor ? ' hl-pen' : ''
         }`}
       >

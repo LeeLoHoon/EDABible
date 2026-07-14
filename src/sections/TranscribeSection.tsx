@@ -69,7 +69,7 @@ export default function TranscribeSection({ entry, update, FieldEditor }: Props)
     [update],
   )
 
-  // 형광펜 상태 — null이면 꺼짐(본문 선택·복사 가능)
+  // 형광펜 상태 — null이면 꺼짐
   const [penColor, setPenColor] = useState<HighlightColor | null>(null)
 
   // 현재 본문 + 펼침 상태
@@ -484,7 +484,17 @@ export default function TranscribeSection({ entry, update, FieldEditor }: Props)
           placeholder="읽은 본문을 한 자 한 자 옮겨 적어보세요."
           rows={10}
           inkHeight={360}
+          disablePaste
+          ariaDescribedBy="transcription-paste-notice"
         />
+        {mode === 'text' && (
+          <p
+            id="transcription-paste-notice"
+            className="mt-1.5 px-1 text-[11px] text-rose-key/70"
+          >
+            직접 옮겨 적을 수 있도록 붙여넣기는 사용할 수 없습니다.
+          </p>
+        )}
       </div>
     </div>
   )
