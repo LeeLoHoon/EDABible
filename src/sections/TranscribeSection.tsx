@@ -242,209 +242,205 @@ export default function TranscribeSection({ entry, update, FieldEditor }: Props)
         onPassage={setPassage}
       />
 
-      {/* 본문 — 헤더 아래에 sticky 고정. 필사하며 스크롤해도 항상 보임 */}
+      {/* 본문 — sticky 고정 금지. 모바일에서 필사 영역과 겹쳐 스크롤이 어색해진다 */}
       {hasPassage && (
-        <div className="sticky top-[52px] z-[5]">
-          <div className="rounded-xl border border-rose-line bg-rose-card px-4 py-3 shadow-sm">
-            <div className="flex items-center justify-between gap-2">
-              <button
-                type="button"
-                onClick={() => setOpen((o) => !o)}
-                disabled={passage!.loading || editingPassage}
-                className="flex min-w-0 flex-1 items-center justify-between gap-2 disabled:opacity-100"
-              >
-                <span className="min-w-0 truncate font-serif text-sm font-bold tracking-wide text-rose-accent">
-                  {passage!.ref}
+        <div className="rounded-xl border border-rose-line bg-rose-card px-4 py-3 shadow-sm">
+          <div className="flex items-center justify-between gap-2">
+            <button
+              type="button"
+              onClick={() => setOpen((o) => !o)}
+              disabled={passage!.loading || editingPassage}
+              className="flex min-w-0 flex-1 items-center justify-between gap-2 disabled:opacity-100"
+            >
+              <span className="min-w-0 truncate font-serif text-sm font-bold tracking-wide text-rose-accent">
+                {passage!.ref}
+              </span>
+              {!passage!.loading && !editingPassage && (
+                <span className="shrink-0 text-xs font-medium text-rose-key">
+                  {open ? '접기 ▴' : '펼치기 ▾'}
                 </span>
-                {!passage!.loading && !editingPassage && (
-                  <span className="shrink-0 text-xs font-medium text-rose-key">
-                    {open ? '접기 ▴' : '펼치기 ▾'}
-                  </span>
-                )}
-              </button>
-              {!passage!.loading && passage!.canEdit && !editingPassage && (
-                <div className="relative flex shrink-0 items-center gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => setShowPassageFormatHelp((value) => !value)}
-                    className="grid h-7 w-7 place-items-center rounded-lg border border-rose-line bg-white text-xs font-black text-rose-key shadow-sm"
-                    aria-expanded={showPassageFormatHelp}
-                    aria-label="본문 수정 방법 보기"
-                    title="본문 수정 방법"
-                  >
-                    ?
-                  </button>
-                  <button
-                    type="button"
-                    onClick={startPassageEdit}
-                    className="rounded-lg bg-rose-chip px-2.5 py-1 text-xs font-bold text-rose-accent"
-                  >
-                    본문 수정
-                  </button>
-                  {showPassageFormatHelp && (
-                    <div className="absolute right-0 top-9 z-20 w-[min(19rem,calc(100vw-2rem))] rounded-xl border border-rose-line bg-white p-3 text-left text-xs leading-relaxed text-rose-ink shadow-lg">
-                      <p className="font-bold text-rose-accent">본문 수정 방법</p>
-                      <div className="mt-2 rounded-lg bg-rose-bg/70 p-2 font-mono text-[11px] leading-relaxed text-rose-ink">
-                        <p>[[제목]]</p>
-                        <p>(1-3) 본문 내용...</p>
-                        <p>(4-6) 본문 내용...</p>
-                        <p className="mt-2">[[중간 제목]]</p>
-                        <p>(7-10) 본문 내용...</p>
-                      </div>
-                      <ul className="mt-2 space-y-1 text-rose-key">
-                        <li>제목은 <b>[[제목]]</b>으로 단독 줄에 씁니다.</li>
-                        <li>절은 <b>(1)</b> 또는 <b>(1-3)</b>처럼 문단 앞에 씁니다.</li>
-                        <li>절 구분이 확실하지 않으면 절 표기는 쓰지 않습니다.</li>
-                      </ul>
-                    </div>
-                  )}
-                </div>
               )}
-              {!passage!.loading && passage!.isFinalized && (
-                <div className="flex shrink-0 items-center gap-1.5">
-                  {devMode && passage!.canUnfinalize && (
-                    <button
-                      type="button"
-                      onClick={unfinalizePassage}
-                      disabled={unfinalizingPassage}
-                      className="rounded-full border border-rose-accent/60 bg-white px-2.5 py-1 text-xs font-bold text-rose-accent transition active:scale-[0.98] disabled:opacity-50"
-                    >
-                      {unfinalizingPassage ? '해제 중' : '완료 해제'}
-                    </button>
-                  )}
-                  {/* 연속 7번 탭이 개발자 모드를 토글한다 — 겉보기는 그대로 배지 */}
-                  <button
-                    type="button"
-                    onClick={countDevModeTap}
-                    aria-label="완료됨"
-                    className="touch-manipulation rounded-lg bg-leaf-pale/70 px-2.5 py-1 text-xs font-bold text-leaf-deep"
-                  >
-                    완료됨
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {/* 완료 해제 실패 등, 편집 중이 아닐 때 생기는 오류 */}
-            {passageSaveError && !editingPassage && (
-              <p className="mt-1 text-right text-xs text-red-500">{passageSaveError}</p>
-            )}
-
-            {/* 형광펜 툴바 — 켜면 본문을 긋는 대로 칠해진다 (선택·복사 메뉴 없음) */}
-            {!passage!.loading && !editingPassage && open && (
-              <div className="mt-2 flex items-center justify-end gap-1.5">
-                {penColor &&
-                  HIGHLIGHT_COLORS.map((c) => (
-                    <button
-                      key={c.color}
-                      type="button"
-                      aria-label={`${c.label} 형광펜`}
-                      onClick={() => setPenColor(c.color)}
-                      className={`h-6 w-6 rounded-full border border-black/10 transition active:scale-90 ${
-                        penColor === c.color
-                          ? 'ring-2 ring-rose-accent-deep ring-offset-1 ring-offset-rose-card'
-                          : ''
-                      }`}
-                      style={{ background: c.hex }}
-                    />
-                  ))}
+            </button>
+            {!passage!.loading && passage!.canEdit && !editingPassage && (
+              <div className="relative flex shrink-0 items-center gap-1.5">
                 <button
                   type="button"
-                  aria-pressed={!!penColor}
-                  onClick={() => setPenColor(penColor ? null : 'gold')}
-                  className={`ml-1 rounded-full px-2.5 py-1 text-xs font-bold transition active:scale-[0.98] ${
-                    penColor
-                      ? 'bg-rose-accent-deep text-white shadow-sm shadow-rose-accent/25'
-                      : 'bg-rose-chip text-rose-accent hover:bg-rose-accent-deep hover:text-white'
-                  }`}
+                  onClick={() => setShowPassageFormatHelp((value) => !value)}
+                  className="grid h-7 w-7 place-items-center rounded-lg border border-rose-line bg-white text-xs font-black text-rose-key shadow-sm"
+                  aria-expanded={showPassageFormatHelp}
+                  aria-label="본문 수정 방법 보기"
+                  title="본문 수정 방법"
                 >
-                  🖍 형광펜
+                  ?
+                </button>
+                <button
+                  type="button"
+                  onClick={startPassageEdit}
+                  className="rounded-lg bg-rose-chip px-2.5 py-1 text-xs font-bold text-rose-accent"
+                >
+                  본문 수정
+                </button>
+                {showPassageFormatHelp && (
+                  <div className="absolute right-0 top-9 z-20 w-[min(19rem,calc(100vw-2rem))] rounded-xl border border-rose-line bg-white p-3 text-left text-xs leading-relaxed text-rose-ink shadow-lg">
+                    <p className="font-bold text-rose-accent">본문 수정 방법</p>
+                    <div className="mt-2 rounded-lg bg-rose-bg/70 p-2 font-mono text-[11px] leading-relaxed text-rose-ink">
+                      <p>[[제목]]</p>
+                      <p>(1-3) 본문 내용...</p>
+                      <p>(4-6) 본문 내용...</p>
+                      <p className="mt-2">[[중간 제목]]</p>
+                      <p>(7-10) 본문 내용...</p>
+                    </div>
+                    <ul className="mt-2 space-y-1 text-rose-key">
+                      <li>제목은 <b>[[제목]]</b>으로 단독 줄에 씁니다.</li>
+                      <li>절은 <b>(1)</b> 또는 <b>(1-3)</b>처럼 문단 앞에 씁니다.</li>
+                      <li>절 구분이 확실하지 않으면 절 표기는 쓰지 않습니다.</li>
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
+            {!passage!.loading && passage!.isFinalized && (
+              <div className="flex shrink-0 items-center gap-1.5">
+                {devMode && passage!.canUnfinalize && (
+                  <button
+                    type="button"
+                    onClick={unfinalizePassage}
+                    disabled={unfinalizingPassage}
+                    className="rounded-full border border-rose-accent/60 bg-white px-2.5 py-1 text-xs font-bold text-rose-accent transition active:scale-[0.98] disabled:opacity-50"
+                  >
+                    {unfinalizingPassage ? '해제 중' : '완료 해제'}
+                  </button>
+                )}
+                {/* 연속 7번 탭이 개발자 모드를 토글한다 — 겉보기는 그대로 배지 */}
+                <button
+                  type="button"
+                  onClick={countDevModeTap}
+                  aria-label="완료됨"
+                  className="touch-manipulation rounded-lg bg-leaf-pale/70 px-2.5 py-1 text-xs font-bold text-leaf-deep"
+                >
+                  완료됨
                 </button>
               </div>
             )}
-
-            {passage!.loading ? (
-              <div className="mt-2 animate-pulse space-y-2.5 py-0.5" aria-label="본문 불러오는 중">
-                <div className="h-3 w-full rounded bg-rose-line/50" />
-                <div className="h-3 w-[92%] rounded bg-rose-line/50" />
-                <div className="h-3 w-[70%] rounded bg-rose-line/50" />
-              </div>
-            ) : editingPassage ? (
-              <div className="mt-2 space-y-2">
-                <textarea
-                  value={passageDraft}
-                  onChange={(event) => setPassageDraft(event.target.value)}
-                  autoFocus
-                  autoCapitalize="off"
-                  autoCorrect="off"
-                  spellCheck={false}
-                  className="min-h-[12rem] w-full rounded-xl border border-rose-line bg-white px-3 py-2 font-serif text-[15px] leading-[1.75] text-rose-ink outline-none focus:border-rose-accent"
-                  aria-label={`${passage!.ref} 본문 수정`}
-                />
-                {passageSaveError && <p className="text-xs text-red-500">{passageSaveError}</p>}
-                <div className="flex justify-end gap-2">
-                  {passage!.canFinalize && (
-                    <button
-                      type="button"
-                      onClick={completePassageEdit}
-                      disabled={savingPassage || finalizingPassage}
-                      className="rounded-full border border-rose-accent/60 bg-white px-3 py-2 text-xs font-bold text-rose-accent transition active:scale-[0.98] disabled:opacity-50"
-                    >
-                      {finalizingPassage ? '완료 중' : '저장 후 완료'}
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={cancelPassageEdit}
-                    disabled={savingPassage || finalizingPassage}
-                    className="rounded-full border border-rose-line bg-white px-3 py-2 text-xs font-bold text-rose-key transition hover:border-rose-accent/50 hover:text-rose-accent active:scale-[0.98] disabled:opacity-50"
-                  >
-                    취소
-                  </button>
-                  <button
-                    type="button"
-                    onClick={savePassageEdit}
-                    disabled={savingPassage || finalizingPassage}
-                    className="rounded-full bg-rose-accent-deep px-3 py-2 text-xs font-bold text-white shadow-sm shadow-rose-accent/25 transition active:scale-[0.98] disabled:opacity-50"
-                  >
-                    {savingPassage ? '저장 중' : '저장'}
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div
-                key={`${passage!.book}-${passage!.chapter}-${open}`}
-                className={
-                  open
-                    ? 'mt-2 max-h-[min(50vh,18rem)] overflow-y-auto'
-                    : 'relative mt-2 max-h-[3.4rem] overflow-hidden'
-                }
-                style={{ animation: 'fadeIn 0.3s ease' }}
-              >
-                <PassageText
-                  chunks={passage!.chunks}
-                  startChapter={passage!.chapter}
-                  highlightRanges={entry.highlightRanges}
-                  onApplyRanges={applyHighlights}
-                  onRemoveRange={removeHighlight}
-                  penColor={penColor}
-                />
-                {/* 접힘 상태일 때 아래쪽 페이드로 '더 있음' 암시 */}
-                {!open && (
-                  <div className="pointer-events-none absolute inset-x-0 bottom-0 h-6 bg-gradient-to-t from-rose-card to-transparent" />
-                )}
-              </div>
-            )}
-            {/* 첫 사용자 힌트 — 하이라이트가 하나라도 생기면 사라진다 */}
-            {open &&
-              !passage!.loading &&
-              !editingPassage &&
-              (entry.highlightRanges?.length ?? 0) === 0 && (
-                <p className="mt-2 border-t border-rose-line/60 pt-1.5 text-[11px] text-rose-key/70">
-                  🖍 형광펜을 켜고 본문을 가로로 그으면 칠해져요 · 칠한 부분은 탭하면 지워집니다
-                </p>
-              )}
           </div>
+
+          {/* 완료 해제 실패 등, 편집 중이 아닐 때 생기는 오류 */}
+          {passageSaveError && !editingPassage && (
+            <p className="mt-1 text-right text-xs text-red-500">{passageSaveError}</p>
+          )}
+
+          {/* 형광펜 툴바 — 켜면 본문을 긋는 대로 칠해진다 (선택·복사 메뉴 없음) */}
+          {!passage!.loading && !editingPassage && open && (
+            <div className="mt-2 flex items-center justify-end gap-1.5">
+              {penColor &&
+                HIGHLIGHT_COLORS.map((c) => (
+                  <button
+                    key={c.color}
+                    type="button"
+                    aria-label={`${c.label} 형광펜`}
+                    onClick={() => setPenColor(c.color)}
+                    className={`h-6 w-6 rounded-full border border-black/10 transition active:scale-90 ${
+                      penColor === c.color
+                        ? 'ring-2 ring-rose-accent-deep ring-offset-1 ring-offset-rose-card'
+                        : ''
+                    }`}
+                    style={{ background: c.hex }}
+                  />
+                ))}
+              <button
+                type="button"
+                aria-pressed={!!penColor}
+                onClick={() => setPenColor(penColor ? null : 'gold')}
+                className={`ml-1 rounded-full px-2.5 py-1 text-xs font-bold transition active:scale-[0.98] ${
+                  penColor
+                    ? 'bg-rose-accent-deep text-white shadow-sm shadow-rose-accent/25'
+                    : 'bg-rose-chip text-rose-accent hover:bg-rose-accent-deep hover:text-white'
+                }`}
+              >
+                🖍 형광펜
+              </button>
+            </div>
+          )}
+
+          {passage!.loading ? (
+            <div className="mt-2 animate-pulse space-y-2.5 py-0.5" aria-label="본문 불러오는 중">
+              <div className="h-3 w-full rounded bg-rose-line/50" />
+              <div className="h-3 w-[92%] rounded bg-rose-line/50" />
+              <div className="h-3 w-[70%] rounded bg-rose-line/50" />
+            </div>
+          ) : editingPassage ? (
+            <div className="mt-2 space-y-2">
+              <textarea
+                value={passageDraft}
+                onChange={(event) => setPassageDraft(event.target.value)}
+                autoFocus
+                autoCapitalize="off"
+                autoCorrect="off"
+                spellCheck={false}
+                className="min-h-[12rem] w-full rounded-xl border border-rose-line bg-white px-3 py-2 font-serif text-[15px] leading-[1.75] text-rose-ink outline-none focus:border-rose-accent"
+                aria-label={`${passage!.ref} 본문 수정`}
+              />
+              {passageSaveError && <p className="text-xs text-red-500">{passageSaveError}</p>}
+              <div className="flex justify-end gap-2">
+                {passage!.canFinalize && (
+                  <button
+                    type="button"
+                    onClick={completePassageEdit}
+                    disabled={savingPassage || finalizingPassage}
+                    className="rounded-full border border-rose-accent/60 bg-white px-3 py-2 text-xs font-bold text-rose-accent transition active:scale-[0.98] disabled:opacity-50"
+                  >
+                    {finalizingPassage ? '완료 중' : '저장 후 완료'}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={cancelPassageEdit}
+                  disabled={savingPassage || finalizingPassage}
+                  className="rounded-full border border-rose-line bg-white px-3 py-2 text-xs font-bold text-rose-key transition hover:border-rose-accent/50 hover:text-rose-accent active:scale-[0.98] disabled:opacity-50"
+                >
+                  취소
+                </button>
+                <button
+                  type="button"
+                  onClick={savePassageEdit}
+                  disabled={savingPassage || finalizingPassage}
+                  className="rounded-full bg-rose-accent-deep px-3 py-2 text-xs font-bold text-white shadow-sm shadow-rose-accent/25 transition active:scale-[0.98] disabled:opacity-50"
+                >
+                  {savingPassage ? '저장 중' : '저장'}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div
+              key={`${passage!.book}-${passage!.chapter}-${open}`}
+              className={
+                open ? 'mt-2' : 'relative mt-2 max-h-[3.4rem] overflow-hidden'
+              }
+              style={{ animation: 'fadeIn 0.3s ease' }}
+            >
+              <PassageText
+                chunks={passage!.chunks}
+                startChapter={passage!.chapter}
+                highlightRanges={entry.highlightRanges}
+                onApplyRanges={applyHighlights}
+                onRemoveRange={removeHighlight}
+                penColor={penColor}
+              />
+              {/* 접힘 상태일 때 아래쪽 페이드로 '더 있음' 암시 */}
+              {!open && (
+                <div className="pointer-events-none absolute inset-x-0 bottom-0 h-6 bg-gradient-to-t from-rose-card to-transparent" />
+              )}
+            </div>
+          )}
+          {/* 첫 사용자 힌트 — 하이라이트가 하나라도 생기면 사라진다 */}
+          {open &&
+            !passage!.loading &&
+            !editingPassage &&
+            (entry.highlightRanges?.length ?? 0) === 0 && (
+              <p className="mt-2 border-t border-rose-line/60 pt-1.5 text-[11px] text-rose-key/70">
+                🖍 형광펜을 켜고 본문을 가로로 그으면 칠해져요 · 칠한 부분은 탭하면 지워집니다
+              </p>
+            )}
         </div>
       )}
 
