@@ -367,7 +367,7 @@ export default function BiblePicker({ value, onChange, onPassage }: Props) {
   }, [error, loading, nextValue, passageText, selectedPassages])
 
   return (
-    <div className="rounded-2xl bg-rose-chip px-4 py-3">
+    <div className="bible-picker rounded-2xl bg-rose-chip px-4 py-3">
       <div className="mb-2 flex items-center justify-between gap-3">
         <label className="block text-sm font-semibold text-rose-ink">
           {FIXED_BOOK_ORDER === null ? '오늘의 본문 (성경·장/편 선택)' : '오늘의 본문 (장/편 선택)'}
@@ -398,7 +398,7 @@ export default function BiblePicker({ value, onChange, onPassage }: Props) {
           return (
             <div
               key={selection.id}
-              className="grid grid-cols-[minmax(0,1fr)_5.75rem_auto_5.75rem_auto] items-center gap-2"
+              className="bible-picker-row"
             >
               {FIXED_BOOK_ORDER === null ? (
                 <select
@@ -408,7 +408,7 @@ export default function BiblePicker({ value, onChange, onPassage }: Props) {
                       order: e.target.value ? Number(e.target.value) : '',
                     })
                   }
-                  className="min-w-0 rounded-xl border border-rose-line bg-white px-3 py-2 text-base font-medium text-rose-ink outline-none focus:border-rose-accent"
+                  className="bible-picker-book min-w-0 rounded-xl border border-rose-line bg-white px-3 py-2 text-base font-medium text-rose-ink outline-none focus:border-rose-accent"
                   aria-label={`본문 ${rowIndex + 1} 성경`}
                 >
                   <option value="">성경 선택</option>
@@ -419,52 +419,54 @@ export default function BiblePicker({ value, onChange, onPassage }: Props) {
                   ))}
                 </select>
               ) : (
-                <div className="min-w-0 truncate rounded-xl border border-rose-line bg-white/60 px-3 py-2 text-base font-medium text-rose-ink">
+                <div className="bible-picker-book min-w-0 truncate rounded-xl border border-rose-line bg-white/60 px-3 py-2 text-base font-medium text-rose-ink">
                   {meta?.book ?? '…'}
                 </div>
               )}
 
-              <select
-                value={selection.chapter}
-                onChange={(e) =>
-                  updateSelection(selection.id, {
-                    chapter: e.target.value ? Number(e.target.value) : '',
-                  })
-                }
-                disabled={!activeDoc}
-                className="min-w-0 rounded-xl border border-rose-line bg-white px-3 py-2 text-base font-medium text-rose-ink outline-none focus:border-rose-accent disabled:opacity-50"
-                aria-label={`본문 ${rowIndex + 1} 시작 ${unit}`}
-              >
-                <option value="">시작</option>
-                {chapterOptions.map((n) => (
-                  <option key={n} value={n}>
-                    {n}{unit}
-                  </option>
-                ))}
-              </select>
-
-              <span className="text-center text-sm font-semibold text-rose-key">~</span>
-
-              <select
-                value={selection.endChapter}
-                onChange={(e) =>
-                  updateSelection(selection.id, {
-                    endChapter: e.target.value ? Number(e.target.value) : '',
-                  })
-                }
-                disabled={!activeDoc || selection.chapter === ''}
-                className="min-w-0 rounded-xl border border-rose-line bg-white px-3 py-2 text-base font-medium text-rose-ink outline-none focus:border-rose-accent disabled:opacity-50"
-                aria-label={`본문 ${rowIndex + 1} 끝 ${unit}`}
-              >
-                <option value="">끝</option>
-                {chapterOptions
-                  .filter((n) => selection.chapter === '' || n >= selection.chapter)
-                  .map((n) => (
+              <div className="bible-picker-range">
+                <select
+                  value={selection.chapter}
+                  onChange={(e) =>
+                    updateSelection(selection.id, {
+                      chapter: e.target.value ? Number(e.target.value) : '',
+                    })
+                  }
+                  disabled={!activeDoc}
+                  className="min-w-0 rounded-xl border border-rose-line bg-white px-3 py-2 text-base font-medium text-rose-ink outline-none focus:border-rose-accent disabled:opacity-50"
+                  aria-label={`본문 ${rowIndex + 1} 시작 ${unit}`}
+                >
+                  <option value="">시작</option>
+                  {chapterOptions.map((n) => (
                     <option key={n} value={n}>
                       {n}{unit}
                     </option>
                   ))}
-              </select>
+                </select>
+
+                <span className="text-center text-sm font-semibold text-rose-key">~</span>
+
+                <select
+                  value={selection.endChapter}
+                  onChange={(e) =>
+                    updateSelection(selection.id, {
+                      endChapter: e.target.value ? Number(e.target.value) : '',
+                    })
+                  }
+                  disabled={!activeDoc || selection.chapter === ''}
+                  className="min-w-0 rounded-xl border border-rose-line bg-white px-3 py-2 text-base font-medium text-rose-ink outline-none focus:border-rose-accent disabled:opacity-50"
+                  aria-label={`본문 ${rowIndex + 1} 끝 ${unit}`}
+                >
+                  <option value="">끝</option>
+                  {chapterOptions
+                    .filter((n) => selection.chapter === '' || n >= selection.chapter)
+                    .map((n) => (
+                      <option key={n} value={n}>
+                        {n}{unit}
+                      </option>
+                    ))}
+                </select>
+              </div>
 
               <button
                 type="button"
@@ -473,7 +475,7 @@ export default function BiblePicker({ value, onChange, onPassage }: Props) {
                     prev.length === 1 ? [emptySelection()] : prev.filter((item) => item.id !== selection.id),
                   )
                 }
-                className="flex h-10 w-10 items-center justify-center rounded-full text-xl font-bold text-rose-key transition hover:bg-white hover:text-rose-accent"
+                className="bible-picker-remove flex h-10 w-10 items-center justify-center rounded-full text-xl font-bold text-rose-key transition hover:bg-white hover:text-rose-accent"
                 aria-label={`본문 ${rowIndex + 1} 삭제`}
               >
                 ×

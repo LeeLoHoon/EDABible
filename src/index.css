@@ -89,6 +89,46 @@ body.ink-active .selectable-text {
   white-space: normal;
 }
 
+/* 본문 선택 줄: 좁은 폰에서는 책 이름이 편 선택 칸에 밀리지 않도록 두 줄로 쌓는다.
+   컨테이너 쿼리 미지원 브라우저도 안전한 2행 레이아웃을 기본값으로 사용한다. */
+.bible-picker {
+  container-type: inline-size;
+}
+
+.bible-picker-row {
+  display: grid;
+  grid-template-areas:
+    'book remove'
+    'range range';
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.bible-picker-book {
+  grid-area: book;
+}
+
+.bible-picker-range {
+  grid-area: range;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.bible-picker-remove {
+  grid-area: remove;
+}
+
+@container (min-width: 24rem) {
+  .bible-picker-row {
+    grid-template-areas: 'book range remove';
+    grid-template-columns: minmax(4.5rem, 1fr) 13rem auto;
+  }
+}
+
 .passage-segment {
   margin: 0.42rem 0 0;
 }
