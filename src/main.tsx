@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { registerSW } from 'virtual:pwa-register'
 import { announceAppUpdate, isNewerVersion } from './appUpdate'
 import { clearBibleCache } from './bible'
+import { isBibleCopyEnabled } from './bibleCopy'
 import UpdateNotice from './components/UpdateNotice'
 import { flushPendingSaves } from './saveFlush'
 import './index.css'
@@ -229,9 +230,11 @@ const inProtectedBibleText = (el: EventTarget | null): boolean => {
 
 // 입력칸 포커스 중 selectstart를 모두 막으면 iOS 키보드/편집이 깨진다.
 // 단, 이벤트 대상이 성경 본문이면 포커스 상태보다 본문 보호를 우선한다.
-const allowSelect = (e: Event) =>
-  !inProtectedBibleText(e.target) &&
-  (isEditable(e.target) || isEditable(document.activeElement))
+const allowSelect = (e: Event) => {
+  const protectedBibleText = inProtectedBibleText(e.target)
+  if (protectedBibleText) return isBibleCopyEnabled()
+  return isEditable(e.target) || isEditable(document.activeElement)
+}
 
 const selectionTouchesProtectedBibleText = (): boolean => {
   const selection = window.getSelection()
@@ -251,6 +254,7 @@ const selectionTouchesProtectedBibleText = (): boolean => {
 }
 
 const preventProtectedCopy = (e: ClipboardEvent) => {
+  if (isBibleCopyEnabled()) return
   if (inProtectedBibleText(e.target) || selectionTouchesProtectedBibleText()) {
     e.preventDefault()
   }
@@ -269,7 +273,7 @@ document.addEventListener('contextmenu', (e) => {
 document.addEventListener('copy', preventProtectedCopy)
 document.addEventListener('cut', preventProtectedCopy)
 document.addEventListener('dragstart', (e) => {
-  if (inProtectedBibleText(e.target)) e.preventDefault()
+  if (!isBibleCopyEnabled() && inProtectedBibleText(e.target)) e.preventDefault()
 })
 
 createRoot(document.getElementById('root')!).render(

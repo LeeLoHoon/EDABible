@@ -78,6 +78,14 @@ textarea {
   cursor: default;
 }
 
+/* EntryPage의 숨은 개발자 탭 제스처가 켜진 세션에서만 본문 선택·복사를 복구한다. */
+.dev-bible-copy-enabled .protected-bible-text {
+  user-select: text;
+  -webkit-user-select: text;
+  -webkit-touch-callout: default;
+  cursor: text;
+}
+
 .passage-text {
   white-space: normal;
 }

@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import { enableBibleCopy } from '../bibleCopy'
 import { useEntry } from '../hooks/useEntry'
 import FieldEditor from '../components/FieldEditor'
 import GuideButton from '../components/GuideButton'
@@ -22,6 +23,9 @@ const TABS: { key: Tab; label: string; icon: string }[] = [
   { key: 'temptationVictory', label: '승리', icon: '🛡️' },
 ]
 
+const DEV_COPY_TAP_COUNT = 5
+const DEV_COPY_TAP_WINDOW_MS = 2_000
+
 function formatDate(date: string): string {
   const [y, m, d] = date.split('-')
   const days = ['일', '월', '화', '수', '목', '금', '토']
@@ -42,11 +46,29 @@ export default function EntryPage() {
     questions: true,
     victory: true,
   })
+  const copyTapRef = useRef({ count: 0, deadline: 0 })
   const shareRef = useRef<HTMLDivElement>(null)
   // 공유 카드는 평소엔 렌더하지 않는다(매 획마다 모든 획을 SVG로 다시 그려 메인스레드를
   // 막던 문제) — 공유를 누를 때만 잠깐 DOM에 올려 캡처한다.
   const [showShareCard, setShowShareCard] = useState(false)
   const canShare = Object.values(shareSections).some(Boolean)
+
+  const handleDateTap = () => {
+    const now = performance.now()
+    const taps = copyTapRef.current
+    if (now > taps.deadline) {
+      taps.count = 1
+      taps.deadline = now + DEV_COPY_TAP_WINDOW_MS
+      return
+    }
+
+    taps.count += 1
+    if (taps.count < DEV_COPY_TAP_COUNT) return
+    taps.count = 0
+    taps.deadline = 0
+    enableBibleCopy()
+    navigator.vibrate?.(40)
+  }
 
   const shareEntry = async () => {
     if (!entry || shareState === 'working' || !canShare) return
@@ -92,7 +114,10 @@ export default function EntryPage() {
         >
           ← 목록
         </button>
-        <h1 className="min-w-0 flex-1 truncate px-2 text-center font-serif text-lg font-bold text-rose-ink">
+        <h1
+          onClick={handleDateTap}
+          className="min-w-0 flex-1 truncate px-2 text-center font-serif text-lg font-bold text-rose-ink"
+        >
           {formatDate(entry.date)}
           {entry.bibleRef && (
             <span className="ml-2 font-medium text-rose-key">· {entry.bibleRef}</span>
