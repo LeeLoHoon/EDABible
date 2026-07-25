@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import type { Field, Stroke } from '../types'
 import InkCanvas, { type InkTool } from './InkCanvas'
 import { useDockedTextarea } from '../hooks/useDockedTextarea'
+import { t } from '../i18n/strings'
 
 interface Props {
   field: Field
@@ -103,14 +104,14 @@ export default function FieldEditor({
               onClick={() => setTool('pen')}
               className={`rounded-lg px-2.5 py-1 text-sm transition ${tool === 'pen' ? 'bg-rose-chip text-rose-ink' : 'text-rose-key/70 hover:bg-rose-chip/60 hover:text-rose-accent'}`}
             >
-              ✏️ 펜
+              {t('fieldPen')}
             </button>
             <button
               type="button"
               onClick={() => setTool('eraser')}
               className={`rounded-lg px-2.5 py-1 text-sm transition ${tool === 'eraser' ? 'bg-rose-chip text-rose-ink' : 'text-rose-key/70 hover:bg-rose-chip/60 hover:text-rose-accent'}`}
             >
-              🧽 지우개
+              {t('fieldEraser')}
             </button>
 
             <span className="mx-1 h-4 w-px bg-rose-line" />
@@ -119,7 +120,7 @@ export default function FieldEditor({
               <button
                 key={c}
                 type="button"
-                aria-label={`색상 ${c}`}
+                aria-label={t('fieldColor')(c)}
                 onClick={() => {
                   setColor(c)
                   setTool('pen')
@@ -138,7 +139,7 @@ export default function FieldEditor({
               value={size}
               onChange={(e) => setSize(Number(e.target.value))}
               className="w-20 accent-rose-accent-deep"
-              aria-label="펜 굵기"
+              aria-label={t('fieldPenSize')}
             />
 
             <button
@@ -147,7 +148,7 @@ export default function FieldEditor({
               disabled={field.strokes.length === 0}
               className="rounded-lg px-2.5 py-1 text-sm text-rose-key/70 transition hover:bg-rose-chip/60 hover:text-rose-accent disabled:opacity-40"
             >
-              ↩️ 취소
+              {t('fieldUndo')}
             </button>
             <button
               type="button"
@@ -155,7 +156,7 @@ export default function FieldEditor({
               disabled={field.strokes.length === 0}
               className="rounded-lg px-2.5 py-1 text-sm text-rose-key/70 transition hover:bg-rose-chip/60 hover:text-rose-accent disabled:opacity-40"
             >
-              전체 지우기
+              {t('fieldClear')}
             </button>
           </div>
 
@@ -174,7 +175,7 @@ export default function FieldEditor({
             onClick={() => setExtra((e) => e + 240)}
             className="mt-2 w-full rounded-xl border border-dashed border-rose-line py-2.5 text-sm font-medium text-rose-key active:bg-rose-chip/50"
           >
-            + 공간 늘리기
+            {t('fieldGrow')}
           </button>
         </div>
       )}

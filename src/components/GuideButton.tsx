@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
+import { t } from '../i18n/strings'
 
 function HelpIcon({ className = 'h-4 w-4' }: { className?: string }) {
   return (
@@ -52,18 +53,18 @@ function GuideModal({ onClose }: { onClose: () => void }) {
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
-        aria-label="사용 가이드"
+        aria-label={t('guideAria')}
       >
         {/* 헤더 */}
         <div className="flex shrink-0 items-center justify-between border-b border-rose-line px-5 py-3.5">
           <h2 className="flex items-center gap-2 font-serif text-lg font-extrabold text-rose-ink">
             <HelpIcon className="h-5 w-5 text-rose-accent" />
-            사용 가이드
+            {t('guideTitle')}
           </h2>
           <button
             type="button"
             onClick={onClose}
-            aria-label="닫기"
+            aria-label={t('guideClose')}
             className="flex h-9 w-9 items-center justify-center rounded-full text-xl text-rose-key/70 hover:bg-rose-chip/60 hover:text-rose-accent"
           >
             ✕
@@ -73,53 +74,42 @@ function GuideModal({ onClose }: { onClose: () => void }) {
         {/* 내용 (스크롤) */}
         <div className="min-h-0 flex-1 space-y-3.5 overflow-y-auto overscroll-contain px-5 py-4">
           <p className="rounded-xl bg-rose-chip/50 px-3.5 py-2.5 text-[13px] leading-relaxed text-rose-ink">
-            매일 성경 본문을 <b>읽고 · 필사하고 · 묵상</b>하는 노트예요. 작성한 내용은 자동으로
-            저장됩니다.
+            {t('guideIntro')}
           </p>
 
-          <Section icon="✏️" title="묵상 시작">
-            <p>홈에서 “오늘 묵상 시작”을 누르면 오늘 날짜의 묵상이 만들어져요.</p>
-            <p>이미 쓴 묵상은 목록에서 눌러 이어서 작성할 수 있습니다.</p>
+          <Section icon="✏️" title={t('guideStartTitle')}>
+            <p>{t('guideStart1')}</p>
+            <p>{t('guideStart2')}</p>
           </Section>
 
-          <Section icon="📖" title="본문 선택">
-            <p>성경과 장/편을 고르면 위에 본문이 나와요. 본문을 읽으며 아래 칸에 필사하세요.</p>
-            <p>본문 카드의 <b>🖍 형광펜</b>을 켜고 원하는 부분을 그으면 3가지 색으로 칠할 수 있어요. 칠한 부분은 탭하면 지워집니다.</p>
+          <Section icon="📖" title={t('guidePassageTitle')}>
+            <p>{t('guidePassage1')}</p>
+            <p>{t('guidePassage2')}</p>
           </Section>
 
-          <Section icon="🖊️" title="필사 — 손글씨 · 타이핑">
-            <p>오른쪽 위 토글로 <b>손글씨</b> / <b>타이핑</b>을 전환합니다.</p>
-            <p>
-              손글씨는 <b>애플펜슬(스타일러스) 전용</b>이라, 쓰는 동안 손바닥이 화면에 닿아도
-              괜찮아요.
-            </p>
-            <p>펜 색 5가지 · 굵기 조절 · 지우개(획 단위) · ↩️ 취소 · 전체 지우기를 쓸 수 있어요.</p>
-            <p>
-              칸이 부족하면 <b>“+ 공간 늘리기”</b>를 눌러 아래로 더 넓게 쓰세요. (지난 필기는 다시
-              열어도 그대로 보입니다.)
-            </p>
+          <Section icon="🖊️" title={t('guideWritingTitle')}>
+            <p>{t('guideWriting1')}</p>
+            <p>{t('guideWriting2')}</p>
+            <p>{t('guideWriting3')}</p>
+            <p>{t('guideWriting4')}</p>
           </Section>
 
-          <Section icon="🗂️" title="네 가지 탭">
-            <p>아래 탭으로 이동해요: 📖 필사 · 🙏 기도 · ❓ 5가지 질문 · 🛡️ 승리.</p>
-            <p>각 탭은 따로 저장되며, 원하는 것만 채워도 됩니다.</p>
+          <Section icon="🗂️" title={t('guideTabsTitle')}>
+            <p>{t('guideTabs1')}</p>
+            <p>{t('guideTabs2')}</p>
           </Section>
 
-          <Section icon="📤" title="이미지로 공유">
-            <p>상단 <b>공유</b> 버튼을 누르고, 공유할 탭을 고른 뒤 “JPG 공유”를 누르면 한 장의
-              이미지로 저장·공유됩니다.</p>
+          <Section icon="📤" title={t('guideShareTitle')}>
+            <p>{t('guideShare1')}</p>
           </Section>
 
-          <Section icon="📱" title="앱처럼 쓰기">
-            <p>
-              Safari에서 <b>공유 → “홈 화면에 추가”</b>를 하면, 주소창 없는 전체화면 앱처럼 쓸 수
-              있어요. (펜 입력도 더 쾌적합니다.)
-            </p>
+          <Section icon="📱" title={t('guideAppTitle')}>
+            <p>{t('guideApp1')}</p>
           </Section>
 
-          <Section icon="💾" title="저장 · 삭제">
-            <p>작성 즉시 <b>이 기기에 자동 저장</b>됩니다.</p>
-            <p>지우려면 홈 목록에서 항목 오른쪽 ✕ 를 누르세요.</p>
+          <Section icon="💾" title={t('guideSaveTitle')}>
+            <p>{t('guideSave1')}</p>
+            <p>{t('guideSave2')}</p>
           </Section>
         </div>
       </div>
@@ -138,12 +128,12 @@ export default function GuideButton({ className = '' }: { className?: string }) 
     <>
       <button
         type="button"
-        aria-label="사용 가이드 열기"
+        aria-label={t('guideOpen')}
         onClick={() => setOpen(true)}
         className={`flex items-center gap-1 rounded-full bg-rose-chip/80 px-2.5 py-1 text-[13px] font-semibold text-rose-key transition active:scale-95 ${className}`}
       >
         <HelpIcon />
-        사용법
+        {t('guideUsage')}
       </button>
       {open && <GuideModal onClose={() => setOpen(false)} />}
     </>

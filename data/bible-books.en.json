@@ -1,0 +1,464 @@
+[
+  {
+    "order": 1,
+    "book": "Genesis",
+    "abbr": "Gen",
+    "file": "01_Gen.json",
+    "standardChapters": 50
+  },
+  {
+    "order": 2,
+    "book": "Exodus",
+    "abbr": "Exod",
+    "file": "02_Exod.json",
+    "standardChapters": 40
+  },
+  {
+    "order": 3,
+    "book": "Leviticus",
+    "abbr": "Lev",
+    "file": "03_Lev.json",
+    "standardChapters": 27
+  },
+  {
+    "order": 4,
+    "book": "Numbers",
+    "abbr": "Num",
+    "file": "04_Num.json",
+    "standardChapters": 36
+  },
+  {
+    "order": 5,
+    "book": "Deuteronomy",
+    "abbr": "Deut",
+    "file": "05_Deut.json",
+    "standardChapters": 34
+  },
+  {
+    "order": 6,
+    "book": "Joshua",
+    "abbr": "Josh",
+    "file": "06_Josh.json",
+    "standardChapters": 24
+  },
+  {
+    "order": 7,
+    "book": "Judges",
+    "abbr": "Judg",
+    "file": "07_Judg.json",
+    "standardChapters": 21
+  },
+  {
+    "order": 8,
+    "book": "Ruth",
+    "abbr": "Ruth",
+    "file": "08_Ruth.json",
+    "standardChapters": 4
+  },
+  {
+    "order": 9,
+    "book": "1 Samuel",
+    "abbr": "1Sam",
+    "file": "09_1Sam.json",
+    "standardChapters": 31
+  },
+  {
+    "order": 10,
+    "book": "2 Samuel",
+    "abbr": "2Sam",
+    "file": "10_2Sam.json",
+    "standardChapters": 24
+  },
+  {
+    "order": 11,
+    "book": "1 Kings",
+    "abbr": "1Kgs",
+    "file": "11_1Kgs.json",
+    "standardChapters": 22
+  },
+  {
+    "order": 12,
+    "book": "2 Kings",
+    "abbr": "2Kgs",
+    "file": "12_2Kgs.json",
+    "standardChapters": 25
+  },
+  {
+    "order": 13,
+    "book": "1 Chronicles",
+    "abbr": "1Chr",
+    "file": "13_1Chr.json",
+    "standardChapters": 29
+  },
+  {
+    "order": 14,
+    "book": "2 Chronicles",
+    "abbr": "2Chr",
+    "file": "14_2Chr.json",
+    "standardChapters": 36
+  },
+  {
+    "order": 15,
+    "book": "Ezra",
+    "abbr": "Ezra",
+    "file": "15_Ezra.json",
+    "standardChapters": 10
+  },
+  {
+    "order": 16,
+    "book": "Nehemiah",
+    "abbr": "Neh",
+    "file": "16_Neh.json",
+    "standardChapters": 13
+  },
+  {
+    "order": 17,
+    "book": "Esther",
+    "abbr": "Esth",
+    "file": "17_Esth.json",
+    "standardChapters": 10
+  },
+  {
+    "order": 18,
+    "book": "Job",
+    "abbr": "Job",
+    "file": "18_Job.json",
+    "standardChapters": 42
+  },
+  {
+    "order": 19,
+    "book": "Psalms",
+    "abbr": "Ps",
+    "file": "19_Ps.json",
+    "standardChapters": 150
+  },
+  {
+    "order": 20,
+    "book": "Proverbs",
+    "abbr": "Prov",
+    "file": "20_Prov.json",
+    "standardChapters": 31
+  },
+  {
+    "order": 21,
+    "book": "Ecclesiastes",
+    "abbr": "Eccl",
+    "file": "21_Eccl.json",
+    "standardChapters": 12
+  },
+  {
+    "order": 22,
+    "book": "Song of Solomon",
+    "abbr": "Song",
+    "file": "22_Song.json",
+    "standardChapters": 8
+  },
+  {
+    "order": 23,
+    "book": "Isaiah",
+    "abbr": "Isa",
+    "file": "23_Isa.json",
+    "standardChapters": 66
+  },
+  {
+    "order": 24,
+    "book": "Jeremiah",
+    "abbr": "Jer",
+    "file": "24_Jer.json",
+    "standardChapters": 52
+  },
+  {
+    "order": 25,
+    "book": "Lamentations",
+    "abbr": "Lam",
+    "file": "25_Lam.json",
+    "standardChapters": 5
+  },
+  {
+    "order": 26,
+    "book": "Ezekiel",
+    "abbr": "Ezek",
+    "file": "26_Ezek.json",
+    "standardChapters": 48
+  },
+  {
+    "order": 27,
+    "book": "Daniel",
+    "abbr": "Dan",
+    "file": "27_Dan.json",
+    "standardChapters": 12
+  },
+  {
+    "order": 28,
+    "book": "Hosea",
+    "abbr": "Hos",
+    "file": "28_Hos.json",
+    "standardChapters": 14
+  },
+  {
+    "order": 29,
+    "book": "Joel",
+    "abbr": "Joel",
+    "file": "29_Joel.json",
+    "standardChapters": 3
+  },
+  {
+    "order": 30,
+    "book": "Amos",
+    "abbr": "Amos",
+    "file": "30_Amos.json",
+    "standardChapters": 9
+  },
+  {
+    "order": 31,
+    "book": "Obadiah",
+    "abbr": "Obad",
+    "file": "31_Obad.json",
+    "standardChapters": 1
+  },
+  {
+    "order": 32,
+    "book": "Jonah",
+    "abbr": "Jonah",
+    "file": "32_Jonah.json",
+    "standardChapters": 4
+  },
+  {
+    "order": 33,
+    "book": "Micah",
+    "abbr": "Mic",
+    "file": "33_Mic.json",
+    "standardChapters": 7
+  },
+  {
+    "order": 34,
+    "book": "Nahum",
+    "abbr": "Nah",
+    "file": "34_Nah.json",
+    "standardChapters": 3
+  },
+  {
+    "order": 35,
+    "book": "Habakkuk",
+    "abbr": "Hab",
+    "file": "35_Hab.json",
+    "standardChapters": 3
+  },
+  {
+    "order": 36,
+    "book": "Zephaniah",
+    "abbr": "Zeph",
+    "file": "36_Zeph.json",
+    "standardChapters": 3
+  },
+  {
+    "order": 37,
+    "book": "Haggai",
+    "abbr": "Hag",
+    "file": "37_Hag.json",
+    "standardChapters": 2
+  },
+  {
+    "order": 38,
+    "book": "Zechariah",
+    "abbr": "Zech",
+    "file": "38_Zech.json",
+    "standardChapters": 14
+  },
+  {
+    "order": 39,
+    "book": "Malachi",
+    "abbr": "Mal",
+    "file": "39_Mal.json",
+    "standardChapters": 4
+  },
+  {
+    "order": 40,
+    "book": "Matthew",
+    "abbr": "Matt",
+    "file": "40_Matt.json",
+    "standardChapters": 28
+  },
+  {
+    "order": 41,
+    "book": "Mark",
+    "abbr": "Mark",
+    "file": "41_Mark.json",
+    "standardChapters": 16
+  },
+  {
+    "order": 42,
+    "book": "Luke",
+    "abbr": "Luke",
+    "file": "42_Luke.json",
+    "standardChapters": 24
+  },
+  {
+    "order": 43,
+    "book": "John",
+    "abbr": "John",
+    "file": "43_John.json",
+    "standardChapters": 21
+  },
+  {
+    "order": 44,
+    "book": "Acts",
+    "abbr": "Acts",
+    "file": "44_Acts.json",
+    "standardChapters": 28
+  },
+  {
+    "order": 45,
+    "book": "Romans",
+    "abbr": "Rom",
+    "file": "45_Rom.json",
+    "standardChapters": 16
+  },
+  {
+    "order": 46,
+    "book": "1 Corinthians",
+    "abbr": "1Cor",
+    "file": "46_1Cor.json",
+    "standardChapters": 16
+  },
+  {
+    "order": 47,
+    "book": "2 Corinthians",
+    "abbr": "2Cor",
+    "file": "47_2Cor.json",
+    "standardChapters": 13
+  },
+  {
+    "order": 48,
+    "book": "Galatians",
+    "abbr": "Gal",
+    "file": "48_Gal.json",
+    "standardChapters": 6
+  },
+  {
+    "order": 49,
+    "book": "Ephesians",
+    "abbr": "Eph",
+    "file": "49_Eph.json",
+    "standardChapters": 6
+  },
+  {
+    "order": 50,
+    "book": "Philippians",
+    "abbr": "Phil",
+    "file": "50_Phil.json",
+    "standardChapters": 4
+  },
+  {
+    "order": 51,
+    "book": "Colossians",
+    "abbr": "Col",
+    "file": "51_Col.json",
+    "standardChapters": 4
+  },
+  {
+    "order": 52,
+    "book": "1 Thessalonians",
+    "abbr": "1Thess",
+    "file": "52_1Thess.json",
+    "standardChapters": 5
+  },
+  {
+    "order": 53,
+    "book": "2 Thessalonians",
+    "abbr": "2Thess",
+    "file": "53_2Thess.json",
+    "standardChapters": 3
+  },
+  {
+    "order": 54,
+    "book": "1 Timothy",
+    "abbr": "1Tim",
+    "file": "54_1Tim.json",
+    "standardChapters": 6
+  },
+  {
+    "order": 55,
+    "book": "2 Timothy",
+    "abbr": "2Tim",
+    "file": "55_2Tim.json",
+    "standardChapters": 4
+  },
+  {
+    "order": 56,
+    "book": "Titus",
+    "abbr": "Titus",
+    "file": "56_Titus.json",
+    "standardChapters": 3
+  },
+  {
+    "order": 57,
+    "book": "Philemon",
+    "abbr": "Phlm",
+    "file": "57_Phlm.json",
+    "standardChapters": 1
+  },
+  {
+    "order": 58,
+    "book": "Hebrews",
+    "abbr": "Heb",
+    "file": "58_Heb.json",
+    "standardChapters": 13
+  },
+  {
+    "order": 59,
+    "book": "James",
+    "abbr": "Jas",
+    "file": "59_Jas.json",
+    "standardChapters": 5
+  },
+  {
+    "order": 60,
+    "book": "1 Peter",
+    "abbr": "1Pet",
+    "file": "60_1Pet.json",
+    "standardChapters": 5
+  },
+  {
+    "order": 61,
+    "book": "2 Peter",
+    "abbr": "2Pet",
+    "file": "61_2Pet.json",
+    "standardChapters": 3
+  },
+  {
+    "order": 62,
+    "book": "1 John",
+    "abbr": "1John",
+    "file": "62_1John.json",
+    "standardChapters": 5
+  },
+  {
+    "order": 63,
+    "book": "2 John",
+    "abbr": "2John",
+    "file": "63_2John.json",
+    "standardChapters": 1
+  },
+  {
+    "order": 64,
+    "book": "3 John",
+    "abbr": "3John",
+    "file": "64_3John.json",
+    "standardChapters": 1
+  },
+  {
+    "order": 65,
+    "book": "Jude",
+    "abbr": "Jude",
+    "file": "65_Jude.json",
+    "standardChapters": 1
+  },
+  {
+    "order": 66,
+    "book": "Revelation",
+    "abbr": "Rev",
+    "file": "66_Rev.json",
+    "standardChapters": 22
+  }
+]

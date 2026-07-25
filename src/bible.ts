@@ -1,6 +1,8 @@
 /** 메시지 성경 로더. IndexedDB 캐시를 우선 사용하고, 없으면 public/bible/ 에서 가져온다. */
 
 import { db } from './db'
+import { getLang } from './i18n/lang'
+import { t } from './i18n/strings'
 import {
   finalizeRemoteChapter,
   loadRemoteBook,
@@ -45,6 +47,10 @@ const BUILD = __BUILD__
 let indexCache: Promise<BookMeta[]> | null = null
 const bookCache = new Map<string, Promise<BookDoc>>()
 
+function bibleAssetKey(file: string): string {
+  return getLang() === 'en' ? `en/${file}` : file
+}
+
 async function fetchJson<T>(url: string, message: string): Promise<T> {
   const response = await fetch(url)
   if (!response.ok) throw new Error(message)
@@ -53,15 +59,18 @@ async function fetchJson<T>(url: string, message: string): Promise<T> {
 
 export function loadIndex(): Promise<BookMeta[]> {
   if (!indexCache) {
+    // 언어 전환은 페이지 리로드를 동반하므로 메모리 캐시는 세션당 한 언어만 담는다.
     indexCache = (async () => {
-      const cached = await db.bibleIndex.get('index')
+      const id = getLang() === 'en' ? 'index:en' : 'index'
+      const indexFile = bibleAssetKey('index.json')
+      const cached = await db.bibleIndex.get(id)
       if (cached?.build === BUILD && Array.isArray(cached.items)) {
         return cached.items as BookMeta[]
       }
 
-      const items = await fetchJson<BookMeta[]>(`${BASE}bible/index.json?v=${BUILD}`, '성경 목록을 불러오지 못했습니다')
+      const items = await fetchJson<BookMeta[]>(`${BASE}bible/${indexFile}?v=${BUILD}`, t('bibleIndexError'))
       await db.bibleIndex.put({
-        id: 'index',
+        id,
         build: BUILD,
         items,
         updatedAt: new Date().toISOString(),
@@ -73,53 +82,57 @@ export function loadIndex(): Promise<BookMeta[]> {
 }
 
 export function loadBook(file: string): Promise<BookDoc> {
-  let p = bookCache.get(file)
+  const key = bibleAssetKey(file)
+  let p = bookCache.get(key)
   if (!p) {
     p = (async () => {
-      const cached = await db.bibleBooks.get(file)
+      const cached = await db.bibleBooks.get(key)
       let doc: BookDoc
 
       if (cached?.build === BUILD && cached.doc) {
         doc = cached.doc as BookDoc
       } else {
-        doc = await fetchJson<BookDoc>(`${BASE}bible/${file}?v=${BUILD}`, '본문을 불러오지 못했습니다')
+        doc = await fetchJson<BookDoc>(`${BASE}bible/${key}?v=${BUILD}`, t('bibleBookError'))
         await db.bibleBooks.put({
-          file,
+          file: key,
           build: BUILD,
           doc,
           updatedAt: new Date().toISOString(),
         })
       }
 
-      try {
-        const remoteDoc = await loadRemoteBook(file, doc)
-        if (remoteDoc) {
-          await db.bibleBooks.put({
-            file,
-            build: BUILD,
-            doc: remoteDoc,
-            updatedAt: new Date().toISOString(),
-          })
-          return remoteDoc
+      if (getLang() === 'ko') {
+        try {
+          const remoteDoc = await loadRemoteBook(file, doc)
+          if (remoteDoc) {
+            await db.bibleBooks.put({
+              file,
+              build: BUILD,
+              doc: remoteDoc,
+              updatedAt: new Date().toISOString(),
+            })
+            return remoteDoc
+          }
+        } catch (error) {
+          console.warn('Supabase Bible load failed; using local cache.', error)
         }
-      } catch (error) {
-        console.warn('Supabase Bible load failed; using local cache.', error)
       }
 
       return doc
     })()
-    bookCache.set(file, p)
+    bookCache.set(key, p)
   }
   return p
 }
 
 export async function saveBibleChapterText(file: string, chapter: number, text: string): Promise<BookDoc> {
+  if (getLang() === 'en') throw new Error(t('bibleEditBlocked'))
   const doc = await loadBook(file)
   const existing = doc.chapters.find((item) => item.chapter === chapter)
   const previousText = existing?.text ?? ''
 
   if (existing?.isFinalized) {
-    throw new Error('완료된 장은 수정할 수 없습니다')
+    throw new Error(t('bibleFinalizedEditError'))
   }
 
   await saveRemoteChapterText({
@@ -153,11 +166,12 @@ export async function saveBibleChapterText(file: string, chapter: number, text: 
 }
 
 export async function finalizeBibleChapter(file: string, chapter: number): Promise<BookDoc> {
+  if (getLang() === 'en') throw new Error(t('bibleEditBlocked'))
   const doc = await loadBook(file)
   const existing = doc.chapters.find((item) => item.chapter === chapter)
 
   if (!existing) {
-    throw new Error('완료할 본문을 찾지 못했습니다')
+    throw new Error(t('bibleFinalizeMissing'))
   }
 
   if (!existing.isFinalized) {
@@ -184,11 +198,12 @@ export async function finalizeBibleChapter(file: string, chapter: number): Promi
 
 /** 완료 처리를 되돌려 다시 수정할 수 있게 한다 (개발자 전용 경로). */
 export async function unfinalizeBibleChapter(file: string, chapter: number): Promise<BookDoc> {
+  if (getLang() === 'en') throw new Error(t('bibleEditBlocked'))
   const doc = await loadBook(file)
   const existing = doc.chapters.find((item) => item.chapter === chapter)
 
   if (!existing) {
-    throw new Error('해제할 본문을 찾지 못했습니다')
+    throw new Error(t('bibleUnfinalizeMissing'))
   }
 
   if (existing.isFinalized) {
@@ -218,12 +233,21 @@ export async function clearBibleCache(): Promise<void> {
   })
 }
 
-export function chapterUnit(book?: string): '장' | '편' {
+export function chapterUnit(book?: string): string {
+  if (getLang() === 'en') return ''
   return book === '시편' ? '편' : '장'
+}
+
+export function chapterLabel(book: string | undefined, chapter: number): string {
+  if (getLang() === 'en') return book === 'Psalms' ? `Psalm ${chapter}` : `Ch. ${chapter}`
+  return `${chapter}${chapterUnit(book)}`
 }
 
 /** '창세기 3장', '시편 1~2편' 같은 참조 문자열을 만든다. */
 export function makeRef(book: string, chapter: number, endChapter?: number): string {
+  if (getLang() === 'en') {
+    return endChapter && endChapter !== chapter ? `${book} ${chapter}-${endChapter}` : `${book} ${chapter}`
+  }
   const unit = chapterUnit(book)
   if (endChapter && endChapter !== chapter) {
     return `${book} ${chapter}~${endChapter}${unit}`
@@ -231,7 +255,7 @@ export function makeRef(book: string, chapter: number, endChapter?: number): str
   return `${book} ${chapter}${unit}`
 }
 
-/** bibleRef 한 조각에서 책 이름과 장/편 범위를 best-effort로 파싱. */
+/** 한국어와 영어 bibleRef 한 조각에서 책 이름과 장/편 범위를 best-effort로 파싱. */
 export function parseRef(ref: string): PassageRef | null {
   if (!ref) return null
   const m = ref.match(/^(.+?)\s*(\d+)(?:\s*[~-]\s*(\d+))?\s*[장편]?$/)

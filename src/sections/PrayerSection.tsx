@@ -1,5 +1,6 @@
 import { emptyField, isFieldEmpty, type Entry, type Field, type FieldMode } from '../types'
 import ModeToggle from '../components/ModeToggle'
+import { t } from '../i18n/strings'
 
 interface Props {
   entry: Entry
@@ -40,7 +41,7 @@ function PrayerSet({
               onClick={onRemoveSet}
               className="text-sm text-rose-key/70 hover:text-rose-accent"
             >
-              세트 삭제
+              {t('prayerDeleteSet')}
             </button>
           )}
         </div>
@@ -51,7 +52,7 @@ function PrayerSet({
         <div className="mb-2 flex items-center gap-3">
           <h3 className="flex shrink-0 items-center gap-2 text-[13px] font-black tracking-[0.14em] text-rose-ink">
             <span aria-hidden className="h-3.5 w-[3px] rounded-full bg-rose-accent" />
-            기도 제목
+            {t('prayerTitle')}
           </h3>
           <span aria-hidden className="h-px min-w-6 flex-1 bg-rose-line" />
           <button
@@ -59,28 +60,28 @@ function PrayerSet({
             onClick={onAddTopic}
             className="rounded-full bg-rose-accent-deep px-3 py-1 text-sm font-bold text-white shadow-sm shadow-rose-accent/25 transition active:scale-[0.98]"
           >
-            + 추가
+            {t('prayerAdd')}
           </button>
         </div>
         <div className="space-y-4">
-          {topics.map((t, i) => (
+          {topics.map((topic, i) => (
             <div key={i}>
               <div className="mb-1 flex items-center justify-between">
-                <span className="text-sm font-semibold text-rose-key">기도제목 {i + 1}</span>
+                <span className="text-sm font-semibold text-rose-key">{t('prayerTopic')(i + 1)}</span>
                 {topics.length > 1 && (
                   <button
                     type="button"
                     onClick={() => onRemoveTopic(i)}
                     className="text-sm text-rose-key/70 hover:text-rose-accent"
                   >
-                    삭제
+                    {t('prayerDelete')}
                   </button>
                 )}
               </div>
               <FieldEditor
-                field={t}
+                field={topic}
                 onChange={(v) => onTopicChange(i, v)}
-                placeholder="→ 기도제목을 적어보세요."
+                placeholder={t('prayerTopicPlaceholder')}
                 rows={2}
                 inkHeight={140}
               />
@@ -94,14 +95,14 @@ function PrayerSet({
         <div className="mb-2 flex items-center gap-3">
           <h3 className="flex shrink-0 items-center gap-2 text-[13px] font-black tracking-[0.14em] text-rose-ink">
             <span aria-hidden className="h-3.5 w-[3px] rounded-full bg-rose-accent" />
-            배우자 기도
+            {t('prayerSpouse')}
           </h3>
           <span aria-hidden className="h-px min-w-6 flex-1 bg-rose-line" />
         </div>
         <FieldEditor
           field={spouse}
           onChange={onSpouseChange}
-          placeholder="배우자(또는 미래의 배우자)를 위한 기도를 적어보세요."
+          placeholder={t('prayerSpousePlaceholder')}
           rows={3}
           inkHeight={160}
         />
@@ -146,7 +147,7 @@ export default function PrayerSection({ entry, update, FieldEditor }: Props) {
     const dirty =
       (entry.prayerTopics2 ?? []).some((t) => !isFieldEmpty(t)) ||
       (entry.spousePrayer2 != null && !isFieldEmpty(entry.spousePrayer2))
-    if (dirty && !window.confirm('두 번째 기도 세트를 삭제할까요? 입력한 내용이 사라집니다.')) return
+    if (dirty && !window.confirm(t('prayerSet2DeleteConfirm'))) return
     update((e) => ({ ...e, prayerTopics2: undefined, spousePrayer2: undefined }))
   }
   const setTopic2 = (i: number, value: Field) =>
@@ -180,7 +181,7 @@ export default function PrayerSection({ entry, update, FieldEditor }: Props) {
 
       {hasSet2 ? (
         <PrayerSet
-          label="기도 세트 2"
+          label={t('prayerSet2')}
           topics={entry.prayerTopics2!}
           spouse={entry.spousePrayer2!}
           onTopicChange={setTopic2}
@@ -196,7 +197,7 @@ export default function PrayerSection({ entry, update, FieldEditor }: Props) {
           onClick={addSet}
           className="w-full rounded-xl border border-dashed border-rose-line py-3 text-sm font-medium text-rose-key transition hover:border-rose-accent hover:text-rose-accent"
         >
-          + 기도 세트 추가
+          {t('prayerAddSet')}
         </button>
       )}
     </div>

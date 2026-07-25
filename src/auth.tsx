@@ -2,6 +2,9 @@ import { useEffect, useMemo, useState } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { AuthContext, type AuthState, useAuth } from './authState'
 import { supabase } from './supabase'
+import LangToggle from './components/LangToggle'
+import { getLang } from './i18n/lang'
+import { t } from './i18n/strings'
 
 function authRedirectUrl(): string {
   return `${window.location.origin}${window.location.pathname}`
@@ -41,7 +44,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const loadingTimer = window.setTimeout(() => {
       setLoading(false)
-      setAuthError('로그인 확인이 지연되고 있습니다. 다시 시도해 주세요.')
+      setAuthError(t('authCheckDelayed'))
     }, 8000)
 
     supabase.auth
@@ -51,7 +54,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setSession(data.session)
       })
       .catch((error) => {
-        setAuthError(error instanceof Error ? error.message : '로그인 상태를 확인하지 못했습니다.')
+        setAuthError(error instanceof Error ? error.message : t('authCheckFailed'))
       })
       .finally(() => {
         window.clearTimeout(loadingTimer)
@@ -113,7 +116,7 @@ export function RequireGoogleLogin({ children }: { children: React.ReactNode }) 
     try {
       await signInWithGoogle()
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : '로그인에 실패했습니다.')
+      setError(nextError instanceof Error ? nextError.message : t('authLoginFailed'))
       setSigningIn(false)
     }
   }
@@ -123,7 +126,7 @@ export function RequireGoogleLogin({ children }: { children: React.ReactNode }) 
       <div className="grid min-h-full place-items-center bg-rose-bg px-6 text-rose-ink">
         <div className="text-center">
           <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-rose-line border-t-rose-accent" />
-          <p className="mt-4 font-serif text-lg font-extrabold">로그인 확인 중...</p>
+          <p className="mt-4 font-serif text-lg font-extrabold">{t('authChecking')}</p>
         </div>
       </div>
     )
@@ -132,10 +135,11 @@ export function RequireGoogleLogin({ children }: { children: React.ReactNode }) 
   if (!supabase) {
     return (
       <div className="grid min-h-full place-items-center bg-rose-bg px-6 text-center text-rose-ink">
-        <div className="max-w-sm rounded-2xl border border-rose-line bg-rose-card p-6 shadow-sm">
-          <h1 className="font-serif text-2xl font-extrabold">에다 SPL 바인더</h1>
+        <div className="relative max-w-sm rounded-2xl border border-rose-line bg-rose-card p-6 shadow-sm">
+          <LangToggle className="absolute right-3 top-3" />
+          <h1 className="font-serif text-2xl font-extrabold">{t('authBinderName')}</h1>
           <p className="mt-4 text-sm leading-6 text-rose-key">
-            Supabase 환경변수가 없어 로그인할 수 없습니다.
+            {t('authMissingSupabase')}
           </p>
         </div>
       </div>
@@ -160,7 +164,8 @@ export function RequireGoogleLogin({ children }: { children: React.ReactNode }) 
         />
 
         <div className="w-full max-w-[24rem]" style={{ animation: 'fadeIn 0.5s ease both' }}>
-          <div className="rounded-[28px] border border-rose-line bg-rose-card px-7 py-9 text-center shadow-lift">
+          <div className="relative rounded-[28px] border border-rose-line bg-rose-card px-7 py-9 text-center shadow-lift">
+            <LangToggle className="absolute right-4 top-4" />
             {/* 바인더 스택 일러스트 */}
             <div className="relative mx-auto mb-7 h-[148px] w-36">
               <div className="absolute left-0 top-4 h-[124px] w-[88px] -rotate-6 rounded-lg rounded-l-sm border border-rose-line bg-rose-chip/80 shadow-sm" />
@@ -178,7 +183,7 @@ export function RequireGoogleLogin({ children }: { children: React.ReactNode }) 
                 <div className="flex h-full flex-col items-center justify-center pl-3">
                   <p className="text-[8px] font-black tracking-[0.3em] text-rose-key/70">EDA</p>
                   <p className="mt-1.5 font-serif text-[22px] font-extrabold leading-none">SPL</p>
-                  <p className="mt-1 text-[11px] font-bold text-rose-key">바인더</p>
+                  <p className="mt-1 text-[11px] font-bold text-rose-key">{t('authBinderShort')}</p>
                   <span className="mt-2.5 h-px w-9 bg-rose-line" />
                   <p className="mt-2 text-[8px] font-black tracking-[0.24em] text-rose-accent/80">
                     EDA BOOKS
@@ -189,32 +194,34 @@ export function RequireGoogleLogin({ children }: { children: React.ReactNode }) 
 
             <p className="text-[11px] font-black tracking-[0.3em] text-rose-key/70">EDA BINDER</p>
             <h1 className="mt-2.5 font-serif text-[34px] font-extrabold leading-tight text-rose-ink">
-              에다 SPL 바인더
+              {t('authBinderName')}
             </h1>
             <p className="mx-auto mt-3 max-w-[19rem] text-[14px] font-bold leading-6.5 text-rose-key">
-              Google 계정으로 로그인하면 필기와 책갈피가
-              <br />내 바인더에 안전하게 저장됩니다.
+              {t('authLoginDescription').split('\n').map((line, index) => (
+                <span key={line}>{index > 0 && <br />}{line}</span>
+              ))}
             </p>
 
             {inAppBrowser ? (
               <div className="mt-7">
                 <p className="rounded-xl border border-rose-accent/30 bg-rose-bg px-3.5 py-3 text-left text-[13px] font-bold leading-6 text-rose-ink">
-                  {inAppBrowser === 'kakaotalk' ? '카카오톡' : '지금 사용 중인'} 앱 안의 브라우저에서는
-                  Google이 보안 정책상 로그인을 차단해요.
+                  {t('authInAppPrefix')(
+                    inAppBrowser === 'kakaotalk' ? t('authKakao') : t('authCurrent'),
+                  )}
                   <br />
-                  <span className="text-rose-key">기본 브라우저(Chrome·Safari)로 열면 정상 로그인됩니다.</span>
+                  <span className="text-rose-key">{t('authExternalHint')}</span>
                 </p>
                 <button
                   type="button"
                   onClick={() => openInExternalBrowser(inAppBrowser)}
                   className="mt-3 w-full rounded-full bg-rose-accent-deep px-4 py-3.5 text-[15px] font-extrabold text-white shadow-sm shadow-rose-accent/25 transition active:scale-[0.99]"
                 >
-                  기본 브라우저로 열기
+                  {t('authOpenExternal')}
                 </button>
                 <p className="mt-3 text-xs font-bold leading-5 text-rose-key/70">
-                  버튼이 동작하지 않으면 화면의 메뉴(⋮ 또는 공유)에서
-                  <br />
-                  ‘다른 브라우저로 열기’를 선택해 주세요.
+                  {t('authExternalFallback').split('\n').map((line, index) => (
+                    <span key={line}>{index > 0 && <br />}{line}</span>
+                  ))}
                 </p>
               </div>
             ) : (
@@ -242,12 +249,12 @@ export function RequireGoogleLogin({ children }: { children: React.ReactNode }) 
                   d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"
                 />
               </svg>
-              <span>{signingIn ? 'Google로 이동 중...' : 'Google로 계속하기'}</span>
+              <span>{signingIn ? t('authGoogleOpening') : t('authGoogleContinue')}</span>
             </button>
             )}
 
             <p className="mt-4 text-xs font-bold leading-5 text-rose-key/60">
-              로그인 후 내 계정에 바인더 기록이 동기화됩니다.
+              {t('authSyncAfterLogin')}
             </p>
 
             {(error || authError) && (
@@ -257,12 +264,19 @@ export function RequireGoogleLogin({ children }: { children: React.ReactNode }) 
             )}
           </div>
 
-          <blockquote className="mt-8 text-center font-serif text-[14px] leading-7 text-rose-key/85">
-            “이 율법책을 네 입에서 떠나지 말게 하며
-            <br />
-            주야로 그것을 묵상하라”
-            <footer className="mt-1.5 text-xs text-rose-key/60">— 여호수아 1:8</footer>
-          </blockquote>
+          {getLang() === 'en' ? (
+            <blockquote className="mt-8 text-center font-serif text-[14px] leading-7 text-rose-key/85">
+              “Ponder and meditate on it day and night,
+              <br />making sure you practice everything written in it.”
+              <footer className="mt-1.5 text-xs text-rose-key/60">— Joshua 1:8</footer>
+            </blockquote>
+          ) : (
+            <blockquote className="mt-8 text-center font-serif text-[14px] leading-7 text-rose-key/85">
+              “이 율법책을 네 입에서 떠나지 말게 하며
+              <br />주야로 그것을 묵상하라”
+              <footer className="mt-1.5 text-xs text-rose-key/60">— 여호수아 1:8</footer>
+            </blockquote>
+          )}
           <p className="mt-5 text-center font-mono text-[10px] text-rose-key/40">v{__BUILD__}</p>
         </div>
       </div>

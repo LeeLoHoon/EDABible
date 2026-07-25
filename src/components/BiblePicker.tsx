@@ -3,6 +3,7 @@ import {
   loadIndex,
   loadBook,
   finalizeBibleChapter,
+  chapterLabel,
   chapterUnit,
   makeRef,
   parseRefs,
@@ -11,6 +12,9 @@ import {
   type BookMeta,
   type BookDoc,
 } from '../bible'
+import { bookOrderByName } from '../i18n/bibleBookNames'
+import { getLang } from '../i18n/lang'
+import { t } from '../i18n/strings'
 
 /** 본문을 이루는 한 조각. label이 있으면 그 장의 시작이다 ('14편'). */
 export interface PassageChunk {
@@ -73,6 +77,7 @@ function chapterText(doc: BookDoc, chapter: number): string {
   if (direct) return direct
 
   if (doc.book === '창세기' && chapter === 28) {
+    // 한국어 스캔 원본만을 위한 보정이며 영어 데이터에는 적용하지 않는다.
     return (
       doc.chapters.find((c) =>
         c.text.includes('야곱은 브엘세바를 떠나 하란을 향해 갔다'),
@@ -101,7 +106,8 @@ export default function BiblePicker({ value, onChange, onPassage }: Props) {
         if (parsed.length > 0) {
           setSelections(
             parsed.map((ref) => {
-              const meta = idx.find((b) => b.book === ref.book)
+              const order = bookOrderByName(ref.book)
+              const meta = idx.find((b) => b.book === ref.book) ?? idx.find((b) => b.order === order)
               return {
                 id: crypto.randomUUID(),
                 order: meta?.order ?? FIXED_BOOK_ORDER ?? '',
@@ -236,7 +242,7 @@ export default function BiblePicker({ value, onChange, onPassage }: Props) {
             const text = chapter?.text ?? chapterText(doc, current)
             if (text) {
               texts.push(text)
-              chunks.push({ label: `${current}${chapterUnit(book)}`, text })
+              chunks.push({ label: chapterLabel(book, current), text })
             }
             sourceQualities.push(chapter?.sourceQuality === 'verified' ? 'verified' : 'fallback')
             if (chapter?.isFinalized) isFinalized = true
@@ -297,6 +303,7 @@ export default function BiblePicker({ value, onChange, onPassage }: Props) {
 
   useEffect(() => {
     if (!inited || loading || !nextValue) return
+    // 다른 언어로 저장된 참조는 현재 언어 책 이름으로 자연스럽게 다시 기록한다.
     if (nextValue !== value) onChange(nextValue)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inited, loading, nextValue])
@@ -317,9 +324,10 @@ export default function BiblePicker({ value, onChange, onPassage }: Props) {
       typeof first.order === 'number' &&
       !!first.file &&
       first.chapter === first.endChapter
-    const canEdit = isSingleChapter && !first.isFinalized
+    const canEdit = isSingleChapter && !first.isFinalized && getLang() === 'ko'
     const canFinalize = canEdit && !!activeDoc?.supportsFinalize
-    const canUnfinalize = isSingleChapter && first.isFinalized && !!activeDoc?.supportsFinalize
+    const canUnfinalize =
+      isSingleChapter && first.isFinalized && !!activeDoc?.supportsFinalize && getLang() === 'ko'
 
     onPassage({
       book: first.book,
@@ -370,7 +378,7 @@ export default function BiblePicker({ value, onChange, onPassage }: Props) {
     <div className="bible-picker rounded-2xl bg-rose-chip px-4 py-3">
       <div className="mb-2 flex items-center justify-between gap-3">
         <label className="block text-sm font-semibold text-rose-ink">
-          {FIXED_BOOK_ORDER === null ? '오늘의 본문 (성경·장/편 선택)' : '오늘의 본문 (장/편 선택)'}
+          {FIXED_BOOK_ORDER === null ? t('pickerTitleFull') : t('pickerTitleChapter')}
         </label>
         <button
           type="button"
@@ -378,13 +386,13 @@ export default function BiblePicker({ value, onChange, onPassage }: Props) {
           disabled={rebuilding}
           className="shrink-0 rounded-lg bg-white px-2.5 py-1 text-xs font-bold text-rose-accent shadow-sm"
         >
-          + 본문 추가
+          {t('pickerAdd')}
         </button>
       </div>
 
       {rebuilding ? (
         <div className="rounded-xl border border-rose-line bg-white/70 px-3 py-3 text-sm leading-6 text-rose-key">
-          성경 본문을 원본 스캔 기준으로 다시 만드는 중입니다.
+          {t('pickerRebuilding')}
         </div>
       ) : (
       <div className="space-y-2">
@@ -409,9 +417,9 @@ export default function BiblePicker({ value, onChange, onPassage }: Props) {
                     })
                   }
                   className="bible-picker-book min-w-0 rounded-xl border border-rose-line bg-white px-3 py-2 text-base font-medium text-rose-ink outline-none focus:border-rose-accent"
-                  aria-label={`본문 ${rowIndex + 1} 성경`}
+                   aria-label={t('pickerBookAria')(rowIndex + 1)}
                 >
-                  <option value="">성경 선택</option>
+                   <option value="">{t('pickerSelectBible')}</option>
                   {index.map((book) => (
                     <option key={book.order} value={book.order}>
                       {book.book}
@@ -434,12 +442,12 @@ export default function BiblePicker({ value, onChange, onPassage }: Props) {
                   }
                   disabled={!activeDoc}
                   className="min-w-0 rounded-xl border border-rose-line bg-white px-3 py-2 text-base font-medium text-rose-ink outline-none focus:border-rose-accent disabled:opacity-50"
-                  aria-label={`본문 ${rowIndex + 1} 시작 ${unit}`}
+                   aria-label={t('pickerStartAria')(rowIndex + 1, unit)}
                 >
-                  <option value="">시작</option>
+                   <option value="">{t('pickerStart')}</option>
                   {chapterOptions.map((n) => (
                     <option key={n} value={n}>
-                      {n}{unit}
+                       {chapterLabel(meta?.book, n)}
                     </option>
                   ))}
                 </select>
@@ -455,14 +463,14 @@ export default function BiblePicker({ value, onChange, onPassage }: Props) {
                   }
                   disabled={!activeDoc || selection.chapter === ''}
                   className="min-w-0 rounded-xl border border-rose-line bg-white px-3 py-2 text-base font-medium text-rose-ink outline-none focus:border-rose-accent disabled:opacity-50"
-                  aria-label={`본문 ${rowIndex + 1} 끝 ${unit}`}
+                   aria-label={t('pickerEndAria')(rowIndex + 1, unit)}
                 >
-                  <option value="">끝</option>
+                   <option value="">{t('pickerEnd')}</option>
                   {chapterOptions
                     .filter((n) => selection.chapter === '' || n >= selection.chapter)
                     .map((n) => (
                       <option key={n} value={n}>
-                        {n}{unit}
+                         {chapterLabel(meta?.book, n)}
                       </option>
                     ))}
                 </select>
@@ -476,7 +484,7 @@ export default function BiblePicker({ value, onChange, onPassage }: Props) {
                   )
                 }
                 className="bible-picker-remove flex h-10 w-10 items-center justify-center rounded-full text-xl font-bold text-rose-key transition hover:bg-white hover:text-rose-accent"
-                aria-label={`본문 ${rowIndex + 1} 삭제`}
+                 aria-label={t('pickerDeleteAria')(rowIndex + 1)}
               >
                 ×
               </button>
@@ -489,7 +497,7 @@ export default function BiblePicker({ value, onChange, onPassage }: Props) {
       {error && <p className="mt-2 text-sm text-red-500">{error}</p>}
 
       {!rebuilding && <p className="mt-2 text-xs text-rose-key/70">
-        📖 여러 본문을 추가해 함께 읽고 필사할 수 있습니다.
+         {t('pickerHint')}
       </p>}
     </div>
   )

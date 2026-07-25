@@ -6,6 +6,7 @@ import PassageText from '../components/PassageText'
 import TranscribeGuide from '../components/TranscribeGuide'
 import { useDockedTextarea } from '../hooks/useDockedTextarea'
 import { applyRanges, HIGHLIGHT_COLORS, removeRange } from '../highlights'
+import { t } from '../i18n/strings'
 
 interface Props {
   entry: Entry
@@ -106,6 +107,8 @@ export default function TranscribeSection({ entry, update, FieldEditor }: Props)
     previousPassageKeyRef.current = passageKey
 
     if (!passage) {
+      // 여러 편집 상태를 현재 passage prop과 함께 초기화하는 기존 동기화 effect다.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setPassageDraft('')
       setPassageSaveError(null)
       setEditingPassage(false)
@@ -185,7 +188,7 @@ export default function TranscribeSection({ entry, update, FieldEditor }: Props)
 
   const unfinalizePassage = async () => {
     if (!passage?.canUnfinalize) return
-    if (!confirm(`${passage.ref} 본문의 완료를 해제할까요?\n해제하면 다시 수정할 수 있습니다.`)) {
+    if (!confirm(t('transcribeUnfinalizeConfirm')(passage.ref))) {
       return
     }
 
@@ -213,7 +216,7 @@ export default function TranscribeSection({ entry, update, FieldEditor }: Props)
 
   const completePassageEdit = async () => {
     if (!passage?.canFinalize) return
-    if (!confirm(`${passage.ref} 본문을 저장하고 완료 처리할까요?\n완료 후에는 이 화면에서 더 이상 수정할 수 없습니다.`)) {
+    if (!confirm(t('transcribeFinalizeConfirm')(passage.ref))) {
       return
     }
 
@@ -267,7 +270,7 @@ export default function TranscribeSection({ entry, update, FieldEditor }: Props)
               </span>
               {!passage!.loading && !editingPassage && (
                 <span className="shrink-0 text-xs font-medium text-rose-key">
-                  {open ? '접기 ▴' : '펼치기 ▾'}
+                  {open ? t('transcribeCollapse') : t('transcribeExpand')}
                 </span>
               )}
             </button>
@@ -278,8 +281,8 @@ export default function TranscribeSection({ entry, update, FieldEditor }: Props)
                   onClick={() => setShowPassageFormatHelp((value) => !value)}
                   className="grid h-7 w-7 place-items-center rounded-lg border border-rose-line bg-white text-xs font-black text-rose-key shadow-sm"
                   aria-expanded={showPassageFormatHelp}
-                  aria-label="본문 수정 방법 보기"
-                  title="본문 수정 방법"
+                  aria-label={t('transcribeEditHelpView')}
+                  title={t('transcribeEditHelp')}
                 >
                   ?
                 </button>
@@ -288,22 +291,22 @@ export default function TranscribeSection({ entry, update, FieldEditor }: Props)
                   onClick={startPassageEdit}
                   className="rounded-lg bg-rose-chip px-2.5 py-1 text-xs font-bold text-rose-accent"
                 >
-                  본문 수정
+                  {t('transcribeEdit')}
                 </button>
                 {showPassageFormatHelp && (
                   <div className="absolute right-0 top-9 z-20 w-[min(19rem,calc(100vw-2rem))] rounded-xl border border-rose-line bg-white p-3 text-left text-xs leading-relaxed text-rose-ink shadow-lg">
-                    <p className="font-bold text-rose-accent">본문 수정 방법</p>
+                    <p className="font-bold text-rose-accent">{t('transcribeEditHelp')}</p>
                     <div className="mt-2 rounded-lg bg-rose-bg/70 p-2 font-mono text-[11px] leading-relaxed text-rose-ink">
-                      <p>[[제목]]</p>
-                      <p>(1-3) 본문 내용...</p>
-                      <p>(4-6) 본문 내용...</p>
-                      <p className="mt-2">[[중간 제목]]</p>
-                      <p>(7-10) 본문 내용...</p>
+                      <p>[[{t('transcribeFormatTitle')}]]</p>
+                      <p>(1-3) {t('transcribeFormatBody')}</p>
+                      <p>(4-6) {t('transcribeFormatBody')}</p>
+                      <p className="mt-2">[[{t('transcribeFormatMiddleTitle')}]]</p>
+                      <p>(7-10) {t('transcribeFormatBody')}</p>
                     </div>
                     <ul className="mt-2 space-y-1 text-rose-key">
-                      <li>제목은 <b>[[제목]]</b>으로 단독 줄에 씁니다.</li>
-                      <li>절은 <b>(1)</b> 또는 <b>(1-3)</b>처럼 문단 앞에 씁니다.</li>
-                      <li>절 구분이 확실하지 않으면 절 표기는 쓰지 않습니다.</li>
+                      <li>{t('transcribeHelpTitleRule')}</li>
+                      <li>{t('transcribeHelpVerseRule')}</li>
+                      <li>{t('transcribeHelpUnknownRule')}</li>
                     </ul>
                   </div>
                 )}
@@ -318,17 +321,17 @@ export default function TranscribeSection({ entry, update, FieldEditor }: Props)
                     disabled={unfinalizingPassage}
                     className="rounded-full border border-rose-accent/60 bg-white px-2.5 py-1 text-xs font-bold text-rose-accent transition active:scale-[0.98] disabled:opacity-50"
                   >
-                    {unfinalizingPassage ? '해제 중' : '완료 해제'}
+                    {unfinalizingPassage ? t('transcribeUnfinalizing') : t('transcribeUnfinalize')}
                   </button>
                 )}
                 {/* 연속 7번 탭이 개발자 모드를 토글한다 — 겉보기는 그대로 배지 */}
                 <button
                   type="button"
                   onClick={countDevModeTap}
-                  aria-label="완료됨"
+                  aria-label={t('transcribeFinalized')}
                   className="touch-manipulation rounded-lg bg-leaf-pale/70 px-2.5 py-1 text-xs font-bold text-leaf-deep"
                 >
-                  완료됨
+                  {t('transcribeFinalized')}
                 </button>
               </div>
             )}
@@ -343,11 +346,11 @@ export default function TranscribeSection({ entry, update, FieldEditor }: Props)
           {!passage!.loading && !editingPassage && open && (
             <div className="mt-2 flex items-center justify-end gap-1.5">
               {penColor &&
-                HIGHLIGHT_COLORS.map((c) => (
+                 HIGHLIGHT_COLORS.map((c, index) => (
                   <button
                     key={c.color}
                     type="button"
-                    aria-label={`${c.label} 형광펜`}
+                     aria-label={t('transcribeHighlightAria')(t('hlColorNames')[index])}
                     onClick={() => setPenColor(c.color)}
                     className={`h-6 w-6 rounded-full border border-black/10 transition active:scale-90 ${
                       penColor === c.color
@@ -367,13 +370,13 @@ export default function TranscribeSection({ entry, update, FieldEditor }: Props)
                     : 'bg-rose-chip text-rose-accent hover:bg-rose-accent-deep hover:text-white'
                 }`}
               >
-                🖍 형광펜
+                {t('transcribeHighlight')}
               </button>
             </div>
           )}
 
           {passage!.loading ? (
-            <div className="mt-2 animate-pulse space-y-2.5 py-0.5" aria-label="본문 불러오는 중">
+            <div className="mt-2 animate-pulse space-y-2.5 py-0.5" aria-label={t('transcribeLoadingPassage')}>
               <div className="h-3 w-full rounded bg-rose-line/50" />
               <div className="h-3 w-[92%] rounded bg-rose-line/50" />
               <div className="h-3 w-[70%] rounded bg-rose-line/50" />
@@ -393,7 +396,7 @@ export default function TranscribeSection({ entry, update, FieldEditor }: Props)
                   autoCorrect="off"
                   spellCheck={false}
                   className="block min-h-[12rem] w-full rounded-xl border border-rose-line bg-white px-3 py-2 font-serif text-[16px] leading-[1.75] text-rose-ink outline-none focus:border-rose-accent"
-                  aria-label={`${passage!.ref} 본문 수정`}
+                  aria-label={t('transcribeEditAria')(passage!.ref)}
                 />
               </div>
               {passageSaveError && <p className="text-xs text-red-500">{passageSaveError}</p>}
@@ -405,7 +408,7 @@ export default function TranscribeSection({ entry, update, FieldEditor }: Props)
                     disabled={savingPassage || finalizingPassage}
                     className="rounded-full border border-rose-accent/60 bg-white px-3 py-2 text-xs font-bold text-rose-accent transition active:scale-[0.98] disabled:opacity-50"
                   >
-                    {finalizingPassage ? '완료 중' : '저장 후 완료'}
+                    {finalizingPassage ? t('transcribeFinalizing') : t('transcribeSaveFinalize')}
                   </button>
                 )}
                 <button
@@ -414,7 +417,7 @@ export default function TranscribeSection({ entry, update, FieldEditor }: Props)
                   disabled={savingPassage || finalizingPassage}
                   className="rounded-full border border-rose-line bg-white px-3 py-2 text-xs font-bold text-rose-key transition hover:border-rose-accent/50 hover:text-rose-accent active:scale-[0.98] disabled:opacity-50"
                 >
-                  취소
+                  {t('transcribeCancel')}
                 </button>
                 <button
                   type="button"
@@ -422,7 +425,7 @@ export default function TranscribeSection({ entry, update, FieldEditor }: Props)
                   disabled={savingPassage || finalizingPassage}
                   className="rounded-full bg-rose-accent-deep px-3 py-2 text-xs font-bold text-white shadow-sm shadow-rose-accent/25 transition active:scale-[0.98] disabled:opacity-50"
                 >
-                  {savingPassage ? '저장 중' : '저장'}
+                  {savingPassage ? t('transcribeSaving') : t('transcribeSave')}
                 </button>
               </div>
             </div>
@@ -454,7 +457,7 @@ export default function TranscribeSection({ entry, update, FieldEditor }: Props)
             !editingPassage &&
             (entry.highlightRanges?.length ?? 0) === 0 && (
               <p className="mt-2 border-t border-rose-line/60 pt-1.5 text-[11px] text-rose-key/70">
-                🖍 형광펜을 켜고 본문을 가로로 그으면 칠해져요 · 칠한 부분은 탭하면 지워집니다
+                {t('transcribeHighlightHint')}
               </p>
             )}
         </div>
@@ -465,7 +468,7 @@ export default function TranscribeSection({ entry, update, FieldEditor }: Props)
         <div className="mb-2 flex items-center gap-3">
           <h3 className="flex shrink-0 items-center gap-2 text-[13px] font-black tracking-[0.14em] text-rose-ink">
             <span aria-hidden className="h-3.5 w-[3px] rounded-full bg-rose-accent" />
-            필사
+            {t('transcribeTitle')}
           </h3>
           <span aria-hidden className="h-px min-w-6 flex-1 bg-rose-line" />
           <ModeToggle mode={mode} onChange={setMode} />
@@ -481,7 +484,7 @@ export default function TranscribeSection({ entry, update, FieldEditor }: Props)
         <FieldEditor
           field={entry.transcription}
           onChange={setTranscription}
-          placeholder="읽은 본문을 한 자 한 자 옮겨 적어보세요."
+          placeholder={t('transcribePlaceholder')}
           rows={10}
           inkHeight={360}
           disablePaste
@@ -492,7 +495,7 @@ export default function TranscribeSection({ entry, update, FieldEditor }: Props)
             id="transcription-paste-notice"
             className="mt-1.5 px-1 text-[11px] text-rose-key/70"
           >
-            직접 옮겨 적을 수 있도록 붙여넣기는 사용할 수 없습니다.
+            {t('transcribePasteBlocked')}
           </p>
         )}
       </div>

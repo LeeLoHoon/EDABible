@@ -1,6 +1,8 @@
 import type React from 'react'
 import { getQuestionSet, emptyTemptationVictory, type Entry, type Field } from '../types'
 import ReadonlyField from './ReadonlyField'
+import { formatEntryDateDot } from '../i18n/format'
+import { t } from '../i18n/strings'
 
 interface Props {
   entry: Entry
@@ -12,23 +14,6 @@ export interface ShareSections {
   prayer: boolean
   questions: boolean
   victory: boolean
-}
-
-const STAGE_TITLES = [
-  '1단계 - 유혹',
-  '2단계 - 침투',
-  '3단계 - 사건',
-  '4단계 - 견고한 진',
-  '5단계 - 억압',
-  '6단계 - 집착',
-  '7단계 - 포로',
-] as const
-
-function formatDate(date: string): string {
-  const [y, m, d] = date.split('-')
-  const days = ['일', '월', '화', '수', '목', '금', '토']
-  const dow = days[new Date(Number(y), Number(m) - 1, Number(d)).getDay()]
-  return `${y}.${m}.${d} (${dow})`
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -81,49 +66,49 @@ export default function EntryShareCard({
       <header className="mb-8 border-b border-rose-line pb-5">
         <p className="font-serif text-[34px] font-extrabold text-rose-ink">EDABible</p>
         <div className="mt-2 flex items-end justify-between gap-6">
-          <h1 className="font-serif text-[28px] font-bold text-rose-ink">{formatDate(entry.date)}</h1>
+          <h1 className="font-serif text-[28px] font-bold text-rose-ink">{formatEntryDateDot(entry.date)}</h1>
           <p className="shrink-0 whitespace-nowrap text-right text-[18px] font-semibold text-rose-key">
-            {entry.bibleRef || '본문 미입력'}
+            {entry.bibleRef || t('homePassageMissing')}
           </p>
         </div>
       </header>
 
       <div className="space-y-9">
         {sections.transcribe && (
-          <Section title="필사">
+          <Section title={t('shareTranscribe')}>
             <ReadonlyField field={entry.transcription} minHeight={240} />
           </Section>
         )}
 
         {sections.prayer && (
-          <Section title="기도">
+          <Section title={t('sharePrayer')}>
             <div className="grid grid-cols-2 gap-4">
               {entry.prayerTopics.map((topic, index) => (
                 <LabeledField
                   key={index}
-                  label={`기도제목 ${index + 1}`}
+                   label={t('sharePrayerTopic')(index + 1)}
                   field={topic}
                   minHeight={96}
                 />
               ))}
             </div>
-            <LabeledField label="배우자 기도" field={entry.spousePrayer} minHeight={120} />
+            <LabeledField label={t('shareSpousePrayer')} field={entry.spousePrayer} minHeight={120} />
 
             {entry.prayerTopics2 && (
               <div className="break-inside-avoid space-y-3 border-t border-rose-line pt-4">
-                <p className="text-[15px] font-bold text-rose-key">기도 세트 2</p>
+                <p className="text-[15px] font-bold text-rose-key">{t('sharePrayerSet2')}</p>
                 <div className="grid grid-cols-2 gap-4">
                   {entry.prayerTopics2.map((topic, index) => (
                     <LabeledField
                       key={index}
-                      label={`기도제목 ${index + 1}`}
+                       label={t('sharePrayerTopic')(index + 1)}
                       field={topic}
                       minHeight={96}
                     />
                   ))}
                 </div>
                 {entry.spousePrayer2 && (
-                  <LabeledField label="배우자 기도" field={entry.spousePrayer2} minHeight={120} />
+                  <LabeledField label={t('shareSpousePrayer')} field={entry.spousePrayer2} minHeight={120} />
                 )}
               </div>
             )}
@@ -131,7 +116,7 @@ export default function EntryShareCard({
         )}
 
         {sections.questions && (
-          <Section title="5가지 질문">
+          <Section title={t('shareQuestions')}>
             <div className="space-y-4">
               {getQuestionSet(entry.questionSet).questions.map((question, index) => (
                 <LabeledField
@@ -148,49 +133,49 @@ export default function EntryShareCard({
 
         {sections.victory && (
           <>
-            <Section title="7가지 단계">
+            <Section title={t('shareStages')}>
               <LabeledField
-                label="나의 죄"
-                description="승리하고 싶은 죄 한가지를 떠올려 자세히 적어주세요."
+                label={t('shareMySin')}
+                description={t('shareSinDesc')}
                 field={worksheet.sin}
                 minHeight={120}
               />
               <div className="rounded-xl border border-rose-line bg-white px-4 py-3">
-                <p className="mb-2 text-[16px] font-bold text-rose-ink">나의 상태</p>
+                <p className="mb-2 text-[16px] font-bold text-rose-ink">{t('shareMyState')}</p>
                 <p className="text-[15px] text-rose-ink">
-                  {worksheet.stage ? STAGE_TITLES[worksheet.stage - 1] : '선택된 단계가 없습니다.'}
+                  {worksheet.stage ? t('tvStages')[worksheet.stage - 1].name : t('shareNoStage')}
                 </p>
               </div>
               <LabeledField
-                label="나의 상태 기록"
-                description="선택한 단계에서 내 상태가 어떤지 적은 내용"
+                label={t('shareStateNote')}
+                description={t('shareStateNoteDesc')}
                 field={worksheet.stageNote}
                 minHeight={120}
               />
             </Section>
 
-            <Section title="죄로부터 승리">
+            <Section title={t('shareVictory')}>
               <LabeledField
                 label="HELP"
-                description="다른 사람에게 요청할 도움이나 중보기도"
+                description={t('shareHelpDesc')}
                 field={worksheet.help}
                 minHeight={120}
               />
               <LabeledField
                 label="PRAY"
-                description="회개기도"
+                description={t('sharePrayDesc')}
                 field={worksheet.pray}
                 minHeight={140}
               />
               <LabeledField
                 label="VICTORY"
-                description="승리 여부와 감사기도"
+                description={t('shareVictoryDesc')}
                 field={worksheet.victory}
                 minHeight={140}
               />
               <LabeledField
                 label="GROW"
-                description="승리 후 성장"
+                description={t('shareGrowDesc')}
                 field={worksheet.grow}
                 minHeight={140}
               />

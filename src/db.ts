@@ -3,7 +3,7 @@ import { emptyField, type Entry, type Field } from './types'
 import { supabase } from './supabase'
 
 export interface BibleIndexCache {
-  id: 'index'
+  id: string
   build: string
   items: unknown[]
   updatedAt: string
@@ -25,14 +25,19 @@ export interface BinderWork {
   bookmarks: BinderBookmark[]
   /** 이 권에서 마지막으로 보던 쪽 — 다시 열 때 이어보기용 */
   lastPageNumber?: number
+  /** 체크포인트 구간별로 마지막에 보던 쪽 — 체크포인트를 다시 누르면 그 자리로 돌아간다 */
+  checkpointPages?: Record<string, number>
   updatedAt: number
 }
 
+/** 쪽 위에 얹는 타이핑 상자 — x·y·width·height는 모두 쪽 크기 대비 비율(0~1) */
 export interface BinderTextBox {
   id: string
   x: number
   y: number
   width: number
+  /** 없으면 내용에 맞춰 자동 높이 (크기 조절 이전에 만든 상자) */
+  height?: number
   text: string
 }
 
@@ -102,6 +107,7 @@ export function createBinderWork(bookId: string): BinderWork {
     pageInputs: {},
     pageTextBoxes: {},
     bookmarks: [],
+    checkpointPages: {},
     updatedAt: Date.now(),
   }
 }
@@ -113,6 +119,7 @@ function normalizeBinderWork(bookId: string, work: Partial<BinderWork> | null | 
     pageInputs: work?.pageInputs ?? {},
     pageTextBoxes: work?.pageTextBoxes ?? {},
     bookmarks: work?.bookmarks ?? [],
+    checkpointPages: work?.checkpointPages ?? {},
   }
 }
 

@@ -1,8 +1,11 @@
 import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
-const bibleDir = new URL('../public/bible/', import.meta.url);
-const reportPath = new URL('../.tmp/bible-validation.json', import.meta.url);
+// --lang en 이면 public/bible/en 산출물을 검증한다. 한국어 전용 규칙(편집 제목·페이지 헤더)은
+// 영어 본문과 매칭되지 않으므로 같은 규칙을 그대로 적용해도 안전하다.
+const lang = process.argv.includes('--lang') ? process.argv[process.argv.indexOf('--lang') + 1] : 'ko';
+const bibleDir = new URL(lang === 'en' ? '../public/bible/en/' : '../public/bible/', import.meta.url);
+const reportPath = new URL(`../.tmp/bible-validation${lang === 'en' ? '-en' : ''}.json`, import.meta.url);
 
 const index = JSON.parse(readFileSync(new URL('index.json', bibleDir), 'utf8'));
 const files = readdirSync(bibleDir).filter((name) => name.endsWith('.json') && name !== 'index.json');

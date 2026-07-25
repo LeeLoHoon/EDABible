@@ -117,7 +117,7 @@ export default defineConfig({
                     cacheName: `bible-json-${pkg.version}`,
                     networkTimeoutSeconds: 5,
                     expiration: {
-                      maxEntries: 70,
+                      maxEntries: 140,
                       maxAgeSeconds: 60 * 60 * 24 * 30,
                     },
                   },

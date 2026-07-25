@@ -1,9 +1,16 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 
-const BOOKS_PATH = 'data/bible-books.json'
-const CHAPTERS_PATH = 'data/bible-chapters.jsonl'
+// --lang en 이면 영어(The Message) 데이터셋을 public/bible/en 아래에 생성한다.
+const lang = process.argv.includes('--lang') ? process.argv[process.argv.indexOf('--lang') + 1] : 'ko'
+if (lang !== 'ko' && lang !== 'en') {
+  console.error(`unsupported lang: ${lang}`)
+  process.exit(1)
+}
+
+const BOOKS_PATH = lang === 'en' ? 'data/bible-books.en.json' : 'data/bible-books.json'
+const CHAPTERS_PATH = lang === 'en' ? 'data/bible-chapters.en.jsonl' : 'data/bible-chapters.jsonl'
 const PACKAGE_PATH = 'package.json'
-const OUT_DIR = 'public/bible'
+const OUT_DIR = lang === 'en' ? 'public/bible/en' : 'public/bible'
 
 async function readJson(path) {
   return JSON.parse(await readFile(path, 'utf8'))

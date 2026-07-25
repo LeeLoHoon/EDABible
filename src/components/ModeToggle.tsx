@@ -1,4 +1,5 @@
 import type { FieldMode } from '../types'
+import { t } from '../i18n/strings'
 
 interface Props {
   mode: FieldMode
@@ -16,7 +17,7 @@ export default function ModeToggle({ mode, onChange }: Props) {
           mode === 'text' ? 'bg-rose-accent-deep text-white' : 'text-rose-ink'
         }`}
       >
-        ⌨️ 타이핑
+        {t('modeTyping')}
       </button>
       <button
         type="button"
@@ -25,7 +26,7 @@ export default function ModeToggle({ mode, onChange }: Props) {
           mode === 'ink' ? 'bg-rose-accent-deep text-white' : 'text-rose-ink'
         }`}
       >
-        ✍️ 손글씨
+        {t('modeInk')}
       </button>
     </div>
   )

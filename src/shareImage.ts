@@ -1,6 +1,7 @@
 import { toJpeg } from 'html-to-image'
 import html2canvas from 'html2canvas'
 import type { Entry } from './types'
+import { t } from './i18n/strings'
 
 function filename(entry: Entry): string {
   return `edabible-${entry.date}.jpg`
@@ -32,7 +33,7 @@ function canvasToFile(canvas: HTMLCanvasElement, name: string, type: string): Pr
     canvas.toBlob(
       (blob) => {
         if (!blob) {
-          reject(new Error('캔버스 이미지를 파일로 변환하지 못했습니다.'))
+          reject(new Error(t('shareCanvasError')))
           return
         }
         resolve(new File([blob], name, { type }))

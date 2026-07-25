@@ -4,6 +4,7 @@ import {
   setAppUpdateRefreshing,
   subscribeToAppUpdate,
 } from '../appUpdate'
+import { t } from '../i18n/strings'
 
 interface UpdateNoticeProps {
   onRefresh: () => Promise<void>
@@ -46,10 +47,10 @@ export default function UpdateNotice({ onRefresh }: UpdateNoticeProps) {
         className="mx-auto flex min-h-11 w-full max-w-3xl items-center justify-between gap-3 rounded-xl px-2 text-left text-xs font-bold leading-5 transition active:bg-white/10 disabled:cursor-wait sm:px-3 sm:text-sm"
       >
         <span>
-          최신 버전은 <span className="font-mono">{latestVersion}</span> 입니다. 새로고침을 진행해주세요
+          {t('updateMessage')(latestVersion)}
         </span>
         <span className="shrink-0 rounded-full bg-white px-3 py-1 text-xs font-extrabold text-rose-ink sm:text-[13px]">
-          {refreshing ? '새로고침 중…' : '새로고침'}
+          {refreshing ? t('updateRefreshing') : t('updateRefresh')}
         </span>
       </button>
     </aside>

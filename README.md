@@ -48,7 +48,9 @@ SUPABASE_SERVICE_ROLE_KEY=your-service-role-key npm run seed:supabase-bible
 ## Scripts
 
 ```bash
-npm run dev
+npm run dev           # 말씀 묵상 노트 개발 서버
+npm run dev:binder    # 에다 SPL 바인더 개발 서버
+npm run dev:all       # 통합(노트+바인더) 개발 서버
 npm run build:note
 npm run build:binder
 npm run build:all

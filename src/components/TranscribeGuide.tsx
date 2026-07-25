@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import type { PassageChunk } from './BiblePicker'
 import { splitBlocks } from '../passageBlocks'
+import { t } from '../i18n/strings'
 
 interface Props {
   /** 본문 조각 — PassageInfo.chunks 그대로 */
@@ -104,7 +105,7 @@ export default function TranscribeGuide({ chunks, startChapter, storageKey }: Pr
         onClick={toggleHidden}
         className="mb-2 flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-rose-line bg-rose-card/60 px-3 py-2 text-xs font-bold text-rose-key transition active:scale-[0.99]"
       >
-        📖 따라쓰기 가이드 펼치기
+        {t('tguideShow')}
       </button>
     )
   }
@@ -116,7 +117,7 @@ export default function TranscribeGuide({ chunks, startChapter, storageKey }: Pr
     >
       <div className="flex items-center justify-between gap-2">
         <span className="text-xs font-bold text-rose-key">
-          📖 따라쓰기 · {clamped + 1} / {steps.length}
+          {t('tguideProgress')(clamped + 1, steps.length)}
           {chapterLabel && <span className="ml-1.5 text-rose-accent">{chapterLabel}</span>}
         </span>
         <button
@@ -124,7 +125,7 @@ export default function TranscribeGuide({ chunks, startChapter, storageKey }: Pr
           onClick={toggleHidden}
           className="shrink-0 rounded-lg px-2 py-1 text-xs font-medium text-rose-key"
         >
-          숨기기 ▴
+          {t('tguideHide')}
         </button>
       </div>
 
@@ -146,7 +147,7 @@ export default function TranscribeGuide({ chunks, startChapter, storageKey }: Pr
           disabled={clamped === 0}
           className="flex-1 rounded-full border border-rose-line bg-white px-3 py-2 text-[13px] font-bold text-rose-key transition active:scale-[0.98] disabled:opacity-40"
         >
-          ◀ 이전 구절
+          {t('tguidePrev')}
         </button>
         <button
           type="button"
@@ -154,7 +155,7 @@ export default function TranscribeGuide({ chunks, startChapter, storageKey }: Pr
           disabled={clamped === steps.length - 1}
           className="flex-1 rounded-full bg-rose-accent-deep px-3 py-2 text-[13px] font-bold text-white shadow-sm shadow-rose-accent/25 transition active:scale-[0.98] disabled:opacity-40"
         >
-          다음 구절 ▶
+          {t('tguideNext')}
         </button>
       </div>
     </div>

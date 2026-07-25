@@ -1,4 +1,5 @@
 import { v4 as uuid } from 'uuid'
+import { getLang } from './i18n/lang'
 
 export type FieldMode = 'text' | 'ink'
 
@@ -80,7 +81,7 @@ export interface QuestionSet {
 }
 
 /** 선택 가능한 5가지 질문 세트들 (첫 번째가 기본값) */
-export const QUESTION_SETS: QuestionSet[] = [
+const QUESTION_SETS_KO: QuestionSet[] = [
   {
     id: 'meditation',
     label: '묵상 5질문',
@@ -109,11 +110,45 @@ export const QUESTION_SETS: QuestionSet[] = [
   },
 ]
 
+const QUESTION_SETS_EN: QuestionSet[] = [
+  {
+    id: 'meditation',
+    label: '5 Questions',
+    questions: [
+      { text: 'What words did I speak today?', keyword: 'words' },
+      { text: 'How did I spend my time today?', keyword: 'time' },
+      { text: 'What meetings did I have today?', keyword: 'meetings' },
+      { text: 'What did I put into practice right away today?', keyword: 'practice' },
+      { text: 'How did I care for myself today?', keyword: 'care for myself' },
+    ],
+  },
+  {
+    id: 'review',
+    label: 'Daily Review',
+    questions: [
+      { text: 'What did I discover today?', keyword: 'discover', hint: 'things I realized' },
+      { text: 'What did I share with others today?', keyword: 'share' },
+      { text: 'What did I receive today?', keyword: 'receive' },
+      {
+        text: 'What did I develop today?',
+        keyword: 'develop',
+        hint: 'applying the morning meditation / answered prayers / fruit',
+      },
+      { text: 'What do I need to forgive or let go of today?', keyword: 'forgive or let go of' },
+    ],
+  },
+]
+
+export function getQuestionSets(): QuestionSet[] {
+  return getLang() === 'en' ? QUESTION_SETS_EN : QUESTION_SETS_KO
+}
+
 export const DEFAULT_QUESTION_SET_ID: QuestionSetId = 'meditation'
 
 /** id로 질문 세트 조회 — 없거나 모르는 id면 기본 세트 */
 export function getQuestionSet(id: QuestionSetId | undefined): QuestionSet {
-  return QUESTION_SETS.find((s) => s.id === id) ?? QUESTION_SETS[0]
+  const sets = getQuestionSets()
+  return sets.find((s) => s.id === id) ?? sets[0]
 }
 
 export function emptyField(): Field {

@@ -47,6 +47,13 @@ body,
   height: 100%;
 }
 
+/* iOS/Android가 가로 화면에서 본문 글자를 임의로 키우는 자동 보정(text autosizing)을
+   끈다. 끄지 않으면 태블릿을 회전할 때만 글씨 크기가 달라진다. */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
 body {
   margin: 0;
   background: var(--color-rose-bg);

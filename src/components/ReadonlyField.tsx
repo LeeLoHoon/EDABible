@@ -1,5 +1,6 @@
 import { getStroke } from 'perfect-freehand'
 import type { Field, Stroke } from '../types'
+import { t } from '../i18n/strings'
 
 interface Props {
   field: Field
@@ -47,7 +48,7 @@ export default function ReadonlyField({ field, minHeight = 96 }: Props) {
         className="min-h-24 whitespace-pre-wrap rounded-xl border border-rose-line bg-white px-4 py-3 text-[16px] leading-relaxed text-rose-ink"
         style={{ minHeight }}
       >
-        {hasText ? field.text : <span className="text-rose-key/50">작성된 내용이 없습니다.</span>}
+        {hasText ? field.text : <span className="text-rose-key/50">{t('readonlyEmpty')}</span>}
       </div>
     )
   }
@@ -60,7 +61,7 @@ export default function ReadonlyField({ field, minHeight = 96 }: Props) {
         width="100%"
         height={Math.max(minHeight, size.height)}
         preserveAspectRatio="xMinYMin meet"
-        aria-label="손글씨 내용"
+        aria-label={t('readonlyInk')}
       >
         {field.strokes.map((stroke, index) => (
           <path key={index} d={strokePath(stroke)} fill={stroke.color} />

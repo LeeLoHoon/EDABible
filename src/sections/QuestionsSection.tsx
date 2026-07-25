@@ -1,5 +1,5 @@
 import {
-  QUESTION_SETS,
+  getQuestionSets,
   getQuestionSet,
   type Entry,
   type Field,
@@ -7,6 +7,7 @@ import {
   type QuestionSetId,
 } from '../types'
 import ModeToggle from '../components/ModeToggle'
+import { t } from '../i18n/strings'
 
 interface Props {
   entry: Entry
@@ -37,7 +38,7 @@ function SetToggle({
 }) {
   return (
     <div className="inline-flex select-none rounded-full bg-rose-chip p-0.5">
-      {QUESTION_SETS.map((s) => (
+       {getQuestionSets().map((s) => (
         <button
           key={s.id}
           type="button"
@@ -74,7 +75,7 @@ export default function QuestionsSection({ entry, update, FieldEditor }: Props) 
       <div className="flex flex-wrap items-center gap-3">
         <h3 className="flex shrink-0 items-center gap-2 text-[13px] font-black tracking-[0.14em] text-rose-ink">
           <span aria-hidden className="h-3.5 w-[3px] rounded-full bg-rose-accent" />
-          5가지 질문
+          {t('questionsTitle')}
         </h3>
         <span aria-hidden className="h-px min-w-6 flex-1 bg-rose-line" />
         <ModeToggle mode={mode} onChange={setMode} />
@@ -90,7 +91,7 @@ export default function QuestionsSection({ entry, update, FieldEditor }: Props) 
           <FieldEditor
             field={entry.answers[i]}
             onChange={(v) => setAnswer(i, v)}
-            placeholder="→ 오늘 하루를 돌아보며 적어보세요."
+            placeholder={t('questionsPlaceholder')}
             rows={3}
             inkHeight={160}
           />

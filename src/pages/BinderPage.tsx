@@ -15,8 +15,12 @@ import {
 } from '../db'
 import { canvasToJpegFile, shareOrDownloadFiles } from '../shareImage'
 import { emptyField, type Field, type FieldMode, type Stroke } from '../types'
+import { t } from '../i18n/strings'
+import LangToggle from '../components/LangToggle'
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl
+
+// The binder PDF itself is source material and intentionally remains in Korean.
 
 type PdfDocument = Awaited<ReturnType<typeof pdfjsLib.getDocument>['promise']>
 type InkTool = 'pen' | 'eraser'
@@ -35,6 +39,20 @@ const IS_IOS =
 // 펜을 뗀 뒤에도 잠시 손바닥 터치를 계속 차단하는 유예(ms)
 const PALM_GRACE_MS = 1200
 
+// 텍스트 상자는 한 번 탭으로 만들면 오탭이 잦아 두 번 탭으로만 만든다
+const DOUBLE_TAP_MS = 400
+const DOUBLE_TAP_SLOP_PX = 32
+// 상자 크기는 쪽 대비 비율로 저장하지만, 최소 크기는 px로 잡아야
+// 좁은 폰에서도 한 줄이 들어가는 크기가 보장된다
+const NEW_TEXT_BOX_WIDTH_RATIO = 0.34
+const NEW_TEXT_BOX_HEIGHT_PX = 56
+const MIN_TEXT_BOX_WIDTH_PX = 90
+const MIN_TEXT_BOX_HEIGHT_PX = 44
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value))
+}
+
 interface BinderCheckpoint {
   id: string
   label: string
@@ -43,28 +61,9 @@ interface BinderCheckpoint {
 
 function defaultCheckpoints(bookId: string): BinderCheckpoint[] {
   if (bookId === 'spl-00-01') {
-    return [
-      { id: 'cover', label: '표지', page: 1 },
-      { id: 'starter-00', label: '00 목차', page: 7 },
-      { id: 'accept-prayer', label: '영접 기도', page: 53 },
-      { id: 'starter-01', label: '01 목차', page: 57 },
-      { id: 'strength', label: '강점 찾기', page: 59 },
-      { id: 'mission', label: '사명 찾기', page: 63 },
-      { id: 'eda-prayer', label: '에다 기도문', page: 71 },
-      { id: 'deliverance', label: '축사 기도문', page: 95 },
-      { id: 'meditation', label: '성경묵상', page: 113 },
-      { id: 'timothy', label: '디모데 만들기', page: 151 },
-      { id: 'book-study', label: '책공부', page: 163 },
-    ]
+    return t('binderCheckpoints')
   }
-
-  return [
-    { id: 'cover', label: '표지', page: 1 },
-    { id: 'toc', label: '목차', page: 5 },
-    { id: 'meditation', label: '성경묵상', page: 7 },
-    { id: 'timothy', label: '디모데 만들기', page: 43 },
-    { id: 'book-study', label: '책공부', page: 55 },
-  ]
+  return t('binderCheckpointsShort')
 }
 
 function nearbyPages(pageNumber: number, pageCount: number, count = 5): number[] {
@@ -124,7 +123,7 @@ function drawStrokes(canvas: HTMLCanvasElement, strokes: Stroke[]) {
   }
 }
 
-/** 텍스트 상자를 공유 이미지에 그린다 — 줄바꿈·자동 줄바꿈 포함 */
+/** 텍스트 상자를 공유 이미지에 그린다 — 화면과 같이 테두리 없이 글자만, 자동 줄바꿈 포함 */
 function paintShareTextBox(
   ctx: CanvasRenderingContext2D,
   box: BinderTextBox,
@@ -133,13 +132,14 @@ function paintShareTextBox(
   exportScale: number,
 ) {
   const fontSize = 16 * exportScale
-  const lineHeight = fontSize * 1.6
-  const padding = 10 * exportScale
+  const lineHeight = fontSize * 1.625
+  const paddingX = 10 * exportScale
+  const paddingY = 8 * exportScale
   const x = box.x * canvasWidth
   const y = box.y * canvasHeight
-  const maxWidth = box.width * canvasWidth - padding * 2
+  const maxWidth = box.width * canvasWidth - paddingX * 2
 
-  ctx.font = `${fontSize}px 'Nanum Myeongjo', 'Apple SD Gothic Neo', serif`
+  ctx.font = `${fontSize}px 'Pretendard Variable', Pretendard, 'Apple SD Gothic Neo', sans-serif`
   ctx.textBaseline = 'top'
 
   const lines: string[] = []
@@ -156,18 +156,9 @@ function paintShareTextBox(
     lines.push(line)
   }
 
-  const boxHeight = lines.length * lineHeight + padding * 2
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.75)'
-  ctx.strokeStyle = 'rgba(160, 156, 51, 0.25)'
-  ctx.lineWidth = 1 * exportScale
-  ctx.beginPath()
-  ctx.roundRect(x, y, box.width * canvasWidth, boxHeight, 8 * exportScale)
-  ctx.fill()
-  ctx.stroke()
-
   ctx.fillStyle = '#3a3626'
   lines.forEach((line, index) => {
-    ctx.fillText(line, x + padding, y + padding + index * lineHeight)
+    ctx.fillText(line, x + paddingX, y + paddingY + index * lineHeight)
   })
 }
 
@@ -258,10 +249,19 @@ function PageOverlay({
   useEffect(() => {
     inkPropsRef.current = { tool, color, size, mode, onChange }
   }, [tool, color, size, mode, onChange])
-  const [activeTextBoxId, setActiveTextBoxId] = useState<string | null>(textBoxes[0]?.id ?? null)
-  const visibleActiveTextBoxId = textBoxes.some((box) => box.id === activeTextBoxId)
-    ? activeTextBoxId
-    : (textBoxes[0]?.id ?? null)
+  const [activeTextBoxId, setActiveTextBoxId] = useState<string | null>(null)
+  // 이동·크기 조절 중에는 매 프레임 저장하지 않도록 손을 뗄 때까지 임시 상태로만 그린다
+  const [draftTextBox, setDraftTextBox] = useState<BinderTextBox | null>(null)
+  const draftTextBoxRef = useRef<BinderTextBox | null>(null)
+  // 드래그가 배경 위에서 끝나면 그 pointerup이 "배경 탭"으로 오인돼 선택이 풀린다
+  const draggingTextBoxRef = useRef(false)
+  const lastTapRef = useRef<{ time: number; x: number; y: number } | null>(null)
+  const editable = mode === 'text'
+  const visibleActiveTextBoxId =
+    editable && textBoxes.some((box) => box.id === activeTextBoxId) ? activeTextBoxId : null
+  const visibleTextBoxes = draftTextBox
+    ? textBoxes.map((box) => (box.id === draftTextBox.id ? draftTextBox : box))
+    : textBoxes
 
   useEffect(() => {
     fieldRef.current = field
@@ -287,7 +287,6 @@ function PageOverlay({
     }
     onTextBoxesChange([box])
     onChange({ ...field, text: '' })
-    window.setTimeout(() => setActiveTextBoxId(box.id), 0)
   }, [field, onChange, onTextBoxesChange, textBoxes.length])
 
   useEffect(() => {
@@ -549,54 +548,94 @@ function PageOverlay({
     }
   }, [])
 
-  const addTextBox = (event: React.MouseEvent<HTMLDivElement>) => {
-    if (mode !== 'text') return
-    if (event.target !== event.currentTarget) return
-    const rect = event.currentTarget.getBoundingClientRect()
-    const x = Math.max(0, Math.min(0.78, (event.clientX - rect.left) / rect.width))
-    const y = Math.max(0, Math.min(0.92, (event.clientY - rect.top) / rect.height))
-    const box = {
-      id: crypto.randomUUID(),
-      x,
-      y,
-      width: 0.34,
-      text: '',
-    }
-    onTextBoxesChange([...textBoxesRef.current, box])
-    setActiveTextBoxId(box.id)
-    window.setTimeout(() => {
-      document.querySelector<HTMLTextAreaElement>(`[data-text-box-id="${box.id}"]`)?.focus()
-    }, 0)
-  }
-
   const updateTextBox = (id: string, patch: Partial<BinderTextBox>) => {
     onTextBoxesChange(textBoxesRef.current.map((box) => (box.id === id ? { ...box, ...patch } : box)))
   }
 
-  const startMoveTextBox = (event: React.PointerEvent<HTMLButtonElement>, box: BinderTextBox) => {
+  const filledTextBoxes = () => textBoxesRef.current.filter((box) => box.text.trim())
+
+  // 비어 있는 상자는 테두리가 사라지면 보이지 않으므로 선택이 풀릴 때 정리한다
+  const dropEmptyTextBoxes = () => {
+    const filled = filledTextBoxes()
+    if (filled.length !== textBoxesRef.current.length) onTextBoxesChange(filled)
+  }
+
+  const addTextBoxAt = (clientX: number, clientY: number, rect: DOMRect) => {
+    const height = Math.max(MIN_TEXT_BOX_HEIGHT_PX, NEW_TEXT_BOX_HEIGHT_PX) / rect.height
+    const box: BinderTextBox = {
+      id: crypto.randomUUID(),
+      x: clamp((clientX - rect.left) / rect.width, 0, Math.max(0, 1 - NEW_TEXT_BOX_WIDTH_RATIO)),
+      y: clamp((clientY - rect.top) / rect.height, 0, Math.max(0, 1 - height)),
+      width: NEW_TEXT_BOX_WIDTH_RATIO,
+      height,
+      text: '',
+    }
+    onTextBoxesChange([...filledTextBoxes(), box])
+    setActiveTextBoxId(box.id)
+    window.setTimeout(() => {
+      window.document.querySelector<HTMLTextAreaElement>(`[data-text-box-id="${box.id}"]`)?.focus()
+    }, 0)
+  }
+
+  const handleOverlayTap = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!editable || draggingTextBoxRef.current) return
+    if (event.target !== event.currentTarget) return
+
+    const previous = lastTapRef.current
+    const now = Date.now()
+    const isDoubleTap =
+      previous !== null &&
+      now - previous.time < DOUBLE_TAP_MS &&
+      Math.hypot(event.clientX - previous.x, event.clientY - previous.y) < DOUBLE_TAP_SLOP_PX
+
+    if (!isDoubleTap) {
+      lastTapRef.current = { time: now, x: event.clientX, y: event.clientY }
+      setActiveTextBoxId(null)
+      dropEmptyTextBoxes()
+      return
+    }
+
+    lastTapRef.current = null
+    addTextBoxAt(event.clientX, event.clientY, event.currentTarget.getBoundingClientRect())
+  }
+
+  // 이동·크기 조절 공통: 드래그하는 동안은 draft만 갱신하고 손을 뗄 때 한 번 저장한다
+  const startTextBoxDrag = (
+    event: React.PointerEvent<HTMLElement>,
+    box: BinderTextBox,
+    resolve: (box: BinderTextBox, dx: number, dy: number, rect: DOMRect) => BinderTextBox,
+  ) => {
     const overlay = overlayRef.current
     if (!overlay) return
     event.preventDefault()
     event.stopPropagation()
     setActiveTextBoxId(box.id)
+    draggingTextBoxRef.current = true
 
     const rect = overlay.getBoundingClientRect()
     const startX = event.clientX
     const startY = event.clientY
-    const originX = box.x
-    const originY = box.y
+
+    const setDraft = (next: BinderTextBox | null) => {
+      draftTextBoxRef.current = next
+      setDraftTextBox(next)
+    }
 
     const move = (moveEvent: PointerEvent) => {
-      moveEvent.preventDefault()
-      const nextX = Math.max(0, Math.min(0.94 - box.width, originX + (moveEvent.clientX - startX) / rect.width))
-      const nextY = Math.max(0, Math.min(0.94, originY + (moveEvent.clientY - startY) / rect.height))
-      updateTextBox(box.id, { x: nextX, y: nextY })
+      if (moveEvent.cancelable) moveEvent.preventDefault()
+      setDraft(resolve(box, moveEvent.clientX - startX, moveEvent.clientY - startY, rect))
     }
 
     const up = () => {
       window.removeEventListener('pointermove', move)
       window.removeEventListener('pointerup', up)
       window.removeEventListener('pointercancel', up)
+      const draft = draftTextBoxRef.current
+      setDraft(null)
+      if (draft) updateTextBox(draft.id, { x: draft.x, y: draft.y, width: draft.width, height: draft.height })
+      window.setTimeout(() => {
+        draggingTextBoxRef.current = false
+      }, 0)
     }
 
     window.addEventListener('pointermove', move, { passive: false })
@@ -604,120 +643,121 @@ function PageOverlay({
     window.addEventListener('pointercancel', up)
   }
 
+  const startMoveTextBox = (event: React.PointerEvent<HTMLElement>, box: BinderTextBox) =>
+    startTextBoxDrag(event, box, (origin, dx, dy, rect) => ({
+      ...origin,
+      x: clamp(origin.x + dx / rect.width, 0, Math.max(0, 1 - origin.width)),
+      y: clamp(
+        origin.y + dy / rect.height,
+        0,
+        Math.max(0, 1 - (origin.height ?? MIN_TEXT_BOX_HEIGHT_PX / rect.height)),
+      ),
+    }))
+
+  const startResizeTextBox = (event: React.PointerEvent<HTMLElement>, box: BinderTextBox) =>
+    startTextBoxDrag(event, box, (origin, dx, dy, rect) => {
+      const maxWidth = 1 - origin.x
+      const maxHeight = 1 - origin.y
+      const originHeight = origin.height ?? NEW_TEXT_BOX_HEIGHT_PX / rect.height
+      return {
+        ...origin,
+        width: clamp(
+          origin.width + dx / rect.width,
+          Math.min(MIN_TEXT_BOX_WIDTH_PX / rect.width, maxWidth),
+          maxWidth,
+        ),
+        height: clamp(
+          originHeight + dy / rect.height,
+          Math.min(MIN_TEXT_BOX_HEIGHT_PX / rect.height, maxHeight),
+          maxHeight,
+        ),
+      }
+    })
+
   const deleteTextBox = (id: string) => {
-    const next = textBoxesRef.current.filter((box) => box.id !== id)
-    onTextBoxesChange(next)
-    setActiveTextBoxId(next[0]?.id ?? null)
+    onTextBoxesChange(textBoxesRef.current.filter((box) => box.id !== id))
+    setActiveTextBoxId(null)
   }
 
   return (
-    <div ref={overlayRef} className="absolute inset-0" onClick={addTextBox}>
-      {mode === 'text' && (
-        <>
-          {textBoxes.map((box) => {
-            const active = visibleActiveTextBoxId === box.id
-            return (
-              <div
-                key={box.id}
-                className="absolute"
-                style={{
-                  left: `${box.x * 100}%`,
-                  top: `${box.y * 100}%`,
-                  width: `${box.width * 100}%`,
-                }}
-                onClick={(event) => {
-                  event.stopPropagation()
-                  setActiveTextBoxId(box.id)
-                }}
-              >
-                <textarea
-                  data-text-box-id={box.id}
-                  value={box.text}
-                  onChange={(event) => updateTextBox(box.id, { text: event.target.value })}
-                  placeholder="입력"
-                  className={`min-h-12 w-full resize rounded-lg border bg-white/55 px-2.5 py-2 text-[16px] leading-relaxed text-rose-ink outline-none backdrop-blur-[1px] placeholder:text-rose-key/60 focus:bg-white/70 ${
-                    active ? 'border-rose-accent shadow-sm' : 'border-rose-accent/30'
-                  }`}
-                />
-                {active && (
-                  <div className="mt-1.5 inline-flex items-center gap-0.5 rounded-full border border-rose-line bg-rose-card/95 px-1.5 py-1 shadow-md backdrop-blur">
-                    <button
-                      type="button"
+    <div ref={overlayRef} className="absolute inset-0" onPointerUp={handleOverlayTap}>
+      {/* 손글씨 모드에서도 타이핑한 내용은 그대로 보이되, 펜 입력을 가로채지 않는다.
+          레이어 자체는 항상 투명해야 배경 두 번 탭이 아래 overlay까지 내려간다. */}
+      <div className="pointer-events-none absolute inset-0">
+        {visibleTextBoxes.map((box) => {
+          const active = visibleActiveTextBoxId === box.id
+          return (
+            <div
+              key={box.id}
+              className={`absolute ${editable ? 'pointer-events-auto' : ''}`}
+              style={{
+                left: `${box.x * 100}%`,
+                top: `${box.y * 100}%`,
+                width: `${box.width * 100}%`,
+                height: box.height ? `${box.height * 100}%` : undefined,
+              }}
+            >
+              <textarea
+                data-text-box-id={box.id}
+                value={box.text}
+                readOnly={!editable}
+                onChange={(event) => updateTextBox(box.id, { text: event.target.value })}
+                onFocus={() => setActiveTextBoxId(box.id)}
+                placeholder={editable ? t('binderInputPlaceholder') : ''}
+                className={`h-full w-full resize-none rounded-lg border px-2.5 py-2 text-[16px] leading-relaxed text-rose-ink outline-none transition-colors placeholder:text-rose-key/60 ${
+                  box.height ? '' : 'min-h-12'
+                } ${
+                  active
+                    ? 'border-rose-accent bg-white/70 shadow-sm backdrop-blur-[1px]'
+                    : 'border-transparent bg-transparent'
+                }`}
+              />
+              {active && (
+                <>
+                  <div
+                    className={`absolute left-0 inline-flex items-center gap-0.5 rounded-full border border-rose-line bg-rose-card/95 px-1 py-0.5 shadow-md backdrop-blur ${
+                      box.y < 0.08 ? '-bottom-9' : '-top-9'
+                    }`}
+                  >
+                    <span
+                      role="button"
+                      tabIndex={-1}
+                      aria-label={t('binderMove')}
                       onPointerDown={(event) => startMoveTextBox(event, box)}
-                      className="cursor-grab rounded-full bg-rose-accent-deep px-2.5 py-1 text-xs font-bold text-white active:cursor-grabbing"
+                      style={{ touchAction: 'none' }}
+                      className="grid h-7 w-8 cursor-grab place-items-center rounded-full bg-rose-accent-deep text-xs font-bold text-white active:cursor-grabbing"
                     >
-                      이동
-                    </button>
-                    <span className="mx-0.5 h-4 w-px bg-rose-line" />
-                    <button
-                      type="button"
-                      onClick={() => updateTextBox(box.id, { y: Math.max(0, box.y - 0.015) })}
-                      className="grid h-7 w-7 place-items-center rounded-full text-xs font-bold text-rose-key transition hover:bg-rose-chip"
-                      aria-label="위로"
-                    >
-                      ↑
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => updateTextBox(box.id, { y: Math.min(0.94, box.y + 0.015) })}
-                      className="grid h-7 w-7 place-items-center rounded-full text-xs font-bold text-rose-key transition hover:bg-rose-chip"
-                      aria-label="아래로"
-                    >
-                      ↓
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => updateTextBox(box.id, { x: Math.max(0, box.x - 0.015) })}
-                      className="grid h-7 w-7 place-items-center rounded-full text-xs font-bold text-rose-key transition hover:bg-rose-chip"
-                      aria-label="왼쪽으로"
-                    >
-                      ←
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => updateTextBox(box.id, { x: Math.min(0.88, box.x + 0.015) })}
-                      className="grid h-7 w-7 place-items-center rounded-full text-xs font-bold text-rose-key transition hover:bg-rose-chip"
-                      aria-label="오른쪽으로"
-                    >
-                      →
-                    </button>
-                    <span className="mx-0.5 h-4 w-px bg-rose-line" />
-                    <button
-                      type="button"
-                      onClick={() => updateTextBox(box.id, { width: Math.max(0.18, box.width - 0.04) })}
-                      className="grid h-7 w-7 place-items-center rounded-full text-xs font-bold text-rose-key transition hover:bg-rose-chip"
-                      aria-label="너비 줄이기"
-                    >
-                      −
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => updateTextBox(box.id, { width: Math.min(0.82, box.width + 0.04) })}
-                      className="grid h-7 w-7 place-items-center rounded-full text-xs font-bold text-rose-key transition hover:bg-rose-chip"
-                      aria-label="너비 늘리기"
-                    >
-                      +
-                    </button>
-                    <span className="mx-0.5 h-4 w-px bg-rose-line" />
+                      ⠿
+                    </span>
                     <button
                       type="button"
                       onClick={() => deleteTextBox(box.id)}
                       className="rounded-full px-2.5 py-1 text-xs font-bold text-rose-accent transition hover:bg-rose-chip"
                     >
-                      삭제
+                      {t('binderDelete')}
                     </button>
                   </div>
-                )}
-              </div>
-            )
-          })}
-          {textBoxes.length === 0 && (
-            <div className="pointer-events-none absolute left-1/2 top-5 -translate-x-1/2 whitespace-nowrap rounded-full bg-rose-ink/70 px-4 py-1.5 text-[13px] font-bold text-white shadow-sm backdrop-blur-[2px]">
-              입력할 위치를 탭하세요
+                  <span
+                    role="button"
+                    tabIndex={-1}
+                    aria-label={t('binderResize')}
+                    onPointerDown={(event) => startResizeTextBox(event, box)}
+                    style={{ touchAction: 'none' }}
+                    className="absolute -bottom-2.5 -right-2.5 grid h-7 w-7 cursor-nwse-resize place-items-center rounded-full border border-rose-line bg-rose-card text-[11px] font-bold text-rose-key shadow-md"
+                  >
+                    ◢
+                  </span>
+                </>
+              )}
             </div>
-          )}
-        </>
-      )}
+          )
+        })}
+        {editable && textBoxes.length === 0 && (
+          <div className="pointer-events-none absolute left-1/2 top-5 -translate-x-1/2 whitespace-nowrap rounded-full bg-rose-ink/70 px-4 py-1.5 text-[13px] font-bold text-white shadow-sm backdrop-blur-[2px]">
+            {t('binderTapToInput')}
+          </div>
+        )}
+      </div>
       <canvas
         ref={canvasRef}
         className={`absolute inset-0 h-full w-full rounded-2xl ${mode === 'ink' ? 'pointer-events-auto' : 'pointer-events-none'}`}
@@ -929,7 +969,15 @@ export default function BinderPage() {
   const pageKey = String(pageNumber)
   const pageInput = work?.pageInputs[pageKey] ?? emptyField()
   const pageTextBoxes = work?.pageTextBoxes[pageKey] ?? []
-  const checkpoints = defaultCheckpoints(selected.id).filter((checkpoint) => checkpoint.page <= pageCount)
+  // 체크포인트는 "구간"의 시작점 — 다음 체크포인트 직전까지가 그 구간이다
+  const checkpointSections = defaultCheckpoints(selected.id)
+    .filter((checkpoint) => checkpoint.page <= pageCount)
+    .map((checkpoint, index, list) => ({
+      ...checkpoint,
+      endPage: index + 1 < list.length ? list[index + 1].page - 1 : pageCount,
+    }))
+  const activeCheckpointId =
+    [...checkpointSections].reverse().find((section) => pageNumber >= section.page)?.id ?? ''
   const previewPages = nearbyPages(pageNumber, pageCount)
   const bookmarks = [...(work?.bookmarks ?? [])].sort((a, b) => a.page - b.page || a.createdAt - b.createdAt)
   const currentPageBookmarked = bookmarks.some((bookmark) => bookmark.page === pageNumber)
@@ -943,7 +991,6 @@ export default function BinderPage() {
           .map(([page]) => Number(page)),
       ])
     : new Set<number>()
-  const completedPages = inputPageSet.size
   const bookmarkPageSet = new Set(bookmarks.map((bookmark) => bookmark.page))
   // 공유 후보: 필기한 쪽 + 책갈피 쪽 + 현재 쪽 + 직접 추가한 쪽
   const shareCandidates = [
@@ -1004,20 +1051,29 @@ export default function BinderPage() {
     }
   }, [selected.id, selected.pages, userId])
 
-  // 마지막 위치(권·쪽) 저장 — 계정별 이어보기용
+  // 마지막 위치(권·쪽 + 체크포인트 구간별 쪽) 저장 — 계정별 이어보기용
   useEffect(() => {
     if (!userId || bootRef.current) return
     const timer = window.setTimeout(() => {
       const current = workRef.current
       if (!current || current.bookId !== selected.id) return
-      if (current.lastPageNumber === pageNumber) return
-      const next = { ...current, lastPageNumber: pageNumber }
+      const savedCheckpoints = current.checkpointPages ?? {}
+      const checkpointChanged =
+        activeCheckpointId !== '' && savedCheckpoints[activeCheckpointId] !== pageNumber
+      if (current.lastPageNumber === pageNumber && !checkpointChanged) return
+      const next: BinderWork = {
+        ...current,
+        lastPageNumber: pageNumber,
+        checkpointPages: checkpointChanged
+          ? { ...savedCheckpoints, [activeCheckpointId]: pageNumber }
+          : savedCheckpoints,
+      }
       workRef.current = next
       setWork(next)
       void putBinderWork(next, userId).catch(() => {})
     }, 800)
     return () => window.clearTimeout(timer)
-  }, [pageNumber, selected.id, userId])
+  }, [activeCheckpointId, pageNumber, selected.id, userId])
 
   useEffect(() => {
     let alive = true
@@ -1078,8 +1134,8 @@ export default function BinderPage() {
 
   const addBookmark = () => {
     if (!work) return
-    const fallback = `${pageNumber}쪽`
-    const label = window.prompt('책갈피 이름', fallback)?.trim()
+    const fallback = t('binderPage')(pageNumber)
+    const label = window.prompt(t('binderBookmarkName'), fallback)?.trim()
     if (!label) return
     const bookmark: BinderBookmark = {
       id: crypto.randomUUID(),
@@ -1114,6 +1170,14 @@ export default function BinderPage() {
   const goToPage = (next: number) => {
     navigatedSinceSelectRef.current = true
     setPageNumber(Math.max(1, Math.min(pageCount, next)))
+  }
+  // 그 구간에서 마지막으로 보던 쪽으로 이어보기 — 기록이 없거나 구간을 벗어났으면 첫 쪽
+  const goToCheckpoint = (checkpointId: string) => {
+    const section = checkpointSections.find((item) => item.id === checkpointId)
+    if (!section) return
+    const saved = work?.checkpointPages?.[checkpointId]
+    const resumable = saved !== undefined && saved >= section.page && saved <= section.endPage
+    goToPage(resumable ? saved : section.page)
   }
 
   const startPreviewDrag = (event: React.PointerEvent<HTMLDivElement>) => {
@@ -1229,13 +1293,16 @@ export default function BinderPage() {
       }
       const result = await shareOrDownloadFiles(
         files,
-        `에다 SPL 바인더 ${selected.issue}호`,
-        `${selected.title} · ${pages.map((page) => `${page}쪽`).join(', ')}`,
+        t('binderShareTitle')(selected.issue),
+        t('binderShareText')(
+          t('binderVolumeTitle')(selected.issue),
+          pages.map((page) => t('binderPage')(page)).join(', '),
+        ),
       )
       if (result !== 'cancelled') setShareOpen(false)
     } catch (error) {
       console.error(error)
-      alert('이미지를 만들지 못했습니다. 선택한 쪽 수를 줄여 다시 시도해 주세요.')
+      alert(t('binderImageFailed'))
     } finally {
       setShareBusy(false)
     }
@@ -1261,7 +1328,7 @@ export default function BinderPage() {
                 onClick={() => window.history.back()}
                 className="text-sm font-bold text-rose-key hover:text-rose-accent"
               >
-                ← 이전
+                {t('binderBack')}
               </button>
             ) : (
               <span className="flex flex-col leading-tight">
@@ -1271,15 +1338,16 @@ export default function BinderPage() {
             )}
           </div>
           <h1 className="min-w-0 flex-1 truncate text-center font-serif text-lg font-extrabold">
-            에다 SPL 바인더
+             {t('binderAppTitle')}
           </h1>
-          <div className="flex w-24 shrink-0 justify-end">
+          <div className="flex shrink-0 items-center justify-end gap-1">
+            <LangToggle />
             {__APP_TARGET__ === 'all' && (
               <Link
                 to="/"
                 className="whitespace-nowrap rounded-full border border-rose-line bg-rose-card px-3.5 py-1.5 text-sm font-bold text-rose-key shadow-sm transition hover:text-rose-accent"
               >
-                노트
+                {t('binderNote')}
               </Link>
             )}
             {__APP_TARGET__ !== 'all' && (
@@ -1288,7 +1356,7 @@ export default function BinderPage() {
                 onClick={signOut}
                 className="whitespace-nowrap rounded-full px-2 py-1.5 text-[13px] font-bold text-rose-key/80 transition hover:text-rose-accent"
               >
-                로그아웃
+                {t('binderLogout')}
               </button>
             )}
           </div>
@@ -1296,39 +1364,27 @@ export default function BinderPage() {
       </header>
 
       <main className="mx-auto flex max-w-6xl flex-col gap-5 px-4 py-5 xl:grid xl:grid-cols-[15rem_minmax(0,1fr)] xl:items-start">
-        <aside className="order-2 space-y-4 xl:order-1 xl:sticky xl:top-[66px] xl:self-start">
-          <section className="relative overflow-hidden rounded-2xl border border-rose-line bg-rose-card p-5 pl-7">
+        {/* 폰·태블릿에서는 권 선택 → 체크포인트를 헤더 바로 아래로 올린다.
+            권 표지 카드는 툴바에 같은 제목이 나오는 태블릿 구간에서만 숨긴다. */}
+        <aside className="flex flex-col gap-4 xl:sticky xl:top-[66px] xl:self-start">
+          <section className="relative order-3 overflow-hidden rounded-2xl border border-rose-line bg-rose-card p-5 pl-7 sm:hidden xl:order-1 xl:block">
             <div className="pointer-events-none absolute inset-y-0 left-0 w-2 bg-rose-accent" />
             <div className="flex items-center justify-between">
               <p className="text-[11px] font-black tracking-[0.3em] text-rose-key/80">EDA · SPL</p>
               <span className="rounded-full bg-rose-chip px-2.5 py-0.5 text-[11px] font-black text-rose-accent">
-                {selected.issue}호
+                {t('binderIssue')(selected.issue)}
               </span>
             </div>
-            <p className="mt-3 break-keep font-serif text-[23px] font-extrabold leading-snug">{selected.title}</p>
-            <div className="mt-5">
-              <div className="flex items-baseline justify-between text-xs font-bold text-rose-key">
-                <span>입력한 쪽</span>
-                <span className="tabular-nums">
-                  <span className="text-leaf-deep">{completedPages}</span> / {pageCount}
-                </span>
-              </div>
-              <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-rose-chip">
-                <div
-                  className="h-full rounded-full bg-leaf transition-[width] duration-300"
-                  style={{ width: `${pageCount ? Math.min(100, (completedPages / pageCount) * 100) : 0}%` }}
-                />
-              </div>
-            </div>
+            <p className="mt-3 break-keep font-serif text-[23px] font-extrabold leading-snug">{t('binderVolumeTitle')(selected.issue)}</p>
           </section>
 
-          <section className="overflow-hidden rounded-2xl border border-rose-line bg-rose-card">
+          <section className="order-1 overflow-hidden rounded-2xl border border-rose-line bg-rose-card xl:order-2">
             <div className="flex items-center justify-between px-4 pb-1 pt-3">
               <h2 className="flex items-center gap-2 font-serif text-base font-extrabold">
                 <span aria-hidden className="h-3.5 w-[3px] rounded-full bg-rose-accent" />
-                권 선택
+                {t('binderSelectVolume')}
               </h2>
-              <span className="text-xs font-bold text-rose-key/80">{binderBooks.length}권</span>
+              <span className="text-xs font-bold text-rose-key/80">{t('binderVolumeCount')(binderBooks.length)}</span>
             </div>
             <div className="px-3 pb-3 pt-2">
               <div
@@ -1354,7 +1410,7 @@ export default function BinderPage() {
                           : 'border-rose-line bg-rose-bg text-rose-key hover:-translate-y-1 hover:border-rose-accent/50 hover:text-rose-accent'
                       }`}
                       style={{ width: 42, height: 132 }}
-                      aria-label={`${book.title} 선택`}
+                      aria-label={t('binderSelectVolumeAria')(t('binderVolumeTitle')(book.issue))}
                     >
                       <span
                         className={`pointer-events-none absolute inset-y-0 left-[3px] w-px ${
@@ -1380,28 +1436,28 @@ export default function BinderPage() {
             </div>
           </section>
 
-          <section className="rounded-2xl border border-rose-line bg-rose-card p-3">
+          <section className="order-2 rounded-2xl border border-rose-line bg-rose-card p-3 xl:order-3">
             <div className="mb-2 flex items-center justify-between px-1.5">
               <h2 className="flex items-center gap-2 font-serif text-base font-extrabold">
                 <span aria-hidden className="h-3.5 w-[3px] rounded-full bg-rose-accent" />
-                체크포인트
+                {t('binderCheckpoint')}
               </h2>
               <button
                 type="button"
                 onClick={addBookmark}
                 className="rounded-full bg-rose-chip px-2.5 py-1 text-xs font-bold text-rose-accent transition hover:bg-rose-accent-deep hover:text-white"
               >
-                + 책갈피
+                {t('binderAddBookmark')}
               </button>
             </div>
             <div className="space-y-0.5">
-              {checkpoints.map((checkpoint) => {
-                const active = pageNumber === checkpoint.page
+              {checkpointSections.map((checkpoint) => {
+                const active = activeCheckpointId === checkpoint.id
                 return (
                   <button
                     type="button"
                     key={checkpoint.id}
-                    onClick={() => goToPage(checkpoint.page)}
+                    onClick={() => goToCheckpoint(checkpoint.id)}
                     className={`flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm transition ${
                       active
                         ? 'bg-rose-chip font-extrabold text-rose-accent'
@@ -1425,13 +1481,13 @@ export default function BinderPage() {
               <div className="mb-1.5 flex items-center justify-between px-1.5">
                 <h3 className="flex items-center gap-2 text-sm font-extrabold text-rose-ink">
                   <span aria-hidden className="h-3 w-[3px] rounded-full bg-rose-accent" />
-                  내 책갈피
+                  {t('binderMyBookmarks')}
                 </h3>
-                {currentPageBookmarked && <span className="text-xs font-bold text-rose-accent">현재 쪽</span>}
+                {currentPageBookmarked && <span className="text-xs font-bold text-rose-accent">{t('binderCurrentPage')}</span>}
               </div>
               {bookmarks.length === 0 ? (
                 <p className="rounded-lg border border-dashed border-rose-line px-3 py-2.5 text-[13px] leading-5 text-rose-key/80">
-                  + 책갈피를 누르면 지금 보는 쪽이 저장돼요.
+                  {t('binderBookmarkHint')}
                 </p>
               ) : (
                 <div className="space-y-0.5">
@@ -1456,13 +1512,13 @@ export default function BinderPage() {
                           >
                             {bookmark.label}
                           </span>
-                          <span className="shrink-0 text-xs tabular-nums text-rose-key/60">{bookmark.page}쪽</span>
+                           <span className="shrink-0 text-xs tabular-nums text-rose-key/60">{t('binderPage')(bookmark.page)}</span>
                         </button>
                         <button
                           type="button"
                           onClick={() => removeBookmark(bookmark.id)}
                           className="rounded-full px-1.5 py-0.5 text-xs font-bold text-rose-key/50 transition hover:bg-rose-bg hover:text-rose-accent"
-                          aria-label={`${bookmark.label} 책갈피 삭제`}
+                           aria-label={t('binderBookmarkDeleteAria')(bookmark.label)}
                         >
                           ✕
                         </button>
@@ -1476,27 +1532,24 @@ export default function BinderPage() {
 
         </aside>
 
-        <section className="order-1 min-w-0 space-y-3 xl:order-2">
+        <section className="min-w-0 space-y-3">
           <div className="sticky top-[52px] z-10 flex flex-wrap items-center gap-2 rounded-2xl border border-rose-line bg-rose-card/95 px-3.5 py-2.5 shadow-sm backdrop-blur">
             {/* 제목은 폰에서 숨김(헤더에 앱 이름이 있고, 툴바를 한 줄로 유지하기 위해) */}
             <h2 className="hidden min-w-0 flex-1 truncate font-serif text-lg font-extrabold sm:block">
-              {selected.title}
+              {t('binderVolumeTitle')(selected.issue)}
             </h2>
             <select
-              value={checkpoints.find((checkpoint) => checkpoint.page === pageNumber)?.id ?? ''}
-              onChange={(event) => {
-                const checkpoint = checkpoints.find((item) => item.id === event.target.value)
-                if (checkpoint) goToPage(checkpoint.page)
-              }}
-              className="min-w-0 flex-1 rounded-full border border-rose-line bg-rose-bg px-3 py-1.5 text-[13px] font-bold text-rose-key outline-none focus:border-rose-accent sm:max-w-40 sm:flex-none xl:hidden"
-              aria-label="체크포인트로 이동"
+              value={activeCheckpointId}
+              onChange={(event) => goToCheckpoint(event.target.value)}
+              className="min-w-0 flex-1 rounded-full border border-rose-line bg-rose-bg px-3 py-1.5 text-[13px] font-bold text-rose-key outline-none focus:border-rose-accent sm:max-w-40 sm:flex-none"
+              aria-label={t('binderCheckpointAria')}
             >
               <option value="" disabled>
-                바로가기
+                {t('binderShortcut')}
               </option>
-              {checkpoints.map((checkpoint) => (
+              {checkpointSections.map((checkpoint) => (
                 <option key={checkpoint.id} value={checkpoint.id}>
-                  {checkpoint.label} · {checkpoint.page}쪽
+                  {checkpoint.label} · {t('binderPage')(checkpoint.page)}
                 </option>
               ))}
             </select>
@@ -1506,7 +1559,7 @@ export default function BinderPage() {
               onClick={openShare}
               className="flex shrink-0 items-center gap-1 rounded-full bg-rose-accent-deep px-3 py-1.5 text-[13px] font-bold text-white shadow-sm shadow-rose-accent/25 transition active:scale-95"
             >
-              <span aria-hidden>📤</span> 공유
+              <span aria-hidden>📤</span> {t('binderShare')}
             </button>
 
             {/* 손글씨 도구 줄 — 필기 중 손에 가려지지 않게 상단에 고정 */}
@@ -1518,9 +1571,9 @@ export default function BinderPage() {
                   className={`rounded-full px-2 py-1 text-[13px] font-bold transition sm:px-2.5 ${
                     inkTool === 'pen' ? 'bg-rose-chip text-rose-ink' : 'text-rose-key hover:text-rose-ink'
                   }`}
-                  aria-label="펜"
+                  aria-label={t('binderPen')}
                 >
-                  ✏️<span className="hidden sm:inline"> 펜</span>
+                  ✏️<span className="hidden sm:inline"> {t('binderPen')}</span>
                 </button>
                 <button
                   type="button"
@@ -1528,9 +1581,9 @@ export default function BinderPage() {
                   className={`rounded-full px-2 py-1 text-[13px] font-bold transition sm:px-2.5 ${
                     inkTool === 'eraser' ? 'bg-rose-chip text-rose-ink' : 'text-rose-key hover:text-rose-ink'
                   }`}
-                  aria-label="지우개"
+                  aria-label={t('binderEraser')}
                 >
-                  🧽<span className="hidden sm:inline"> 지우개</span>
+                  🧽<span className="hidden sm:inline"> {t('binderEraser')}</span>
                 </button>
                 <span className="mx-0.5 hidden h-4 w-px bg-rose-line sm:block" />
                 {PEN_COLORS.map((penColor) => (
@@ -1547,7 +1600,7 @@ export default function BinderPage() {
                         : 'border-white hover:scale-105'
                     }`}
                     style={{ backgroundColor: penColor }}
-                    aria-label={`색상 ${penColor}`}
+                    aria-label={t('binderColor')(penColor)}
                   />
                 ))}
                 <input
@@ -1557,7 +1610,7 @@ export default function BinderPage() {
                   value={inkSize}
                   onChange={(event) => setInkSize(Number(event.target.value))}
                   className="w-14 accent-rose-accent-deep sm:w-20"
-                  aria-label="펜 굵기"
+                  aria-label={t('binderPenSize')}
                 />
                 <span className="mx-0.5 hidden h-4 w-px bg-rose-line sm:block" />
                 <button
@@ -1565,18 +1618,18 @@ export default function BinderPage() {
                   onClick={() => updatePageInput({ ...pageInput, strokes: pageInput.strokes.slice(0, -1) })}
                   disabled={pageInput.strokes.length === 0}
                   className="rounded-full px-2 py-1 text-[13px] font-bold text-rose-key transition hover:text-rose-ink disabled:opacity-40 sm:px-2.5"
-                  aria-label="마지막 획 취소"
+                  aria-label={t('binderUndoAria')}
                 >
-                  ↩️<span className="hidden sm:inline"> 취소</span>
+                  ↩️<span className="hidden sm:inline"> {t('binderUndo')}</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => updatePageInput({ ...pageInput, strokes: [] })}
                   disabled={pageInput.strokes.length === 0}
                   className="rounded-full px-2 py-1 text-[13px] font-bold text-rose-key transition hover:text-rose-ink disabled:opacity-40 sm:px-2.5"
-                  aria-label="전체 지우기"
+                  aria-label={t('binderClear')}
                 >
-                  🗑️<span className="hidden sm:inline"> 전체 지우기</span>
+                  🗑️<span className="hidden sm:inline"> {t('binderClear')}</span>
                 </button>
               </div>
             )}
@@ -1592,10 +1645,10 @@ export default function BinderPage() {
             onPointerMove={movePreviewDrag}
             onPointerUp={endPreviewDrag}
             onPointerCancel={endPreviewDrag}
-            aria-label="내용 미리보기 — 드래그로 넘기고 탭하면 이동"
+            aria-label={t('binderPreviewAria')}
           >
             {loadingPdf || !document ? (
-              <span className="text-sm font-bold text-rose-key">미리보기를 불러오는 중...</span>
+              <span className="text-sm font-bold text-rose-key">{t('binderPreviewLoading')}</span>
             ) : (
               previewPages.map((previewPage) => {
                 const active = previewPage === pageNumber
@@ -1623,7 +1676,7 @@ export default function BinderPage() {
           >
             {loadingPdf ? (
               <div className="grid min-h-[56vh] place-items-center rounded-2xl bg-rose-card text-rose-key">
-                바인더를 펼치는 중...
+                {t('binderOpening')}
               </div>
             ) : document ? (
               <PdfPage
@@ -1640,7 +1693,7 @@ export default function BinderPage() {
               />
             ) : (
               <div className="grid min-h-[56vh] place-items-center rounded-2xl bg-rose-card text-rose-key">
-                PDF를 불러오지 못했습니다.
+                {t('binderPdfError')}
               </div>
             )}
 
@@ -1650,7 +1703,7 @@ export default function BinderPage() {
               onClick={goPrev}
               disabled={pageNumber === 1}
               className="absolute left-0 top-1/2 z-10 hidden h-11 w-11 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border border-rose-line bg-rose-card text-base font-bold text-rose-key shadow-md transition hover:text-rose-accent disabled:opacity-0 md:grid"
-              aria-label="이전 쪽"
+              aria-label={t('binderPrevPage')}
             >
               ←
             </button>
@@ -1659,7 +1712,7 @@ export default function BinderPage() {
               onClick={goNext}
               disabled={pageNumber >= pageCount}
               className="absolute right-0 top-1/2 z-10 hidden h-11 w-11 -translate-y-1/2 translate-x-1/2 place-items-center rounded-full border border-rose-line bg-rose-card text-base font-bold text-rose-key shadow-md transition hover:text-rose-accent disabled:opacity-0 md:grid"
-              aria-label="다음 쪽"
+              aria-label={t('binderNextPage')}
             >
               →
             </button>
@@ -1671,7 +1724,7 @@ export default function BinderPage() {
               onClick={goPrev}
               disabled={pageNumber === 1}
               className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-sm font-bold text-rose-key transition hover:bg-rose-chip disabled:opacity-30 md:hidden"
-              aria-label="이전 쪽"
+              aria-label={t('binderPrevPage')}
             >
               ←
             </button>
@@ -1683,14 +1736,14 @@ export default function BinderPage() {
               value={pageNumber}
               onChange={(event) => goToPage(Number(event.target.value))}
               className="pager-range min-w-0 flex-1"
-              aria-label="페이지 이동"
+              aria-label={t('binderPageMove')}
             />
             <button
               type="button"
               onClick={goNext}
               disabled={pageNumber >= pageCount}
               className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-sm font-bold text-rose-key transition hover:bg-rose-chip disabled:opacity-30 md:hidden"
-              aria-label="다음 쪽"
+              aria-label={t('binderNextPage')}
             >
               →
             </button>
@@ -1715,19 +1768,19 @@ export default function BinderPage() {
             onClick={(event) => event.stopPropagation()}
           >
             <div className="flex items-center justify-between">
-              <h3 className="font-serif text-lg font-extrabold">페이지 JPG 공유</h3>
+              <h3 className="font-serif text-lg font-extrabold">{t('binderShareModalTitle')}</h3>
               <button
                 type="button"
                 onClick={() => setShareOpen(false)}
                 disabled={shareBusy}
                 className="grid h-8 w-8 place-items-center rounded-full text-rose-key transition hover:bg-rose-chip disabled:opacity-40"
-                aria-label="닫기"
+                aria-label={t('binderClose')}
               >
                 ✕
               </button>
             </div>
             <p className="mt-1 text-[13px] leading-5 text-rose-key">
-              필기한 쪽(✍️)·책갈피(🔖)·현재 쪽이 후보로 나와요. 탭해서 여러 쪽을 고르세요.
+              {t('binderShareHint')}
             </p>
 
             <div className="mt-3 grid min-h-0 flex-1 grid-cols-3 content-start gap-2 overflow-y-auto rounded-xl bg-rose-chip/40 p-2 sm:grid-cols-4">
@@ -1751,7 +1804,7 @@ export default function BinderPage() {
                       }`}
                     >
                       {selectedPage ? '✓ ' : ''}
-                      {page}쪽 {inputPageSet.has(page) ? '✍️' : ''}
+                      {t('binderPage')(page)} {inputPageSet.has(page) ? '✍️' : ''}
                       {bookmarkPageSet.has(page) ? '🔖' : ''}
                     </span>
                   </button>
@@ -1769,19 +1822,19 @@ export default function BinderPage() {
                 onKeyDown={(event) => {
                   if (event.key === 'Enter') addShareExtraPage()
                 }}
-                placeholder="쪽 번호"
+                placeholder={t('binderPageNumber')}
                 className="w-24 rounded-full border border-rose-line bg-white px-3 py-1.5 text-sm text-rose-ink outline-none focus:border-rose-accent"
-                aria-label="추가할 쪽 번호"
+                aria-label={t('binderAddPageAria')}
               />
               <button
                 type="button"
                 onClick={addShareExtraPage}
                 className="rounded-full bg-rose-chip px-3 py-1.5 text-[13px] font-bold text-rose-accent transition hover:bg-rose-accent-deep hover:text-white"
               >
-                + 다른 쪽 추가
+                {t('binderAddOtherPage')}
               </button>
               <span className="ml-auto text-[13px] font-bold tabular-nums text-rose-key">
-                선택 <span className="text-rose-accent">{shareSelected.length}</span>쪽
+                {t('binderSelectedPages')(shareSelected.length)}
               </span>
             </div>
 
@@ -1791,7 +1844,7 @@ export default function BinderPage() {
               disabled={shareBusy || shareSelected.length === 0}
               className="mt-3 w-full rounded-full bg-rose-accent-deep px-4 py-3 text-[15px] font-extrabold text-white shadow-sm shadow-rose-accent/25 transition active:scale-[0.99] disabled:opacity-50"
             >
-              {shareBusy ? '이미지 만드는 중...' : 'JPG로 공유'}
+              {shareBusy ? t('binderMakingImages') : t('binderJpgShare')}
             </button>
           </div>
         </div>

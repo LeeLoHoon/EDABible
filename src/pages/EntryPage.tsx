@@ -13,25 +13,20 @@ import {
   createEntryImageFile,
   shareOrDownloadEntryImage,
 } from '../shareImage'
+import { formatEntryDateDot } from '../i18n/format'
+import { t } from '../i18n/strings'
 
 type Tab = 'transcribe' | 'questions' | 'prayer' | 'temptationVictory'
 
 const TABS: { key: Tab; label: string; icon: string }[] = [
-  { key: 'transcribe', label: '필사', icon: '📖' },
-  { key: 'prayer', label: '기도', icon: '🙏' },
-  { key: 'questions', label: '5가지 질문', icon: '❓' },
-  { key: 'temptationVictory', label: '승리', icon: '🛡️' },
+  { key: 'transcribe', label: t('entryTabs')[0], icon: '📖' },
+  { key: 'prayer', label: t('entryTabs')[1], icon: '🙏' },
+  { key: 'questions', label: t('entryTabs')[2], icon: '❓' },
+  { key: 'temptationVictory', label: t('entryTabs')[3], icon: '🛡️' },
 ]
 
 const DEV_COPY_TAP_COUNT = 5
 const DEV_COPY_TAP_WINDOW_MS = 2_000
-
-function formatDate(date: string): string {
-  const [y, m, d] = date.split('-')
-  const days = ['일', '월', '화', '수', '목', '금', '토']
-  const dow = days[new Date(Number(y), Number(m) - 1, Number(d)).getDay()]
-  return `${y}.${m}.${d} (${dow})`
-}
 
 export default function EntryPage() {
   const { id } = useParams()
@@ -83,7 +78,7 @@ export default function EntryPage() {
       await shareOrDownloadEntryImage(file, entry)
     } catch (error) {
       console.error(error)
-      alert('이미지 파일을 만들지 못했습니다. 공유할 탭을 줄여서 다시 시도해 주세요.')
+      alert(t('entryImageFailed'))
     } finally {
       setShareState('idle')
       setShowShareCard(false)
@@ -91,14 +86,14 @@ export default function EntryPage() {
   }
 
   if (loading) {
-    return <div className="p-8 text-center text-rose-key/70">불러오는 중…</div>
+    return <div className="p-8 text-center text-rose-key/70">{t('entryLoading')}</div>
   }
   if (!entry) {
     return (
       <div className="p-8 text-center text-rose-key">
-        묵상을 찾을 수 없어요.
+        {t('entryNotFound')}
         <button onClick={() => navigate('/')} className="ml-2 text-rose-accent underline">
-          홈으로
+          {t('entryHome')}
         </button>
       </div>
     )
@@ -112,13 +107,13 @@ export default function EntryPage() {
           onClick={() => navigate('/')}
           className="shrink-0 text-sm text-rose-key hover:text-rose-accent"
         >
-          ← 목록
+          {t('entryBack')}
         </button>
         <h1
           onClick={handleDateTap}
           className="min-w-0 flex-1 truncate px-2 text-center font-serif text-lg font-bold text-rose-ink"
         >
-          {formatDate(entry.date)}
+          {formatEntryDateDot(entry.date)}
           {entry.bibleRef && (
             <span className="ml-2 font-medium text-rose-key">· {entry.bibleRef}</span>
           )}
@@ -132,17 +127,17 @@ export default function EntryPage() {
             className="flex items-center gap-1.5 rounded-full bg-rose-accent-deep px-3.5 py-1.5 text-sm font-semibold text-white shadow-sm shadow-rose-accent/25 transition active:scale-95 disabled:opacity-60"
           >
             <span aria-hidden>📤</span>
-            {shareState === 'working' ? '생성 중…' : '공유'}
+            {shareState === 'working' ? t('entryGenerating') : t('entryShare')}
           </button>
           {shareOpen && (
             <div className="absolute right-0 top-9 z-20 w-44 rounded-xl border border-rose-line bg-rose-card p-3 text-sm shadow-lg">
-              <p className="mb-2 font-semibold text-rose-ink">공유할 탭</p>
+              <p className="mb-2 font-semibold text-rose-ink">{t('entryShareTabs')}</p>
               <div className="space-y-2.5">
                 {[
-                  ['transcribe', '필사'],
-                  ['prayer', '기도'],
-                  ['questions', '5가지 질문'],
-                  ['victory', '승리'],
+                  ['transcribe', t('entryTabs')[0]],
+                  ['prayer', t('entryTabs')[1]],
+                  ['questions', t('entryTabs')[2]],
+                  ['victory', t('entryTabs')[3]],
                 ].map(([key, label]) => (
                   <label key={key} className="flex items-center gap-2 text-rose-ink">
                     <input
@@ -166,7 +161,7 @@ export default function EntryPage() {
                 disabled={!canShare || shareState === 'working'}
                 className="mt-3 w-full rounded-full bg-rose-accent-deep px-3 py-2 font-bold text-white shadow-sm shadow-rose-accent/25 transition active:scale-[0.98] disabled:opacity-50"
               >
-                JPG 공유
+                {t('entryJpgShare')}
               </button>
             </div>
           )}

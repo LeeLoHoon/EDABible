@@ -3,13 +3,10 @@ import { Link, useNavigate } from 'react-router-dom'
 import GuideButton from '../components/GuideButton'
 import { listEntries, putEntry, deleteEntry, clearAllEntries } from '../db'
 import { createEntry, emptyTemptationVictory, isFieldEmpty, type Entry } from '../types'
-
-function formatDate(date: string): string {
-  const [y, m, d] = date.split('-')
-  const days = ['일', '월', '화', '수', '목', '금', '토']
-  const dow = days[new Date(Number(y), Number(m) - 1, Number(d)).getDay()]
-  return `${Number(m)}월 ${Number(d)}일 (${dow})`
-}
+import { formatEntryDate } from '../i18n/format'
+import { getLang } from '../i18n/lang'
+import { t } from '../i18n/strings'
+import LangToggle from '../components/LangToggle'
 
 /** 작성 진행 칸 수 / 전체 칸 수 */
 function progress(e: Entry): { done: number; total: number } {
@@ -53,7 +50,7 @@ export default function HomePage() {
 
   const remove = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation()
-    if (!confirm('이 묵상을 삭제할까요?')) return
+    if (!confirm(t('homeDeleteConfirm'))) return
     await deleteEntry(id)
     setEntries((prev) => prev.filter((x) => x.id !== id))
   }
@@ -61,7 +58,7 @@ export default function HomePage() {
   const removeAll = async () => {
     if (
       !confirm(
-        `모든 묵상 ${entries.length}편을 삭제할까요?\n되돌릴 수 없으며, 필사·기도·기록이 모두 사라집니다.`,
+        t('homeDeleteAllConfirm')(entries.length),
       )
     )
       return
@@ -77,11 +74,14 @@ export default function HomePage() {
             to="/binder"
             className="rounded-lg border border-rose-line bg-rose-card/80 px-3 py-2 text-sm font-bold text-rose-key shadow-sm"
           >
-            SPL 바인더
+            {t('homeBinder')}
           </Link>
         </div>
       )}
-      <GuideButton className="absolute right-4 top-4 z-10" />
+      <div className="absolute right-4 top-4 z-10 flex items-center gap-2">
+        <LangToggle />
+        <GuideButton />
+      </div>
       {/* 책 표지 — 첫 페이지 */}
       <section className="relative flex min-h-[86vh] flex-col items-center justify-center px-6 text-center">
         {/* 표지 프레임 (책 테두리) */}
@@ -97,24 +97,32 @@ export default function HomePage() {
         </div>
 
         <h1 className="font-serif text-[2.75rem] font-extrabold leading-[1.15] tracking-tight text-rose-ink">
-          말씀
+          {t('homeTitleLine1')}
           <br />
-          묵상 노트
+          {t('homeTitleLine2')}
         </h1>
         <p className="mt-4 font-serif text-base tracking-wide text-rose-key">EDABible</p>
 
-        <blockquote className="mt-10 max-w-xs font-serif text-[15px] leading-7 text-rose-ink/80">
-          “주의 말씀은 <span className="verse-mark">내 발에 등</span>이요
-          <br />내 <span className="verse-mark">길에 빛</span>이니이다”
-          <footer className="mt-2.5 text-sm text-rose-key">— 시편 119:105</footer>
-        </blockquote>
+        {getLang() === 'en' ? (
+          <blockquote className="mt-10 max-w-xs font-serif text-[15px] leading-7 text-rose-ink/80">
+            “By your words I can see <span className="verse-mark">where I'm going</span>;
+            <br />they throw <span className="verse-mark">a beam of light</span> on my dark path.”
+            <footer className="mt-2.5 text-sm text-rose-key">— Psalm 119:105</footer>
+          </blockquote>
+        ) : (
+          <blockquote className="mt-10 max-w-xs font-serif text-[15px] leading-7 text-rose-ink/80">
+            “주의 말씀은 <span className="verse-mark">내 발에 등</span>이요
+            <br />내 <span className="verse-mark">길에 빛</span>이니이다”
+            <footer className="mt-2.5 text-sm text-rose-key">— 시편 119:105</footer>
+          </blockquote>
+        )}
 
         <button
           type="button"
           onClick={() => recordsRef.current?.scrollIntoView({ behavior: 'smooth' })}
           className="absolute inset-x-0 bottom-7 mx-auto flex flex-col items-center gap-1 text-rose-key/70 transition active:scale-95"
         >
-          <span className="font-serif text-xs tracking-[0.25em]">묵상 기록 보기</span>
+          <span className="font-serif text-xs tracking-[0.25em]">{t('homeViewRecords')}</span>
           <span className="animate-bounce text-base leading-none">⌄</span>
         </button>
       </section>
@@ -122,9 +130,9 @@ export default function HomePage() {
       {/* 묵상 기록 — 목차 */}
       <div ref={recordsRef} className="scroll-mt-4 px-4 pb-28 pt-2">
         <header className="mb-5 flex items-center gap-3">
-          <h2 className="font-serif text-xl font-bold text-rose-ink">묵상 기록</h2>
+          <h2 className="font-serif text-xl font-bold text-rose-ink">{t('homeRecords')}</h2>
           {!loading && entries.length > 0 && (
-            <span className="text-sm text-rose-key">총 {entries.length}편</span>
+            <span className="text-sm text-rose-key">{t('homeTotalCount')(entries.length)}</span>
           )}
           <span className="h-px flex-1 bg-rose-line" />
           {!loading && entries.length > 0 && (
@@ -133,17 +141,17 @@ export default function HomePage() {
               onClick={removeAll}
               className="shrink-0 rounded-lg px-2 py-1 text-xs font-medium text-rose-key/70 hover:bg-rose-chip/60 hover:text-rose-accent"
             >
-              전체 삭제
+              {t('homeDeleteAll')}
             </button>
           )}
         </header>
 
         {loading ? (
-          <p className="py-12 text-center text-rose-key/70">불러오는 중…</p>
+          <p className="py-12 text-center text-rose-key/70">{t('homeLoading')}</p>
         ) : entries.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-rose-line bg-rose-card/60 py-16 text-center">
-            <p className="text-rose-key">아직 묵상 기록이 없어요.</p>
-            <p className="mt-1 text-sm text-rose-key/70">아래 버튼으로 오늘의 묵상을 시작해보세요.</p>
+            <p className="text-rose-key">{t('homeEmpty')}</p>
+            <p className="mt-1 text-sm text-rose-key/70">{t('homeEmptyHint')}</p>
           </div>
         ) : (
           <ul className="space-y-3">
@@ -156,9 +164,9 @@ export default function HomePage() {
                 className="group flex cursor-pointer items-center justify-between rounded-2xl border border-rose-line bg-rose-card px-4 py-3.5 transition hover:border-rose-accent"
               >
                 <div className="min-w-0">
-                  <p className="font-serif text-[17px] font-bold text-rose-ink">{formatDate(e.date)}</p>
+                  <p className="font-serif text-[17px] font-bold text-rose-ink">{formatEntryDate(e.date)}</p>
                   <p className="truncate text-sm text-rose-key">
-                    {e.bibleRef || '본문 미입력'}
+                    {e.bibleRef || t('homePassageMissing')}
                   </p>
                 </div>
                 <div className="flex items-center gap-3">
@@ -172,7 +180,7 @@ export default function HomePage() {
                   <button
                     onClick={(ev) => remove(e.id, ev)}
                     className="-mr-2 flex h-12 w-12 items-center justify-center rounded-full text-2xl text-rose-key/50 hover:bg-rose-chip/60 hover:text-rose-accent"
-                    aria-label="삭제"
+                    aria-label={t('homeDelete')}
                   >
                     ✕
                   </button>
@@ -195,7 +203,7 @@ export default function HomePage() {
         className="safe-pad fixed inset-x-0 bottom-0 mx-auto flex max-w-2xl items-center justify-center"
       >
         <span className="mb-5 w-[calc(100%-2rem)] rounded-full bg-rose-accent-deep py-4 text-center text-lg font-bold text-white shadow-lift active:scale-[0.99]">
-          ✏️ 오늘 묵상 시작
+          {t('homeStart')}
         </span>
       </button>
     </div>
