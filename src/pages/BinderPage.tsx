@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { flushSync } from 'react-dom'
 import { Link } from 'react-router-dom'
 import * as pdfjsLib from 'pdfjs-dist'
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.mjs?url'
@@ -40,8 +41,8 @@ const IS_IOS =
 const PALM_GRACE_MS = 1200
 
 // 텍스트 상자는 한 번 탭으로 만들면 오탭이 잦아 두 번 탭으로만 만든다
-const DOUBLE_TAP_MS = 400
-const DOUBLE_TAP_SLOP_PX = 32
+const DOUBLE_TAP_MS = 500
+const DOUBLE_TAP_SLOP_PX = 40
 // 상자 크기는 쪽 대비 비율로 저장하지만, 최소 크기는 px로 잡아야
 // 좁은 폰에서도 한 줄이 들어가는 크기가 보장된다
 const NEW_TEXT_BOX_WIDTH_RATIO = 0.34
@@ -570,11 +571,13 @@ function PageOverlay({
       height,
       text: '',
     }
-    onTextBoxesChange([...filledTextBoxes(), box])
-    setActiveTextBoxId(box.id)
-    window.setTimeout(() => {
-      window.document.querySelector<HTMLTextAreaElement>(`[data-text-box-id="${box.id}"]`)?.focus()
-    }, 0)
+    // iOS는 사용자 제스처 밖(setTimeout 등)에서 부른 focus()로 키보드를 열지 않는다.
+    // 새 상자를 동기 렌더한 뒤 같은 이벤트 안에서 focus()해야 키보드가 올라온다.
+    flushSync(() => {
+      onTextBoxesChange([...filledTextBoxes(), box])
+      setActiveTextBoxId(box.id)
+    })
+    window.document.querySelector<HTMLTextAreaElement>(`[data-text-box-id="${box.id}"]`)?.focus()
   }
 
   const handleOverlayTap = (event: React.PointerEvent<HTMLDivElement>) => {
@@ -592,6 +595,8 @@ function PageOverlay({
       lastTapRef.current = { time: now, x: event.clientX, y: event.clientY }
       setActiveTextBoxId(null)
       dropEmptyTextBoxes()
+      // 배경 mousedown의 기본 동작(포커스 이동)을 막아뒀으므로 직접 풀어준다
+      if (window.document.activeElement instanceof HTMLElement) window.document.activeElement.blur()
       return
     }
 
@@ -679,8 +684,21 @@ function PageOverlay({
     setActiveTextBoxId(null)
   }
 
+  // touch-action은 상속되지 않는다. article의 pan-y가 오버레이까지 오지 않으므로 직접 지정해
+  // 더블탭 줌 제스처를 끈다 — iOS Safari는 user-scalable=no를 무시해서, 켜져 있으면 두 번째
+  // 탭을 브라우저가 가져가고 pointer 이벤트가 오지 않는다.
   return (
-    <div ref={overlayRef} className="absolute inset-0" onPointerUp={handleOverlayTap}>
+    <div
+      ref={overlayRef}
+      className="absolute inset-0"
+      style={{ touchAction: 'manipulation' }}
+      onPointerUp={handleOverlayTap}
+      // 터치는 pointerup '뒤에' 호환 mousedown을 보내 방금 focus한 입력칸의 포커스를 뺏는다
+      // (= iOS에서 키보드가 안 올라옴). 입력칸 자체를 누른 게 아니면 기본 동작을 막는다.
+      onMouseDown={(event) => {
+        if (!(event.target instanceof HTMLTextAreaElement)) event.preventDefault()
+      }}
+    >
       {/* 손글씨 모드에서도 타이핑한 내용은 그대로 보이되, 펜 입력을 가로채지 않는다.
           레이어 자체는 항상 투명해야 배경 두 번 탭이 아래 overlay까지 내려간다. */}
       <div className="pointer-events-none absolute inset-0">
