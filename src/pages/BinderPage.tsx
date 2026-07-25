@@ -707,6 +707,7 @@ function PageOverlay({
           return (
             <div
               key={box.id}
+              data-text-box=""
               className={`absolute ${editable ? 'pointer-events-auto' : ''}`}
               style={{
                 left: `${box.x * 100}%`,
@@ -1685,6 +1686,9 @@ export default function BinderPage() {
             onTouchStart={(event) => {
               // 폰에서는 스와이프 넘김 비활성, 손글씨 모드에서는 획 오인 방지
               if (isPhone || inputMode === 'ink') return
+              // 상자를 옮기거나 크기를 바꾸는 드래그가 쪽 넘김으로 오인되지 않게 한다.
+              // 핸들의 stopPropagation은 pointer 이벤트만 막아 touch까지는 오지 않는다.
+              if (event.target instanceof Element && event.target.closest('[data-text-box]')) return
               setTouchStart(event.changedTouches[0]?.clientX ?? null)
             }}
             onTouchEnd={(event) => {
