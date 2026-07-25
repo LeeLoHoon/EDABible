@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { Link } from 'react-router-dom'
 import * as pdfjsLib from 'pdfjs-dist'
@@ -707,7 +707,6 @@ function PageOverlay({
           return (
             <div
               key={box.id}
-              data-text-box=""
               className={`absolute ${editable ? 'pointer-events-auto' : ''}`}
               style={{
                 left: `${box.x * 100}%`,
@@ -963,12 +962,6 @@ export default function BinderPage() {
   const [pageNumber, setPageNumber] = useState(1)
   const [pageCount, setPageCount] = useState(binderBooks[0]?.pages ?? 1)
   const [loadingPdf, setLoadingPdf] = useState(true)
-  const [touchStart, setTouchStart] = useState<number | null>(null)
-  // 폰에서는 스와이프 페이지 넘김을 끈다 (화살표·슬라이더·미리보기로 이동)
-  const isPhone = useMemo(
-    () => typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches,
-    [],
-  )
   const [previewDragging, setPreviewDragging] = useState(false)
   const previewDragRef = useRef<{ startX: number; startPage: number; lastPage: number } | null>(null)
   const previewMovedRef = useRef(false)
@@ -1327,15 +1320,6 @@ export default function BinderPage() {
     }
   }
 
-  const handleTouchEnd = (x: number) => {
-    if (touchStart === null) return
-    const delta = x - touchStart
-    setTouchStart(null)
-    if (Math.abs(delta) < 48) return
-    if (delta < 0) goNext()
-    else goPrev()
-  }
-
   return (
     <div className="min-h-full bg-rose-bg text-rose-ink">
       <header className="sticky top-0 z-20 border-b border-rose-line bg-rose-bg/95 px-4 py-2.5 backdrop-blur">
@@ -1683,18 +1667,6 @@ export default function BinderPage() {
           <article
             className="relative rounded-3xl border border-rose-line bg-rose-chip/50 p-2.5 sm:p-3"
             style={{ touchAction: 'pan-y' }}
-            onTouchStart={(event) => {
-              // 폰에서는 스와이프 넘김 비활성, 손글씨 모드에서는 획 오인 방지
-              if (isPhone || inputMode === 'ink') return
-              // 상자를 옮기거나 크기를 바꾸는 드래그가 쪽 넘김으로 오인되지 않게 한다.
-              // 핸들의 stopPropagation은 pointer 이벤트만 막아 touch까지는 오지 않는다.
-              if (event.target instanceof Element && event.target.closest('[data-text-box]')) return
-              setTouchStart(event.changedTouches[0]?.clientX ?? null)
-            }}
-            onTouchEnd={(event) => {
-              if (isPhone || inputMode === 'ink') return
-              handleTouchEnd(event.changedTouches[0]?.clientX ?? 0)
-            }}
           >
             {loadingPdf ? (
               <div className="grid min-h-[56vh] place-items-center rounded-2xl bg-rose-card text-rose-key">
@@ -1719,33 +1691,38 @@ export default function BinderPage() {
               </div>
             )}
 
-            {/* 페이지 위에 떠 있는 좌우 넘김 (태블릿 이상) */}
-            <button
-              type="button"
-              onClick={goPrev}
-              disabled={pageNumber === 1}
-              className="absolute left-0 top-1/2 z-10 hidden h-11 w-11 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border border-rose-line bg-rose-card text-base font-bold text-rose-key shadow-md transition hover:text-rose-accent disabled:opacity-0 md:grid"
-              aria-label={t('binderPrevPage')}
-            >
-              ←
-            </button>
-            <button
-              type="button"
-              onClick={goNext}
-              disabled={pageNumber >= pageCount}
-              className="absolute right-0 top-1/2 z-10 hidden h-11 w-11 -translate-y-1/2 translate-x-1/2 place-items-center rounded-full border border-rose-line bg-rose-card text-base font-bold text-rose-key shadow-md transition hover:text-rose-accent disabled:opacity-0 md:grid"
-              aria-label={t('binderNextPage')}
-            >
-              →
-            </button>
+            {/* 페이지 위에 떠 있는 좌우 넘김 — 아티클 안쪽에 고정해 좁은 폭에서도 뷰포트를 벗어나지 않는다.
+                필기 중에는 숨긴다: 획이 버튼 위에서 시작하면 쪽이 넘어가 버린다 (하단 바로 이동 가능). */}
+            {inputMode !== 'ink' && (
+              <>
+                <button
+                  type="button"
+                  onClick={goPrev}
+                  disabled={pageNumber === 1}
+                  className="absolute left-2 top-1/2 z-10 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full bg-rose-accent-deep text-xl font-bold text-white shadow-lift transition active:scale-[0.98] disabled:opacity-40 sm:left-3 sm:h-12 sm:w-12"
+                  aria-label={t('binderPrevPage')}
+                >
+                  ←
+                </button>
+                <button
+                  type="button"
+                  onClick={goNext}
+                  disabled={pageNumber >= pageCount}
+                  className="absolute right-2 top-1/2 z-10 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full bg-rose-accent-deep text-xl font-bold text-white shadow-lift transition active:scale-[0.98] disabled:opacity-40 sm:right-3 sm:h-12 sm:w-12"
+                  aria-label={t('binderNextPage')}
+                >
+                  →
+                </button>
+              </>
+            )}
           </article>
 
-          <div className="flex items-center gap-2.5 rounded-full border border-rose-line bg-rose-card py-1.5 pl-2 pr-4 shadow-sm">
+          <div className="flex items-center gap-2 rounded-full border border-rose-line bg-rose-card py-1 pl-1 pr-3 shadow-sm">
             <button
               type="button"
               onClick={goPrev}
               disabled={pageNumber === 1}
-              className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-sm font-bold text-rose-key transition hover:bg-rose-chip disabled:opacity-30 md:hidden"
+              className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-rose-accent-deep text-xl font-bold text-white shadow-sm shadow-rose-accent/25 transition active:scale-[0.98] disabled:opacity-40"
               aria-label={t('binderPrevPage')}
             >
               ←
@@ -1764,7 +1741,7 @@ export default function BinderPage() {
               type="button"
               onClick={goNext}
               disabled={pageNumber >= pageCount}
-              className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-sm font-bold text-rose-key transition hover:bg-rose-chip disabled:opacity-30 md:hidden"
+              className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-rose-accent-deep text-xl font-bold text-white shadow-sm shadow-rose-accent/25 transition active:scale-[0.98] disabled:opacity-40"
               aria-label={t('binderNextPage')}
             >
               →
