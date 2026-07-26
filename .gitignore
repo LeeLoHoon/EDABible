@@ -12,6 +12,7 @@ dist
 dist-*
 dist-ssr
 .tmp
+.tmp/binder-src-compressed/
 *.local
 
 # Editor directories and files
@@ -26,3 +27,4 @@ dist-ssr
 *.sw?
 .vercel
 .env*
+.migration-backup/

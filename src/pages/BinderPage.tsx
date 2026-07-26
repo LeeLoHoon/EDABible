@@ -4,7 +4,15 @@ import { Link } from 'react-router-dom'
 import * as pdfjsLib from 'pdfjs-dist'
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.mjs?url'
 import { useAuth } from '../authState'
-import { binderBooks, binderUrl } from '../binderLibrary'
+import {
+  binderSetList,
+  binderUrl,
+  checkpointsForSet,
+  findBinderSet,
+  isKnownBinderSetId,
+  type BinderCheckpoint,
+} from '../binderLibrary'
+import { migrateLocalBinderWorks, resolveLegacyResume } from '../binderMigration'
 import ModeToggle from '../components/ModeToggle'
 import {
   getBinderWork,
@@ -56,19 +64,6 @@ const MIN_TEXT_BOX_HEIGHT_PX = 44
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value))
-}
-
-interface BinderCheckpoint {
-  id: string
-  label: string
-  page: number
-}
-
-function defaultCheckpoints(bookId: string): BinderCheckpoint[] {
-  if (bookId === 'spl-00-01') {
-    return t('binderCheckpoints')
-  }
-  return t('binderCheckpointsShort')
 }
 
 function nearbyPages(pageNumber: number, pageCount: number, count = 5): number[] {
@@ -959,7 +954,7 @@ export default function BinderPage() {
   const { user, signOut } = useAuth()
   // 토큰 갱신 등으로 user 객체 참조가 바뀌어도 재조회하지 않도록 id 문자열만 의존
   const userId = user?.id
-  const [selectedId, setSelectedId] = useState(binderBooks[0]?.id ?? '')
+  const [selectedId, setSelectedId] = useState(binderSetList[0]?.id ?? '')
   const [work, setWork] = useState<BinderWork | null>(null)
   const [document, setDocument] = useState<PdfDocument | null>(null)
   const [inkTool, setInkTool] = useState<InkTool>('pen')
@@ -973,15 +968,16 @@ export default function BinderPage() {
   const [shareExtraPages, setShareExtraPages] = useState<number[]>([])
   const [shareExtraInput, setShareExtraInput] = useState('')
   const [pageNumber, setPageNumber] = useState(1)
-  const [pageCount, setPageCount] = useState(binderBooks[0]?.pages ?? 1)
+  const [pageCount, setPageCount] = useState(binderSetList[0]?.pages ?? 1)
   const [loadingPdf, setLoadingPdf] = useState(true)
+  const [bootReadyUserId, setBootReadyUserId] = useState<string | null>(null)
   const [previewDragging, setPreviewDragging] = useState(false)
   const previewDragRef = useRef<{ startX: number; startPage: number; lastPage: number } | null>(null)
   const previewMovedRef = useRef(false)
-  const shelfDragRef = useRef<{ pointerId: number; startX: number; startLeft: number; moved: boolean } | null>(null)
-  const shelfMovedRef = useRef(false)
+  const activeCheckpointRef = useRef<HTMLButtonElement | null>(null)
   // 이어보기: 부팅 복원이 끝나기 전에는 마지막 위치를 저장하지 않는다
   const bootRef = useRef(true)
+  const legacyResumeRef = useRef<{ setId: string; page: number } | null>(null)
   // 권을 바꾼 뒤 사용자가 직접 페이지를 넘겼으면 복원으로 되돌리지 않는다
   const navigatedSinceSelectRef = useRef(false)
   const workRef = useRef<BinderWork | null>(null)
@@ -990,19 +986,22 @@ export default function BinderPage() {
     workRef.current = work
   }, [work])
 
-  const selected = binderBooks.find((book) => book.id === selectedId) ?? binderBooks[0]
+  const selected = findBinderSet(selectedId) ?? binderSetList[0]
   const pageKey = String(pageNumber)
   const pageInput = work?.pageInputs[pageKey] ?? emptyField()
   const pageTextBoxes = work?.pageTextBoxes[pageKey] ?? []
   // 체크포인트는 "구간"의 시작점 — 다음 체크포인트 직전까지가 그 구간이다
-  const checkpointSections = defaultCheckpoints(selected.id)
-    .filter((checkpoint) => checkpoint.page <= pageCount)
-    .map((checkpoint, index, list) => ({
-      ...checkpoint,
-      endPage: index + 1 < list.length ? list[index + 1].page - 1 : pageCount,
-    }))
+  const checkpoints: BinderCheckpoint[] = checkpointsForSet(selected)
+  const checkpointSections = checkpoints.map((checkpoint, index, list) => ({
+    ...checkpoint,
+    endPage: index + 1 < list.length ? list[index + 1].page - 1 : pageCount,
+  }))
   const activeCheckpointId =
     [...checkpointSections].reverse().find((section) => pageNumber >= section.page)?.id ?? ''
+
+  useEffect(() => {
+    activeCheckpointRef.current?.scrollIntoView({ block: 'nearest' })
+  }, [activeCheckpointId])
   const previewPages = nearbyPages(pageNumber, pageCount)
   const bookmarks = [...(work?.bookmarks ?? [])].sort((a, b) => a.page - b.page || a.createdAt - b.createdAt)
   const currentPageBookmarked = bookmarks.some((bookmark) => bookmark.page === pageNumber)
@@ -1024,23 +1023,42 @@ export default function BinderPage() {
     .filter((page) => page >= 1 && page <= pageCount)
     .sort((a, b) => a - b)
 
-  // 부팅 시 계정의 마지막 사용 권으로 이동
+  // 부팅 시 로컬 옛 데이터를 먼저 옮긴 뒤 계정의 마지막 사용 세트로 이동
   useEffect(() => {
     if (!userId) return
     let alive = true
-    getLastBinderBookId(userId)
-      .then((bookId) => {
-        if (!alive || !bookId) return
-        if (binderBooks.some((book) => book.id === bookId)) setSelectedId(bookId)
-      })
-      .catch(() => {})
+    const restore = async () => {
+      try {
+        await migrateLocalBinderWorks(userId)
+        const setId = await getLastBinderBookId(userId, isKnownBinderSetId)
+        if (!alive) return
+        if (setId) {
+          setSelectedId(setId)
+          return
+        }
+
+        const legacyId = await getLastBinderBookId(userId)
+        if (!legacyId || isKnownBinderSetId(legacyId)) return
+        const legacyWork = await getBinderWork(legacyId, userId)
+        if (!alive) return
+        const resume = resolveLegacyResume(legacyId, legacyWork.lastPageNumber)
+        if (!resume || !isKnownBinderSetId(resume.setId)) return
+        legacyResumeRef.current = resume
+        setSelectedId(resume.setId)
+      } catch {
+        // 복원 실패 시 첫 세트를 그대로 열어 바인더 사용을 막지 않는다.
+      } finally {
+        if (alive) setBootReadyUserId(userId)
+      }
+    }
+    void restore()
     return () => {
       alive = false
     }
   }, [userId])
 
   useEffect(() => {
-    if (!userId) return
+    if (!userId || bootReadyUserId !== userId) return
     let alive = true
     navigatedSinceSelectRef.current = false
     const resetTimer = window.setTimeout(() => {
@@ -1053,7 +1071,11 @@ export default function BinderPage() {
       if (!alive) return
       window.clearTimeout(resetTimer)
       // 이 권에서 마지막으로 보던 쪽으로 이어보기 (이미 직접 넘겼으면 유지)
-      const target = next.lastPageNumber && next.lastPageNumber > 0 ? next.lastPageNumber : 1
+      const legacyResume = legacyResumeRef.current?.setId === selected.id
+        ? legacyResumeRef.current.page
+        : undefined
+      if (legacyResume !== undefined) legacyResumeRef.current = null
+      const target = legacyResume ?? (next.lastPageNumber && next.lastPageNumber > 0 ? next.lastPageNumber : 1)
       const restored = Math.max(1, Math.min(selected.pages, target))
       if (!navigatedSinceSelectRef.current) setPageNumber(restored)
 
@@ -1074,7 +1096,7 @@ export default function BinderPage() {
       alive = false
       window.clearTimeout(resetTimer)
     }
-  }, [selected.id, selected.pages, userId])
+  }, [bootReadyUserId, selected.id, selected.pages, userId])
 
   // 마지막 위치(권·쪽 + 체크포인트 구간별 쪽) 저장 — 계정별 이어보기용
   useEffect(() => {
@@ -1247,42 +1269,6 @@ export default function BinderPage() {
     }
   }
 
-  // 권 선택 책장: 터치·펜은 네이티브 관성 스크롤에 맡기고(부드러움),
-  // 스크롤바가 없는 마우스만 수동 드래그 스크롤을 붙인다.
-  // 캡처는 실제로 움직이기 시작한 뒤에만 잡아, 가만히 탭한 책등의 클릭은 살린다.
-  const startShelfDrag = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (event.pointerType !== 'mouse') return
-    shelfMovedRef.current = false
-    shelfDragRef.current = {
-      pointerId: event.pointerId,
-      startX: event.clientX,
-      startLeft: event.currentTarget.scrollLeft,
-      moved: false,
-    }
-  }
-
-  const moveShelfDrag = (event: React.PointerEvent<HTMLDivElement>) => {
-    const drag = shelfDragRef.current
-    if (!drag || drag.pointerId !== event.pointerId) return
-    const dx = drag.startX - event.clientX
-    if (!drag.moved) {
-      if (Math.abs(dx) < 8) return
-      drag.moved = true
-      shelfMovedRef.current = true
-      event.currentTarget.setPointerCapture(event.pointerId)
-    }
-    event.currentTarget.scrollLeft = drag.startLeft + dx
-  }
-
-  const endShelfDrag = (event: React.PointerEvent<HTMLDivElement>) => {
-    const drag = shelfDragRef.current
-    if (!drag || drag.pointerId !== event.pointerId) return
-    shelfDragRef.current = null
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId)
-    }
-  }
-
   const openShare = () => {
     setShareSelected([pageNumber])
     setShareExtraInput('')
@@ -1313,14 +1299,14 @@ export default function BinderPage() {
       for (const page of pages) {
         const canvas = await renderSharePage(document, page, work, displayWidth)
         files.push(
-          await canvasToJpegFile(canvas, `eda-spl-${selected.issue}-p${String(page).padStart(3, '0')}.jpg`),
+          await canvasToJpegFile(canvas, `eda-${selected.id}-p${String(page).padStart(3, '0')}.jpg`),
         )
       }
       const result = await shareOrDownloadFiles(
         files,
-        t('binderShareTitle')(selected.issue),
+        t('binderShareTitle')(t('binderSetTitle')(selected.kind)),
         t('binderShareText')(
-          t('binderVolumeTitle')(selected.issue),
+          t('binderSetTitle')(selected.kind),
           pages.map((page) => t('binderPage')(page)).join(', '),
         ),
       )
@@ -1380,75 +1366,53 @@ export default function BinderPage() {
       </header>
 
       <main className="mx-auto flex max-w-6xl flex-col gap-5 px-4 py-5 xl:grid xl:grid-cols-[15rem_minmax(0,1fr)] xl:items-start">
-        {/* 폰·태블릿에서는 권 선택 → 체크포인트를 헤더 바로 아래로 올린다.
-            권 표지 카드는 툴바에 같은 제목이 나오는 태블릿 구간에서만 숨긴다. */}
+        {/* 폰·태블릿에서는 세트 선택 → 체크포인트를 헤더 바로 아래로 올린다.
+            세트 표지 카드는 툴바에 같은 제목이 나오는 태블릿 구간에서만 숨긴다. */}
         <aside className="flex flex-col gap-4 xl:sticky xl:top-[66px] xl:self-start">
           <section className="relative order-3 overflow-hidden rounded-2xl border border-rose-line bg-rose-card p-5 pl-7 sm:hidden xl:order-1 xl:block">
             <div className="pointer-events-none absolute inset-y-0 left-0 w-2 bg-rose-accent" />
             <div className="flex items-center justify-between">
               <p className="text-[11px] font-black tracking-[0.3em] text-rose-key/80">EDA · SPL</p>
               <span className="rounded-full bg-rose-chip px-2.5 py-0.5 text-[11px] font-black text-rose-accent">
-                {t('binderIssue')(selected.issue)}
+                {t('binderSetPages')(selected.pages)}
               </span>
             </div>
-            <p className="mt-3 break-keep font-serif text-[23px] font-extrabold leading-snug">{t('binderVolumeTitle')(selected.issue)}</p>
+            <p className="mt-3 break-keep font-serif text-[23px] font-extrabold leading-snug">
+              {t('binderSetTitle')(selected.kind)}
+            </p>
           </section>
 
           <section className="order-1 overflow-hidden rounded-2xl border border-rose-line bg-rose-card xl:order-2">
             <div className="flex items-center justify-between px-4 pb-1 pt-3">
               <h2 className="flex items-center gap-2 font-serif text-base font-extrabold">
                 <span aria-hidden className="h-3.5 w-[3px] rounded-full bg-rose-accent" />
-                {t('binderSelectVolume')}
+                {t('binderSetSelect')}
               </h2>
-              <span className="text-xs font-bold text-rose-key/80">{t('binderVolumeCount')(binderBooks.length)}</span>
+              <span className="text-xs font-bold text-rose-key/80">{t('binderSetCount')(binderSetList.length)}</span>
             </div>
-            <div className="px-3 pb-3 pt-2">
-              <div
-                className="no-scrollbar flex cursor-grab items-end gap-1.5 overflow-x-auto px-1 pb-1 pt-2 active:cursor-grabbing"
-                onPointerDown={startShelfDrag}
-                onPointerMove={moveShelfDrag}
-                onPointerUp={endShelfDrag}
-                onPointerCancel={endShelfDrag}
-              >
-                {binderBooks.map((book) => {
-                  const active = selected.id === book.id
-                  return (
-                    <button
-                      type="button"
-                      key={book.id}
-                      onClick={() => {
-                        if (shelfMovedRef.current) return
-                        setSelectedId(book.id)
-                      }}
-                      className={`group relative flex shrink-0 flex-col items-center justify-between overflow-hidden rounded-md rounded-b-sm border px-1.5 py-2.5 transition ${
-                        active
-                          ? '-translate-y-1.5 border-rose-accent-deep bg-rose-accent-deep text-white shadow-lg shadow-rose-accent/25'
-                          : 'border-rose-line bg-rose-bg text-rose-key hover:-translate-y-1 hover:border-rose-accent/50 hover:text-rose-accent'
-                      }`}
-                      style={{ width: 42, height: 132 }}
-                      aria-label={t('binderSelectVolumeAria')(t('binderVolumeTitle')(book.issue))}
-                    >
-                      <span
-                        className={`pointer-events-none absolute inset-y-0 left-[3px] w-px ${
-                          active ? 'bg-white/30' : 'bg-white'
-                        }`}
-                      />
-                      <span className={`text-[9px] font-black tracking-[0.14em] ${active ? 'text-white/70' : 'text-rose-key/60'}`}>
-                        EDA
-                      </span>
-                      <span className="mx-auto flex flex-1 items-center justify-center">
-                        <span className="[writing-mode:vertical-rl] font-serif text-[13px] font-extrabold tracking-[0.2em]">
-                          SPL
-                        </span>
-                      </span>
-                      <span className="text-center font-serif text-[15px] font-extrabold leading-tight">
-                        {book.issue}
-                      </span>
-                    </button>
-                  )
-                })}
-              </div>
-              <div className="h-1.5 rounded-full bg-rose-chip" />
+            <div className="space-y-1.5 px-3 pb-3 pt-2">
+              {binderSetList.map((set) => {
+                const active = selected.id === set.id
+                const title = t('binderSetTitle')(set.kind)
+                return (
+                  <button
+                    type="button"
+                    key={set.id}
+                    onClick={() => setSelectedId(set.id)}
+                    className={`flex w-full items-center justify-between gap-3 rounded-xl border px-3 py-2.5 text-left transition ${
+                      active
+                        ? 'border-rose-accent-deep bg-rose-accent-deep text-white shadow-md shadow-rose-accent/20'
+                        : 'border-rose-line bg-rose-bg text-rose-key hover:border-rose-accent/50 hover:text-rose-accent'
+                    }`}
+                    aria-label={t('binderSelectSetAria')(title)}
+                  >
+                    <span className="min-w-0 truncate font-serif text-sm font-extrabold">{title}</span>
+                    <span className={`shrink-0 text-xs font-bold ${active ? 'text-white/75' : 'text-rose-key/60'}`}>
+                      {t('binderSetPages')(set.pages)}
+                    </span>
+                  </button>
+                )
+              })}
             </div>
           </section>
 
@@ -1466,29 +1430,23 @@ export default function BinderPage() {
                 {t('binderAddBookmark')}
               </button>
             </div>
-            <div className="space-y-0.5">
+            <div className="grid max-h-[38vh] grid-cols-2 gap-1 overflow-y-auto sm:grid-cols-3 xl:grid-cols-4">
               {checkpointSections.map((checkpoint) => {
                 const active = activeCheckpointId === checkpoint.id
                 return (
                   <button
                     type="button"
                     key={checkpoint.id}
+                    ref={active ? activeCheckpointRef : null}
                     onClick={() => goToCheckpoint(checkpoint.id)}
-                    className={`flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm transition ${
+                    title={`${checkpoint.label} · ${t('binderPage')(checkpoint.page)}`}
+                    className={`min-w-0 truncate rounded-lg px-2.5 py-1.5 text-left text-sm transition ${
                       active
                         ? 'bg-rose-chip font-extrabold text-rose-accent'
                         : 'font-bold text-rose-key hover:bg-rose-chip/50 hover:text-rose-ink'
                     }`}
                   >
-                    <span className="flex min-w-0 items-center gap-2">
-                      <span
-                        className={`h-1.5 w-1.5 shrink-0 rounded-full ${active ? 'bg-leaf' : 'bg-rose-line'}`}
-                      />
-                      <span className="truncate">{checkpoint.label}</span>
-                    </span>
-                    <span className={`shrink-0 text-xs tabular-nums ${active ? 'text-rose-accent' : 'text-rose-key/60'}`}>
-                      {checkpoint.page}
-                    </span>
+                    {checkpoint.label}
                   </button>
                 )
               })}
@@ -1552,7 +1510,7 @@ export default function BinderPage() {
           <div className="sticky top-[52px] z-10 flex flex-wrap items-center gap-2 rounded-2xl border border-rose-line bg-rose-card/95 px-3.5 py-2.5 shadow-sm backdrop-blur">
             {/* 제목은 폰에서 숨김(헤더에 앱 이름이 있고, 툴바를 한 줄로 유지하기 위해) */}
             <h2 className="hidden min-w-0 flex-1 truncate font-serif text-lg font-extrabold sm:block">
-              {t('binderVolumeTitle')(selected.issue)}
+              {t('binderSetTitle')(selected.kind)}
             </h2>
             <select
               value={activeCheckpointId}

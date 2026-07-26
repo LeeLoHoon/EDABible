@@ -178,8 +178,11 @@ export async function getBinderWork(bookId: string, userId?: string): Promise<Bi
   return normalizeBinderWork(bookId, await db.binderWorks.get(bookId))
 }
 
-/** 계정에서 가장 최근에 사용한 권의 bookId — 기록이 없으면 undefined */
-export async function getLastBinderBookId(userId?: string): Promise<string | undefined> {
+/** 계정에서 가장 최근에 사용한 권의 bookId — 선택 필터를 만족하는 기록이 없으면 undefined */
+export async function getLastBinderBookId(
+  userId?: string,
+  isKnown?: (id: string) => boolean,
+): Promise<string | undefined> {
   if (supabase && userId) {
     try {
       const { data, error } = await supabase
@@ -187,16 +190,18 @@ export async function getLastBinderBookId(userId?: string): Promise<string | und
         .select('book_id')
         .eq('user_id', userId)
         .order('updated_at', { ascending: false })
-        .limit(1)
-        .maybeSingle()
-      if (!error && data?.book_id) return data.book_id as string
+        .limit(20)
+      if (!error && data) {
+        const matched = data.find((row) => !isKnown || isKnown(row.book_id as string))
+        if (matched?.book_id) return matched.book_id as string
+      }
     } catch {
       // 네트워크 실패 시 로컬 캐시로 폴백
     }
   }
 
-  const latest = await db.binderWorks.orderBy('updatedAt').reverse().first()
-  return latest?.bookId
+  const localWorks = await db.binderWorks.orderBy('updatedAt').reverse().toArray()
+  return localWorks.find((work) => !isKnown || isKnown(work.bookId))?.bookId
 }
 
 export async function putBinderWork(work: BinderWork, userId?: string): Promise<void> {

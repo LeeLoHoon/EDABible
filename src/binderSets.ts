@@ -1,0 +1,583 @@
+// 이 파일은 scripts/build_binder_sets.mjs가 생성한다. 직접 고치지 말 것.
+// 세트 PDF의 실제 쪽 구성과 어긋나지 않도록 재조합 시 함께 갱신된다.
+
+export interface BinderSetCheckpoint {
+  id: string
+  issue: string
+  page: number
+}
+
+export interface BinderSetMeta {
+  id: string
+  pages: number
+  checkpoints: BinderSetCheckpoint[]
+}
+
+export const binderSets: BinderSetMeta[] = [
+  {
+    "id": "spl-starter",
+    "pages": 112,
+    "checkpoints": []
+  },
+  {
+    "id": "spl-meditation",
+    "pages": 650,
+    "checkpoints": [
+      {
+        "id": "issue-00-01",
+        "issue": "00-01",
+        "page": 1
+      },
+      {
+        "id": "issue-02",
+        "issue": "02",
+        "page": 39
+      },
+      {
+        "id": "issue-03",
+        "issue": "03",
+        "page": 75
+      },
+      {
+        "id": "issue-04",
+        "issue": "04",
+        "page": 111
+      },
+      {
+        "id": "issue-05",
+        "issue": "05",
+        "page": 147
+      },
+      {
+        "id": "issue-06",
+        "issue": "06",
+        "page": 183
+      },
+      {
+        "id": "issue-07",
+        "issue": "07",
+        "page": 219
+      },
+      {
+        "id": "issue-08",
+        "issue": "08",
+        "page": 255
+      },
+      {
+        "id": "issue-09",
+        "issue": "09",
+        "page": 291
+      },
+      {
+        "id": "issue-10",
+        "issue": "10",
+        "page": 327
+      },
+      {
+        "id": "issue-11",
+        "issue": "11",
+        "page": 363
+      },
+      {
+        "id": "issue-12",
+        "issue": "12",
+        "page": 399
+      },
+      {
+        "id": "issue-13",
+        "issue": "13",
+        "page": 435
+      },
+      {
+        "id": "issue-14",
+        "issue": "14",
+        "page": 471
+      },
+      {
+        "id": "issue-15",
+        "issue": "15",
+        "page": 507
+      },
+      {
+        "id": "issue-16",
+        "issue": "16",
+        "page": 543
+      },
+      {
+        "id": "issue-17",
+        "issue": "17",
+        "page": 579
+      },
+      {
+        "id": "issue-18",
+        "issue": "18",
+        "page": 615
+      }
+    ]
+  },
+  {
+    "id": "spl-timothy",
+    "pages": 216,
+    "checkpoints": [
+      {
+        "id": "issue-00-01",
+        "issue": "00-01",
+        "page": 1
+      },
+      {
+        "id": "issue-02",
+        "issue": "02",
+        "page": 13
+      },
+      {
+        "id": "issue-03",
+        "issue": "03",
+        "page": 25
+      },
+      {
+        "id": "issue-04",
+        "issue": "04",
+        "page": 37
+      },
+      {
+        "id": "issue-05",
+        "issue": "05",
+        "page": 49
+      },
+      {
+        "id": "issue-06",
+        "issue": "06",
+        "page": 61
+      },
+      {
+        "id": "issue-07",
+        "issue": "07",
+        "page": 73
+      },
+      {
+        "id": "issue-08",
+        "issue": "08",
+        "page": 85
+      },
+      {
+        "id": "issue-09",
+        "issue": "09",
+        "page": 97
+      },
+      {
+        "id": "issue-10",
+        "issue": "10",
+        "page": 109
+      },
+      {
+        "id": "issue-11",
+        "issue": "11",
+        "page": 121
+      },
+      {
+        "id": "issue-12",
+        "issue": "12",
+        "page": 133
+      },
+      {
+        "id": "issue-13",
+        "issue": "13",
+        "page": 145
+      },
+      {
+        "id": "issue-14",
+        "issue": "14",
+        "page": 157
+      },
+      {
+        "id": "issue-15",
+        "issue": "15",
+        "page": 169
+      },
+      {
+        "id": "issue-16",
+        "issue": "16",
+        "page": 181
+      },
+      {
+        "id": "issue-17",
+        "issue": "17",
+        "page": 193
+      },
+      {
+        "id": "issue-18",
+        "issue": "18",
+        "page": 205
+      }
+    ]
+  },
+  {
+    "id": "spl-bookstudy",
+    "pages": 204,
+    "checkpoints": [
+      {
+        "id": "issue-00-01",
+        "issue": "00-01",
+        "page": 1
+      },
+      {
+        "id": "issue-02",
+        "issue": "02",
+        "page": 11
+      },
+      {
+        "id": "issue-03",
+        "issue": "03",
+        "page": 21
+      },
+      {
+        "id": "issue-04",
+        "issue": "04",
+        "page": 31
+      },
+      {
+        "id": "issue-05",
+        "issue": "05",
+        "page": 41
+      },
+      {
+        "id": "issue-06",
+        "issue": "06",
+        "page": 53
+      },
+      {
+        "id": "issue-07",
+        "issue": "07",
+        "page": 63
+      },
+      {
+        "id": "issue-08",
+        "issue": "08",
+        "page": 73
+      },
+      {
+        "id": "issue-09",
+        "issue": "09",
+        "page": 85
+      },
+      {
+        "id": "issue-10",
+        "issue": "10",
+        "page": 97
+      },
+      {
+        "id": "issue-11",
+        "issue": "11",
+        "page": 109
+      },
+      {
+        "id": "issue-12",
+        "issue": "12",
+        "page": 121
+      },
+      {
+        "id": "issue-13",
+        "issue": "13",
+        "page": 133
+      },
+      {
+        "id": "issue-14",
+        "issue": "14",
+        "page": 145
+      },
+      {
+        "id": "issue-15",
+        "issue": "15",
+        "page": 157
+      },
+      {
+        "id": "issue-16",
+        "issue": "16",
+        "page": 169
+      },
+      {
+        "id": "issue-17",
+        "issue": "17",
+        "page": 181
+      },
+      {
+        "id": "issue-18",
+        "issue": "18",
+        "page": 193
+      }
+    ]
+  },
+  {
+    "id": "spl-meditation-en",
+    "pages": 612,
+    "checkpoints": [
+      {
+        "id": "issue-02",
+        "issue": "02",
+        "page": 1
+      },
+      {
+        "id": "issue-03",
+        "issue": "03",
+        "page": 37
+      },
+      {
+        "id": "issue-04",
+        "issue": "04",
+        "page": 73
+      },
+      {
+        "id": "issue-05",
+        "issue": "05",
+        "page": 109
+      },
+      {
+        "id": "issue-06",
+        "issue": "06",
+        "page": 145
+      },
+      {
+        "id": "issue-07",
+        "issue": "07",
+        "page": 181
+      },
+      {
+        "id": "issue-08",
+        "issue": "08",
+        "page": 217
+      },
+      {
+        "id": "issue-09",
+        "issue": "09",
+        "page": 253
+      },
+      {
+        "id": "issue-10",
+        "issue": "10",
+        "page": 289
+      },
+      {
+        "id": "issue-11",
+        "issue": "11",
+        "page": 325
+      },
+      {
+        "id": "issue-12",
+        "issue": "12",
+        "page": 361
+      },
+      {
+        "id": "issue-13",
+        "issue": "13",
+        "page": 397
+      },
+      {
+        "id": "issue-14",
+        "issue": "14",
+        "page": 433
+      },
+      {
+        "id": "issue-15",
+        "issue": "15",
+        "page": 469
+      },
+      {
+        "id": "issue-16",
+        "issue": "16",
+        "page": 505
+      },
+      {
+        "id": "issue-17",
+        "issue": "17",
+        "page": 541
+      },
+      {
+        "id": "issue-18",
+        "issue": "18",
+        "page": 577
+      }
+    ]
+  },
+  {
+    "id": "spl-timothy-en",
+    "pages": 204,
+    "checkpoints": [
+      {
+        "id": "issue-02",
+        "issue": "02",
+        "page": 1
+      },
+      {
+        "id": "issue-03",
+        "issue": "03",
+        "page": 13
+      },
+      {
+        "id": "issue-04",
+        "issue": "04",
+        "page": 25
+      },
+      {
+        "id": "issue-05",
+        "issue": "05",
+        "page": 37
+      },
+      {
+        "id": "issue-06",
+        "issue": "06",
+        "page": 49
+      },
+      {
+        "id": "issue-07",
+        "issue": "07",
+        "page": 61
+      },
+      {
+        "id": "issue-08",
+        "issue": "08",
+        "page": 73
+      },
+      {
+        "id": "issue-09",
+        "issue": "09",
+        "page": 85
+      },
+      {
+        "id": "issue-10",
+        "issue": "10",
+        "page": 97
+      },
+      {
+        "id": "issue-11",
+        "issue": "11",
+        "page": 109
+      },
+      {
+        "id": "issue-12",
+        "issue": "12",
+        "page": 121
+      },
+      {
+        "id": "issue-13",
+        "issue": "13",
+        "page": 133
+      },
+      {
+        "id": "issue-14",
+        "issue": "14",
+        "page": 145
+      },
+      {
+        "id": "issue-15",
+        "issue": "15",
+        "page": 157
+      },
+      {
+        "id": "issue-16",
+        "issue": "16",
+        "page": 169
+      },
+      {
+        "id": "issue-17",
+        "issue": "17",
+        "page": 181
+      },
+      {
+        "id": "issue-18",
+        "issue": "18",
+        "page": 193
+      }
+    ]
+  },
+  {
+    "id": "spl-bookstudy-en",
+    "pages": 194,
+    "checkpoints": [
+      {
+        "id": "issue-02",
+        "issue": "02",
+        "page": 1
+      },
+      {
+        "id": "issue-03",
+        "issue": "03",
+        "page": 11
+      },
+      {
+        "id": "issue-04",
+        "issue": "04",
+        "page": 21
+      },
+      {
+        "id": "issue-05",
+        "issue": "05",
+        "page": 31
+      },
+      {
+        "id": "issue-06",
+        "issue": "06",
+        "page": 43
+      },
+      {
+        "id": "issue-07",
+        "issue": "07",
+        "page": 53
+      },
+      {
+        "id": "issue-08",
+        "issue": "08",
+        "page": 63
+      },
+      {
+        "id": "issue-09",
+        "issue": "09",
+        "page": 75
+      },
+      {
+        "id": "issue-10",
+        "issue": "10",
+        "page": 87
+      },
+      {
+        "id": "issue-11",
+        "issue": "11",
+        "page": 99
+      },
+      {
+        "id": "issue-12",
+        "issue": "12",
+        "page": 111
+      },
+      {
+        "id": "issue-13",
+        "issue": "13",
+        "page": 123
+      },
+      {
+        "id": "issue-14",
+        "issue": "14",
+        "page": 135
+      },
+      {
+        "id": "issue-15",
+        "issue": "15",
+        "page": 147
+      },
+      {
+        "id": "issue-16",
+        "issue": "16",
+        "page": 159
+      },
+      {
+        "id": "issue-17",
+        "issue": "17",
+        "page": 171
+      },
+      {
+        "id": "issue-18",
+        "issue": "18",
+        "page": 183
+      }
+    ]
+  }
+]

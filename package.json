@@ -1,7 +1,7 @@
 {
   "name": "edabible",
   "private": true,
-  "version": "1.5.91",
+  "version": "1.6.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -12,9 +12,12 @@
     "build:binder": "APP_TARGET=binder tsc -b && APP_TARGET=binder vite build --outDir dist-binder",
     "build:all": "npm run build:bible && APP_TARGET=all tsc -b && APP_TARGET=all vite build --outDir dist-all",
     "build:bible": "node scripts/build_public_bible_from_jsonl.mjs && node scripts/build_public_bible_from_jsonl.mjs --lang en",
+    "build:binder-sets": "node scripts/build_binder_sets.mjs",
     "import:msg-bible": "node scripts/import_msg_bible.mjs",
     "seed:supabase-bible": "node scripts/seed_supabase_bible.mjs",
     "pull:supabase-bible": "node scripts/pull_supabase_bible.mjs && npm run build:bible",
+    "migrate:binder-works": "node scripts/migrate_binder_works_to_sets.mjs",
+    "test:binder-map": "node --test scripts/binder_legacy_map.test.mjs",
     "validate:bible": "node scripts/validate-bible.mjs",
     "lint": "eslint .",
     "preview": "vite preview"
@@ -45,6 +48,7 @@
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.2",
     "globals": "^17.6.0",
+    "pdf-lib": "^1.17.1",
     "pg": "^8.21.0",
     "puppeteer-core": "^25.1.0",
     "tailwindcss": "^4.3.0",

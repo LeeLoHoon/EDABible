@@ -1,55 +1,70 @@
-import { getLang } from './i18n/lang'
+import { binderSets, type BinderSetCheckpoint } from './binderSets'
+import { getLang, type Lang } from './i18n/lang'
+import { t } from './i18n/strings'
 
-export interface BinderBook {
+/** 바인더 세트의 주제 종류다. */
+export type BinderSetKind = 'starter' | 'meditation' | 'timothy' | 'bookStudy'
+
+/** 화면에 표시할 바인더 세트 정보다. */
+export interface BinderSet {
   id: string
-  issue: string
-  file: string
+  kind: BinderSetKind
+  lang: Lang
   pages: number
+  checkpoints: BinderSetCheckpoint[]
 }
 
-const koBinderBooks: BinderBook[] = [
-  { id: 'spl-00-01', issue: '00-01', file: 'spl-binder-00-01.pdf', pages: 172 },
-  { id: 'spl-02', issue: '02', file: 'spl-binder-02.pdf', pages: 64 },
-  { id: 'spl-03', issue: '03', file: 'spl-binder-03.pdf', pages: 64 },
-  { id: 'spl-04', issue: '04', file: 'spl-binder-04.pdf', pages: 64 },
-  { id: 'spl-05', issue: '05', file: 'spl-binder-05.pdf', pages: 66 },
-  { id: 'spl-06', issue: '06', file: 'spl-binder-06.pdf', pages: 64 },
-  { id: 'spl-07', issue: '07', file: 'spl-binder-07.pdf', pages: 64 },
-  { id: 'spl-08', issue: '08', file: 'spl-binder-08.pdf', pages: 66 },
-  { id: 'spl-09', issue: '09', file: 'spl-binder-09.pdf', pages: 66 },
-  { id: 'spl-10', issue: '10', file: 'spl-binder-10.pdf', pages: 66 },
-  { id: 'spl-11', issue: '11', file: 'spl-binder-11.pdf', pages: 66 },
-  { id: 'spl-12', issue: '12', file: 'spl-binder-12.pdf', pages: 66 },
-  { id: 'spl-13', issue: '13', file: 'spl-binder-13.pdf', pages: 66 },
-  { id: 'spl-14', issue: '14', file: 'spl-binder-14.pdf', pages: 66 },
-  { id: 'spl-15', issue: '15', file: 'spl-binder-15.pdf', pages: 66 },
-  { id: 'spl-16', issue: '16', file: 'spl-binder-16.pdf', pages: 66 },
-  { id: 'spl-17', issue: '17', file: 'spl-binder-17.pdf', pages: 66 },
-  { id: 'spl-18', issue: '18', file: 'spl-binder-18.pdf', pages: 66 },
+/** 화면 이동에 쓰는 바인더 체크포인트다. */
+export interface BinderCheckpoint {
+  id: string
+  label: string
+  page: number
+}
+
+const SET_META: Array<Pick<BinderSet, 'id' | 'kind' | 'lang'>> = [
+  { id: 'spl-starter', kind: 'starter', lang: 'ko' },
+  { id: 'spl-meditation', kind: 'meditation', lang: 'ko' },
+  { id: 'spl-timothy', kind: 'timothy', lang: 'ko' },
+  { id: 'spl-bookstudy', kind: 'bookStudy', lang: 'ko' },
+  { id: 'spl-meditation-en', kind: 'meditation', lang: 'en' },
+  { id: 'spl-timothy-en', kind: 'timothy', lang: 'en' },
+  { id: 'spl-bookstudy-en', kind: 'bookStudy', lang: 'en' },
 ]
 
-const enBinderBooks: BinderBook[] = [
-  { id: 'spl-02-en', issue: '02', file: 'spl-binder-02-en.pdf', pages: 64 },
-  { id: 'spl-03-en', issue: '03', file: 'spl-binder-03-en.pdf', pages: 64 },
-  { id: 'spl-04-en', issue: '04', file: 'spl-binder-04-en.pdf', pages: 64 },
-  { id: 'spl-05-en', issue: '05', file: 'spl-binder-05-en.pdf', pages: 66 },
-  { id: 'spl-06-en', issue: '06', file: 'spl-binder-06-en.pdf', pages: 64 },
-  { id: 'spl-07-en', issue: '07', file: 'spl-binder-07-en.pdf', pages: 64 },
-  { id: 'spl-08-en', issue: '08', file: 'spl-binder-08-en.pdf', pages: 66 },
-  { id: 'spl-09-en', issue: '09', file: 'spl-binder-09-en.pdf', pages: 66 },
-  { id: 'spl-10-en', issue: '10', file: 'spl-binder-10-en.pdf', pages: 66 },
-  { id: 'spl-11-en', issue: '11', file: 'spl-binder-11-en.pdf', pages: 66 },
-  { id: 'spl-12-en', issue: '12', file: 'spl-binder-12-en.pdf', pages: 66 },
-  { id: 'spl-13-en', issue: '13', file: 'spl-binder-13-en.pdf', pages: 66 },
-  { id: 'spl-14-en', issue: '14', file: 'spl-binder-14-en.pdf', pages: 66 },
-  { id: 'spl-15-en', issue: '15', file: 'spl-binder-15-en.pdf', pages: 66 },
-  { id: 'spl-16-en', issue: '16', file: 'spl-binder-16-en.pdf', pages: 66 },
-  { id: 'spl-17-en', issue: '17', file: 'spl-binder-17-en.pdf', pages: 66 },
-  { id: 'spl-18-en', issue: '18', file: 'spl-binder-18-en.pdf', pages: 66 },
-]
+/** 현재 언어에서 표시할 바인더 세트 목록이다. */
+export const binderSetList: BinderSet[] = SET_META.filter((meta) => meta.lang === getLang()).flatMap(
+  (meta) => {
+    const generated = binderSets.find((set) => set.id === meta.id)
+    return generated ? [{ ...meta, pages: generated.pages, checkpoints: generated.checkpoints }] : []
+  },
+)
 
-export const binderBooks: BinderBook[] = getLang() === 'en' ? enBinderBooks : koBinderBooks
+/** 바인더 세트 PDF 주소를 만든다. */
+export function binderUrl(set: BinderSet): string {
+  return `${import.meta.env.BASE_URL}binder/${set.id}.pdf`
+}
 
-export function binderUrl(book: BinderBook): string {
-  return `${import.meta.env.BASE_URL}binder/${book.file}`
+/** 현재 언어의 바인더 세트를 id로 찾는다. */
+export function findBinderSet(id: string): BinderSet | undefined {
+  return binderSetList.find((set) => set.id === id)
+}
+
+/** 현재 언어에 표시되는 바인더 세트 id인지 확인한다. */
+export function isKnownBinderSetId(id: string): boolean {
+  return binderSetList.some((set) => set.id === id)
+}
+
+/** 바인더 세트에서 유효한 화면용 체크포인트를 만든다. */
+export function checkpointsForSet(set: BinderSet): BinderCheckpoint[] {
+  if (set.kind === 'starter') {
+    return t('binderCheckpoints').filter((checkpoint) => checkpoint.page <= set.pages)
+  }
+
+  return set.checkpoints
+    .filter((checkpoint) => checkpoint.page <= set.pages)
+    .map((checkpoint) => ({
+      id: checkpoint.id,
+      label: t('binderIssue')(checkpoint.issue),
+      page: checkpoint.page,
+    }))
 }

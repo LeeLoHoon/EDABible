@@ -159,28 +159,26 @@ const ko = {
   bibleFinalizedEditError: '완료된 장은 수정할 수 없습니다', bibleFinalizeMissing: '완료할 본문을 찾지 못했습니다',
   bibleUnfinalizeMissing: '해제할 본문을 찾지 못했습니다', bibleEditBlocked: '영어 성경 본문은 수정할 수 없습니다',
 
+  /** 새신자 세트 전용 — 00-01 원본 쪽번호와 같다 */
   binderCheckpoints: [
     { id: 'cover', label: '표지', page: 1 }, { id: 'starter-00', label: '00 목차', page: 7 },
     { id: 'accept-prayer', label: '영접 기도', page: 53 }, { id: 'starter-01', label: '01 목차', page: 57 },
     { id: 'strength', label: '강점 찾기', page: 59 }, { id: 'mission', label: '사명 찾기', page: 63 },
     { id: 'eda-prayer', label: '에다 기도문', page: 71 }, { id: 'deliverance', label: '축사 기도문', page: 95 },
-    { id: 'meditation', label: '성경묵상', page: 113 }, { id: 'timothy', label: '디모데 만들기', page: 151 },
-    { id: 'book-study', label: '책공부', page: 163 },
   ],
-  binderCheckpointsShort: [
-    { id: 'cover', label: '표지', page: 1 }, { id: 'toc', label: '목차', page: 5 },
-    { id: 'meditation', label: '성경묵상', page: 7 }, { id: 'timothy', label: '디모데 만들기', page: 43 },
-    { id: 'book-study', label: '책공부', page: 55 },
-  ],
-  binderVolumeTitle: (issue: string) => `SPL 바인더 ${issue}`,
+  binderSetTitle: (kind: 'starter' | 'meditation' | 'timothy' | 'bookStudy') => ({
+    starter: '새신자', meditation: '성경묵상', timothy: '디모데 만들기', bookStudy: '책공부',
+  })[kind],
+  binderSetSelect: '세트 선택', binderSetCount: (n: number) => `${n}세트`, binderSetPages: (n: number) => `${n}쪽`,
+  binderSelectSetAria: (title: string) => `${title} 선택`,
   binderInputPlaceholder: '입력', binderMove: '드래그해서 이동', binderResize: '드래그해서 크기 조절', binderDelete: '삭제', binderTapToInput: '입력할 위치를 두 번 탭하세요',
   binderPage: (n: number) => `${n}쪽`, binderBookmarkName: '책갈피 이름',
-  binderShareTitle: (issue: string) => `에다 SPL 바인더 ${issue}호`,
+  binderLegacyBookmarkSuffix: ' (구 표지·목차)',
+  binderShareTitle: (title: string) => `에다 SPL 바인더 · ${title}`,
   binderShareText: (title: string, pages: string) => `${title} · ${pages}`,
   binderImageFailed: '이미지를 만들지 못했습니다. 선택한 쪽 수를 줄여 다시 시도해 주세요.',
   binderBack: '← 이전', binderAppTitle: '에다 SPL 바인더', binderNote: '노트', binderLogout: '로그아웃',
-  binderIssue: (issue: string) => `${issue}호`, binderSelectVolume: '권 선택',
-  binderVolumeCount: (n: number) => `${n}권`, binderSelectVolumeAria: (title: string) => `${title} 선택`,
+  binderIssue: (issue: string) => `${issue}호`,
   binderCheckpoint: '체크포인트', binderAddBookmark: '+ 책갈피', binderMyBookmarks: '내 책갈피', binderCurrentPage: '현재 쪽',
   binderBookmarkHint: '+ 책갈피를 누르면 지금 보는 쪽이 저장돼요.', binderBookmarkDeleteAria: (label: string) => `${label} 책갈피 삭제`,
   binderCheckpointAria: '체크포인트로 이동', binderShortcut: '바로가기', binderShare: '공유',
@@ -228,13 +226,13 @@ const en: Catalog = {
   fieldPen: '✏️ Pen', fieldEraser: '🧽 Eraser', fieldColor: (color) => `Color ${color}`, fieldPenSize: 'Pen size', fieldUndo: '↩️ Undo', fieldClear: 'Clear All', fieldGrow: '+ Add Space', modeTyping: '⌨️ Typing', modeInk: '✍️ Handwriting', readonlyEmpty: 'Nothing written yet.', readonlyInk: 'Handwritten content', tguideShow: '📖 Show Transcription Guide', tguideProgress: (n, total) => `📖 Transcribe · ${n} / ${total}`, tguideHide: 'Hide ▴', tguidePrev: '◀ Previous Verse', tguideNext: 'Next Verse ▶', updateMessage: (version) => `Version ${version} is available. Please refresh.`, updateRefreshing: 'Refreshing…', updateRefresh: 'Refresh', hlColorNames: ['Gold', 'Green', 'Pink'], shareCanvasError: 'Could not convert the canvas image to a file.',
   guideAria: 'User Guide', guideTitle: 'User Guide', guideClose: 'Close', guideIntro: 'A daily notebook for reading, transcribing, and reflecting on Scripture. Your work is saved automatically.', guideStartTitle: 'Start a Meditation', guideStart1: "Tap “Start Today's Meditation” on Home to create today's entry.", guideStart2: 'Open an existing entry from the list to continue writing.', guidePassageTitle: 'Choose a Passage', guidePassage1: 'Choose a Bible book and chapter to display the passage, then transcribe it below.', guidePassage2: 'Turn on 🖍 Highlighter and drag over text to use one of three colors. Tap a highlight to remove it.', guideWritingTitle: 'Transcribe — Handwriting · Typing', guideWriting1: 'Use the top-right toggle to switch between handwriting and typing.', guideWriting2: 'Handwriting is designed for Apple Pencil or another stylus, with palm rejection while you write.', guideWriting3: 'Choose from pen colors and sizes, erase strokes, undo, or clear all.', guideWriting4: 'If you need more room, tap “+ Add Space.” Your writing remains when you reopen the entry.', guideTabsTitle: 'Four Tabs', guideTabs1: 'Use the tabs below: 📖 Transcribe · 🙏 Prayer · ❓ 5 Questions · 🛡️ Victory.', guideTabs2: 'Each tab is saved separately, and you can complete only the ones you need.', guideShareTitle: 'Share as an Image', guideShare1: 'Tap Share, choose the tabs to include, then tap “Share JPG” to save or share one image.', guideAppTitle: 'Use It Like an App', guideApp1: 'In Safari, choose Share → “Add to Home Screen” for a full-screen app experience and smoother pen input.', guideSaveTitle: 'Save · Delete', guideSave1: 'Your work is saved to this device as you write.', guideSave2: 'To delete an entry, tap ✕ on the right side of the Home list.', guideOpen: 'Open User Guide', guideUsage: 'Guide',
   bibleIndexError: 'Could not load the Bible index', bibleBookError: 'Could not load the passage', bibleFinalizedEditError: 'A finalized chapter cannot be edited', bibleFinalizeMissing: 'Could not find the passage to finalize', bibleUnfinalizeMissing: 'Could not find the passage to reopen', bibleEditBlocked: 'The English Bible text cannot be edited',
+  /** 새신자 세트 전용 — 00-01 원본 쪽번호와 같다 */
   binderCheckpoints: [
-    { id: 'cover', label: 'Cover', page: 1 }, { id: 'starter-00', label: '00 Contents', page: 7 }, { id: 'accept-prayer', label: 'Prayer of Acceptance', page: 53 }, { id: 'starter-01', label: '01 Contents', page: 57 }, { id: 'strength', label: 'Find Strengths', page: 59 }, { id: 'mission', label: 'Find Mission', page: 63 }, { id: 'eda-prayer', label: 'EDA Prayer', page: 71 }, { id: 'deliverance', label: 'Deliverance Prayer', page: 95 }, { id: 'meditation', label: 'Bible Meditation', page: 113 }, { id: 'timothy', label: 'Make a Timothy', page: 151 }, { id: 'book-study', label: 'Book Study', page: 163 },
+    { id: 'cover', label: 'Cover', page: 1 }, { id: 'starter-00', label: '00 Contents', page: 7 }, { id: 'accept-prayer', label: 'Prayer of Acceptance', page: 53 }, { id: 'starter-01', label: '01 Contents', page: 57 }, { id: 'strength', label: 'Find Strengths', page: 59 }, { id: 'mission', label: 'Find Mission', page: 63 }, { id: 'eda-prayer', label: 'EDA Prayer', page: 71 }, { id: 'deliverance', label: 'Deliverance Prayer', page: 95 },
   ],
-  binderCheckpointsShort: [
-    { id: 'cover', label: 'Cover', page: 1 }, { id: 'toc', label: 'Contents', page: 5 }, { id: 'meditation', label: 'Bible Meditation', page: 7 }, { id: 'timothy', label: 'Make a Timothy', page: 43 }, { id: 'book-study', label: 'Book Study', page: 55 },
-  ],
-  binderVolumeTitle: (issue) => `SPL Binder ${issue}`, binderInputPlaceholder: 'Type here', binderMove: 'Drag to move', binderResize: 'Drag to resize', binderDelete: 'Delete', binderTapToInput: 'Double-tap where you want to type', binderPage: (n) => `p.${n}`, binderBookmarkName: 'Bookmark name', binderShareTitle: (issue) => `EDA SPL Binder No. ${issue}`, binderShareText: (title, pages) => `${title} · ${pages}`, binderImageFailed: 'Could not create the images. Select fewer pages and try again.', binderBack: '← Back', binderAppTitle: 'EDA SPL Binder', binderNote: 'Notes', binderLogout: 'Log Out', binderIssue: (issue) => `No. ${issue}`, binderSelectVolume: 'Select Volume', binderVolumeCount: (n) => `${n} volumes`, binderSelectVolumeAria: (title) => `Select ${title}`, binderCheckpoint: 'Checkpoints', binderAddBookmark: '+ Bookmark', binderMyBookmarks: 'My Bookmarks', binderCurrentPage: 'Current Page', binderBookmarkHint: 'Tap + Bookmark to save the page you are viewing.', binderBookmarkDeleteAria: (label) => `Delete ${label} bookmark`, binderCheckpointAria: 'Go to checkpoint', binderShortcut: 'Jump to', binderShare: 'Share', binderPen: 'Pen', binderEraser: 'Eraser', binderColor: (color) => `Color ${color}`, binderPenSize: 'Pen size', binderUndoAria: 'Undo last stroke', binderUndo: 'Undo', binderClear: 'Clear All', binderPreviewAria: 'Content preview — drag to browse and tap to open', binderPreviewLoading: 'Loading previews...', binderOpening: 'Opening binder...', binderPdfError: 'Could not load the PDF.', binderPrevPage: 'Previous page', binderNextPage: 'Next page', binderPageMove: 'Go to page', binderShareModalTitle: 'Share Pages as JPG', binderClose: 'Close', binderShareHint: 'Written pages (✍️), bookmarks (🔖), and the current page appear here. Tap to select multiple pages.', binderPageNumber: 'Page number', binderAddPageAria: 'Page number to add', binderAddOtherPage: '+ Add Another Page', binderSelectedPages: (n) => `${n} selected`, binderMakingImages: 'Creating images...', binderJpgShare: 'Share as JPG',
+  binderSetTitle: (kind) => ({ starter: 'Getting Started', meditation: 'Bible Meditation', timothy: 'Raising a Timothy', bookStudy: 'Book Study' })[kind],
+  binderSetSelect: 'Select Set', binderSetCount: (n) => `${n} sets`, binderSetPages: (n) => `${n} pages`, binderSelectSetAria: (title) => `Select ${title}`,
+  binderInputPlaceholder: 'Type here', binderMove: 'Drag to move', binderResize: 'Drag to resize', binderDelete: 'Delete', binderTapToInput: 'Double-tap where you want to type', binderPage: (n) => `p.${n}`, binderBookmarkName: 'Bookmark name', binderLegacyBookmarkSuffix: ' (old cover)', binderShareTitle: (title) => `EDA SPL Binder · ${title}`, binderShareText: (title, pages) => `${title} · ${pages}`, binderImageFailed: 'Could not create the images. Select fewer pages and try again.', binderBack: '← Back', binderAppTitle: 'EDA SPL Binder', binderNote: 'Notes', binderLogout: 'Log Out', binderIssue: (issue) => `No. ${issue}`, binderCheckpoint: 'Checkpoints', binderAddBookmark: '+ Bookmark', binderMyBookmarks: 'My Bookmarks', binderCurrentPage: 'Current Page', binderBookmarkHint: 'Tap + Bookmark to save the page you are viewing.', binderBookmarkDeleteAria: (label) => `Delete ${label} bookmark`, binderCheckpointAria: 'Go to checkpoint', binderShortcut: 'Jump to', binderShare: 'Share', binderPen: 'Pen', binderEraser: 'Eraser', binderColor: (color) => `Color ${color}`, binderPenSize: 'Pen size', binderUndoAria: 'Undo last stroke', binderUndo: 'Undo', binderClear: 'Clear All', binderPreviewAria: 'Content preview — drag to browse and tap to open', binderPreviewLoading: 'Loading previews...', binderOpening: 'Opening binder...', binderPdfError: 'Could not load the PDF.', binderPrevPage: 'Previous page', binderNextPage: 'Next page', binderPageMove: 'Go to page', binderShareModalTitle: 'Share Pages as JPG', binderClose: 'Close', binderShareHint: 'Written pages (✍️), bookmarks (🔖), and the current page appear here. Tap to select multiple pages.', binderPageNumber: 'Page number', binderAddPageAria: 'Page number to add', binderAddOtherPage: '+ Add Another Page', binderSelectedPages: (n) => `${n} selected`, binderMakingImages: 'Creating images...', binderJpgShare: 'Share as JPG',
 }
 
 export function t<K extends keyof Catalog>(key: K): Catalog[K] {
