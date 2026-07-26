@@ -463,30 +463,31 @@ function PageOverlay({
       return null
     }
 
+    // 손가락으로는 획을 그리지 않으므로(펜 전용) 기본 동작을 그대로 둬서 스크롤이 되게 한다.
+    // 펜 터치일 때만 차단해 네이티브 제스처가 획을 끊지 않도록 한다.
     const onTouchStart = (event: TouchEvent) => {
-      // 캔버스 위 네이티브 제스처(더블탭 줌·콜아웃·스크롤)를 펜 포함 전부 차단
-      event.preventDefault()
       if (!IS_IOS || inkPropsRef.current.mode !== 'ink') return
       const stylus = findStylus(event.changedTouches)
       if (!stylus) return
+      event.preventDefault()
       activeTouchIdRef.current = stylus.identifier
       rectRef.current = canvas.getBoundingClientRect()
       beginAt(stylus.clientX, stylus.clientY, stylus.force)
     }
 
     const onTouchMove = (event: TouchEvent) => {
-      event.preventDefault()
       if (!IS_IOS) return
       const touch = findActive(event.changedTouches)
       if (!touch) return
+      event.preventDefault()
       moveAt(touch.clientX, touch.clientY, touch.force)
     }
 
     const onTouchEnd = (event: TouchEvent) => {
-      event.preventDefault()
       if (!IS_IOS) return
       const touch = findActive(event.changedTouches)
       if (!touch) return
+      event.preventDefault()
       activeTouchIdRef.current = null
       finishStroke()
     }
@@ -790,7 +791,8 @@ function PageOverlay({
       <canvas
         ref={canvasRef}
         className={`absolute inset-0 h-full w-full rounded-2xl ${mode === 'ink' ? 'pointer-events-auto' : 'pointer-events-none'}`}
-        style={{ touchAction: 'none' }}
+        // 세로 스크롤은 손가락에 열어두고, 펜 획은 위 핸들러의 preventDefault로 지킨다
+        style={{ touchAction: 'pan-y' }}
         onPointerDown={startStroke}
       />
     </div>
