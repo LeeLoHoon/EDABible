@@ -5,9 +5,10 @@ import { useEntry } from '../hooks/useEntry'
 import FieldEditor from '../components/FieldEditor'
 import GuideButton from '../components/GuideButton'
 import EntryShareCard, { type ShareSections } from '../components/EntryShareCard'
+import BiblePicker, { type PassageInfo } from '../components/BiblePicker'
+import MeditationSection from '../sections/MeditationSection'
 import TranscribeSection from '../sections/TranscribeSection'
 import QuestionsSection from '../sections/QuestionsSection'
-import PrayerSection from '../sections/PrayerSection'
 import TemptationVictorySection from '../sections/TemptationVictorySection'
 import {
   createEntryImageFile,
@@ -16,11 +17,11 @@ import {
 import { formatEntryDateDot } from '../i18n/format'
 import { t } from '../i18n/strings'
 
-type Tab = 'transcribe' | 'questions' | 'prayer' | 'temptationVictory'
+type Tab = 'meditation' | 'transcribe' | 'questions' | 'temptationVictory'
 
 const TABS: { key: Tab; label: string; icon: string }[] = [
-  { key: 'transcribe', label: t('entryTabs')[0], icon: '📖' },
-  { key: 'prayer', label: t('entryTabs')[1], icon: '🙏' },
+  { key: 'meditation', label: t('entryTabs')[0], icon: '📖' },
+  { key: 'transcribe', label: t('entryTabs')[1], icon: '✍️' },
   { key: 'questions', label: t('entryTabs')[2], icon: '❓' },
   { key: 'temptationVictory', label: t('entryTabs')[3], icon: '🛡️' },
 ]
@@ -32,7 +33,8 @@ export default function EntryPage() {
   const { id } = useParams()
   const navigate = useNavigate()
   const { entry, loading, update } = useEntry(id)
-  const [tab, setTab] = useState<Tab>('transcribe')
+  const [tab, setTab] = useState<Tab>('meditation')
+  const [passage, setPassage] = useState<PassageInfo | null>(null)
   const [shareOpen, setShareOpen] = useState(false)
   const [shareState, setShareState] = useState<'idle' | 'working'>('idle')
   const [shareSections, setShareSections] = useState<ShareSections>({
@@ -134,10 +136,10 @@ export default function EntryPage() {
               <p className="mb-2 font-semibold text-rose-ink">{t('entryShareTabs')}</p>
               <div className="space-y-2.5">
                 {[
-                  ['transcribe', t('entryTabs')[0]],
-                  ['prayer', t('entryTabs')[1]],
-                  ['questions', t('entryTabs')[2]],
-                  ['victory', t('entryTabs')[3]],
+                  ['transcribe', t('shareTranscribe')],
+                  ['prayer', t('sharePrayer')],
+                  ['questions', t('shareQuestions')],
+                  ['victory', t('shareVictory')],
                 ].map(([key, label]) => (
                   <label key={key} className="flex items-center gap-2 text-rose-ink">
                     <input
@@ -170,14 +172,33 @@ export default function EntryPage() {
 
       {/* 본문 */}
       <main className="flex-1 px-4 py-5">
+        {/* 탭을 옮겨도 본문을 다시 받아오지 않도록 마운트는 유지하고 보이기만 감춘다 */}
+        <div className={tab === 'meditation' ? 'mb-4' : 'hidden'}>
+          <BiblePicker
+            value={entry.bibleRef}
+            onChange={(bibleRef) => update({ bibleRef })}
+            onPassage={setPassage}
+          />
+        </div>
+        {tab === 'meditation' && (
+          <MeditationSection
+            entry={entry}
+            passage={passage}
+            setPassage={setPassage}
+            update={update}
+            FieldEditor={FieldEditor}
+          />
+        )}
         {tab === 'transcribe' && (
-          <TranscribeSection entry={entry} update={update} FieldEditor={FieldEditor} />
+          <TranscribeSection
+            entry={entry}
+            passage={passage}
+            update={update}
+            FieldEditor={FieldEditor}
+          />
         )}
         {tab === 'questions' && (
           <QuestionsSection entry={entry} update={update} FieldEditor={FieldEditor} />
-        )}
-        {tab === 'prayer' && (
-          <PrayerSection entry={entry} update={update} FieldEditor={FieldEditor} />
         )}
         {tab === 'temptationVictory' && (
           <TemptationVictorySection entry={entry} update={update} FieldEditor={FieldEditor} />

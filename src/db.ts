@@ -48,12 +48,23 @@ export interface BinderBookmark {
   createdAt: number
 }
 
+/** 묵상 한 편에 딸린 음성 녹음 — 이 기기(IndexedDB)에만 저장되고 어디에도 올라가지 않는다. */
+export interface Recording {
+  id: string
+  entryId: string
+  blob: Blob
+  mimeType: string
+  durationMs: number
+  createdAt: number
+}
+
 /** 로컬(IndexedDB) 저장소 — 묵상 노트 저장 및 바인더 오프라인 캐시. */
 class EdaBibleDB extends Dexie {
   entries!: Table<Entry, string>
   bibleIndex!: Table<BibleIndexCache, string>
   bibleBooks!: Table<BibleBookCache, string>
   binderWorks!: Table<BinderWork, string>
+  recordings!: Table<Recording, string>
 
   constructor() {
     super('edabible')
@@ -71,6 +82,13 @@ class EdaBibleDB extends Dexie {
       bibleIndex: 'id, build',
       bibleBooks: 'file, build',
       binderWorks: 'bookId, updatedAt',
+    })
+    this.version(4).stores({
+      entries: 'id, date, updatedAt',
+      bibleIndex: 'id, build',
+      bibleBooks: 'file, build',
+      binderWorks: 'bookId, updatedAt',
+      recordings: 'id, entryId, createdAt',
     })
   }
 }
@@ -97,6 +115,19 @@ export async function clearAllEntries(): Promise<void> {
 /** 최신순 전체 목록 */
 export async function listEntries(): Promise<Entry[]> {
   return db.entries.orderBy('updatedAt').reverse().toArray()
+}
+
+export async function listRecordings(entryId: string): Promise<Recording[]> {
+  const items = await db.recordings.where('entryId').equals(entryId).toArray()
+  return items.sort((a, b) => a.createdAt - b.createdAt)
+}
+
+export async function addRecording(rec: Recording): Promise<void> {
+  await db.recordings.put(rec)
+}
+
+export async function deleteRecording(id: string): Promise<void> {
+  await db.recordings.delete(id)
 }
 
 export function createBinderWork(bookId: string): BinderWork {
