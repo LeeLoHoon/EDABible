@@ -41,8 +41,12 @@ const IS_IOS =
 const PALM_GRACE_MS = 1200
 
 // 텍스트 상자는 한 번 탭으로 만들면 오탭이 잦아 두 번 탭으로만 만든다
-const DOUBLE_TAP_MS = 500
+// 마우스 더블클릭(약 500ms)보다 넉넉하게 잡는다. 손가락으로 "탭, 탭" 하는 간격은
+// 그보다 느리고, 같은 자리(SLOP) 조건이 있어 길게 잡아도 오생성 위험이 낮다.
+const DOUBLE_TAP_MS = 900
 const DOUBLE_TAP_SLOP_PX = 40
+// 한 번의 탭이 만드는 pointerup+click을 하나로 묶는 창
+const SAME_TAP_MS = 80
 // 상자 크기는 쪽 대비 비율로 저장하지만, 최소 크기는 px로 잡아야
 // 좁은 폰에서도 한 줄이 들어가는 크기가 보장된다
 const NEW_TEXT_BOX_WIDTH_RATIO = 0.34
@@ -257,6 +261,7 @@ function PageOverlay({
   // 드래그가 배경 위에서 끝나면 그 pointerup이 "배경 탭"으로 오인돼 선택이 풀린다
   const draggingTextBoxRef = useRef(false)
   const lastTapRef = useRef<{ time: number; x: number; y: number } | null>(null)
+  const lastCountedTapRef = useRef(0)
   const editable = mode === 'text'
   const visibleActiveTextBoxId =
     editable && textBoxes.some((box) => box.id === activeTextBoxId) ? activeTextBoxId : null
@@ -580,12 +585,17 @@ function PageOverlay({
     window.document.querySelector<HTMLTextAreaElement>(`[data-text-box-id="${box.id}"]`)?.focus()
   }
 
-  const handleOverlayTap = (event: React.PointerEvent<HTMLDivElement>) => {
+  // pointerup과 click 양쪽에서 호출된다. 한쪽이 유실돼도 탭이 세어지도록 이중으로 받고,
+  // 같은 탭에서 둘 다 오면 뒤엣것은 버린다.
+  const handleOverlayTap = (event: React.MouseEvent<HTMLDivElement>) => {
     if (!editable || draggingTextBoxRef.current) return
     if (event.target !== event.currentTarget) return
 
-    const previous = lastTapRef.current
     const now = Date.now()
+    if (now - lastCountedTapRef.current < SAME_TAP_MS) return
+    lastCountedTapRef.current = now
+
+    const previous = lastTapRef.current
     const isDoubleTap =
       previous !== null &&
       now - previous.time < DOUBLE_TAP_MS &&
@@ -693,6 +703,7 @@ function PageOverlay({
       className="absolute inset-0"
       style={{ touchAction: 'manipulation' }}
       onPointerUp={handleOverlayTap}
+      onClick={handleOverlayTap}
       // 터치는 pointerup '뒤에' 호환 mousedown을 보내 방금 focus한 입력칸의 포커스를 뺏는다
       // (= iOS에서 키보드가 안 올라옴). 입력칸 자체를 누른 게 아니면 기본 동작을 막는다.
       onMouseDown={(event) => {
