@@ -50,9 +50,11 @@ SUPABASE_SERVICE_ROLE_KEY=your-service-role-key npm run seed:supabase-bible
 ```bash
 npm run dev           # 말씀 묵상 노트 개발 서버
 npm run dev:binder    # 에다 SPL 바인더 개발 서버
+npm run dev:sermon    # 주간 말씀 묵상 개발 서버
 npm run dev:all       # 통합(노트+바인더) 개발 서버
 npm run build:note
 npm run build:binder
+npm run build:sermon
 npm run build:all
 npm run build:bible
 npm run build
@@ -66,6 +68,7 @@ npm run pull:supabase-bible
 ```bash
 npm run build:note    # dist: 말씀 묵상 노트만 배포, public/binder 제외
 npm run build:binder  # dist-binder: 에다 SPL 바인더만 배포, public/bible 제외
+npm run build:sermon  # dist-sermon: 주간 말씀 묵상만 배포, public/binder 제외
 npm run build:all     # dist-all: 두 기능을 함께 포함한 통합 배포
 ```
 
@@ -124,6 +127,46 @@ on conflict (user_id) do nothing;
 ```
 
 관리자로 로그인한 뒤 앱 제목을 2초 안에 5번 탭하면 관리자 모드가 토글됩니다. 관리자가 정한 숨김 쪽은 모든 사용자에게 공유되며, 원본 PDF와 사용자별 필기·책갈피는 삭제하거나 쪽번호를 다시 매기지 않습니다. service role key는 환경변수나 시크릿 매니저에서만 사용하고 저장소에 커밋하지 마세요.
+
+## 주간 말씀 묵상
+
+주일 설교(오전·오후)를 교인이 그 주 월~토에 묵상하는 별도 앱입니다. Google 로그인이 필수이고 성경 본문을 쓰므로 `public/bible`은 포함하되 `public/binder`는 제외합니다.
+
+```text
+edabible-sermon
+Build Command: npm run build:sermon
+Output Directory: dist-sermon
+```
+
+Vercel 대시보드에서 Build Command를 바꿀 수 없으면 환경변수만 추가합니다.
+
+```text
+APP_TARGET=sermon
+Build Command: npm run build
+Output Directory: dist-sermon
+```
+
+CLI로 배포할 때는 아래 설정 파일을 사용합니다.
+
+```bash
+vercel --prod --local-config vercel.sermon.json
+```
+
+### 주간 말씀 묵상 관리자 등록
+
+설교 등록 관리자는 바인더 관리자와 **별개 테이블**입니다. anon key로는 등록할 수 없으므로 Supabase SQL Editor 또는 service role 연결에서 등록합니다.
+
+```sql
+insert into public.sermon_admins (user_id)
+values ('<auth.users.id>')
+on conflict (user_id) do nothing;
+```
+
+관리자로 로그인한 뒤 앱 제목을 2초 안에 5번 탭하면 관리자 모드가 토글되고, 헤더 우측의 `🛡 관리자 모드 종료` 버튼으로 빠져나옵니다. 관리자가 아닌 계정에서는 탭해도 아무 반응이 없습니다.
+
+설교 본문은 **장 단위**로 저장합니다. `로마서 8:28-30` 같은 절 범위는 표기(`verseLabel`)로만 남고 화면에는 해당 장 전체가 보입니다. 성경 1189장 중 697장에 절 마커가 없어 본문을 절 단위로 잘라낼 수 없고, 잘라내면 형광펜 하이라이트 키가 어긋나기 때문입니다.
+
+묵상은 `sermon_notes`에 사용자별로 저장되며 본인만 읽고 쓸 수 있습니다. 목사님 열람 기능을 나중에 붙일 때는 `sermon_notes`의 select policy만 확장하면 됩니다.
 
 ## 디비에 있는 성경 내려 받기
 
