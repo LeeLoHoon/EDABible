@@ -1326,14 +1326,26 @@ export default function BinderPage() {
     void isBinderAdmin(userId).then((allowed) => {
       if (!allowed) return
       if (adminMode) {
-        setAdminModeUserId(null)
-        const target = snapToVisiblePage(visiblePages, pageNumber)
-        if (target !== null) setPageNumber(target)
+        exitAdminMode()
       } else {
         setAdminModeUserId(userId)
       }
       navigator.vibrate?.(40)
     })
+  }
+
+  const exitAdminMode = () => {
+    setAdminModeUserId(null)
+    // 관리자만 볼 수 있는 숨김 쪽에 머물러 있다가 종료했을 때 일반 뷰에 이상한 쪽이 남지 않도록 스냅
+    const target = snapToVisiblePage(visiblePages, pageNumber)
+    if (target !== null) setPageNumber(target)
+  }
+
+  const handleRestoreAll = () => {
+    if (hiddenSaving || currentHiddenPages.length === 0 || !hiddenPagesWritable) return
+    // 파급이 큰 동작이라 확인 한 단계를 둔다
+    if (!window.confirm(t('binderRestoreAllConfirm')(currentHiddenPages.length))) return
+    void saveHiddenPages([])
   }
 
   const saveHiddenPages = async (nextPages: number[]) => {
@@ -1471,6 +1483,10 @@ export default function BinderPage() {
   return (
     <div className="min-h-full bg-rose-bg text-rose-ink">
       <header className="sticky top-0 z-20 border-b border-rose-line bg-rose-bg/95 px-4 py-2.5 backdrop-blur">
+        {/* 관리자 모드 지속 신호 — 스크롤 위치와 무관하게 늘 보이는 상단 stripe */}
+        {adminMode && (
+          <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-1.5 bg-rose-accent-deep" />
+        )}
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3">
           <div className="flex w-24 shrink-0 items-center">
             {__APP_TARGET__ === 'all' ? (
@@ -1495,6 +1511,18 @@ export default function BinderPage() {
             {t('binderAppTitle')}
           </h1>
           <div className="flex shrink-0 items-center justify-end gap-1">
+            {adminMode && (
+              <button
+                type="button"
+                onClick={exitAdminMode}
+                className="flex shrink-0 items-center gap-1 rounded-full bg-rose-accent-deep px-2.5 py-1.5 text-[12px] font-extrabold text-white shadow-sm shadow-rose-accent/25 transition active:scale-95 sm:px-3 sm:text-[13px]"
+                aria-label={t('binderExitAdmin')}
+              >
+                <span aria-hidden>🛡</span>
+                <span className="hidden sm:inline">{t('binderExitAdmin')}</span>
+                <span aria-hidden className="sm:hidden">✕</span>
+              </button>
+            )}
             <LangToggle />
             {__APP_TARGET__ === 'all' && (
               <Link
@@ -1664,17 +1692,19 @@ export default function BinderPage() {
           </section>
 
           {adminMode && (
-            <section className="order-4 rounded-2xl border border-rose-accent/40 bg-rose-card p-3">
+            <section className="order-4 rounded-2xl border-2 border-rose-accent-deep/50 bg-rose-card p-3 shadow-sm">
               <div className="flex items-center justify-between gap-2 px-1.5">
-                <h2 className="font-serif text-base font-extrabold text-rose-accent">
+                <h2 className="flex items-center gap-1.5 font-serif text-base font-extrabold text-rose-accent-deep">
+                  <span aria-hidden>🚫</span>
                   {t('binderHiddenListTitle')}
                 </h2>
                 <button
                   type="button"
-                  onClick={() => void saveHiddenPages([])}
-                  disabled={hiddenSaving || currentHiddenPages.length === 0}
-                  className="rounded-full bg-rose-chip px-2.5 py-1 text-xs font-bold text-rose-accent disabled:opacity-40"
+                  onClick={handleRestoreAll}
+                  disabled={hiddenSaving || currentHiddenPages.length === 0 || !hiddenPagesWritable}
+                  className="flex items-center gap-1 rounded-full border border-rose-accent-deep bg-white px-2.5 py-1 text-xs font-bold text-rose-accent-deep transition active:scale-95 disabled:opacity-40"
                 >
+                  <span aria-hidden>↩</span>
                   {t('binderRestoreAll')}
                 </button>
               </div>
@@ -1705,8 +1735,10 @@ export default function BinderPage() {
                         type="button"
                         onClick={() => restoreHiddenPage(page)}
                         disabled={hiddenSaving}
-                        className="rounded-full bg-white px-2.5 py-1 text-xs font-bold text-rose-accent disabled:opacity-40"
+                        className="flex items-center gap-1 rounded-full border border-rose-accent-deep bg-white px-2.5 py-1 text-xs font-bold text-rose-accent-deep transition active:scale-95 disabled:opacity-40"
+                        aria-label={`${t('binderRestorePage')} ${t('binderPage')(page)}`}
                       >
+                        <span aria-hidden>↩</span>
                         {t('binderRestorePage')}
                       </button>
                     </div>
@@ -1750,18 +1782,38 @@ export default function BinderPage() {
             </button>
 
             {adminMode && (
-              <div className="flex w-full items-center justify-between gap-2 border-t border-rose-line pt-2">
-                <span className="rounded-full bg-rose-accent px-2.5 py-1 text-xs font-extrabold text-white">
+              <div className="flex w-full items-center justify-between gap-2 border-t-2 border-rose-accent-deep/40 pt-2">
+                <span
+                  className={`flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-xs font-extrabold ${
+                    currentPageHidden
+                      ? 'bg-rose-accent-deep text-white'
+                      : 'border border-rose-accent-deep/50 bg-rose-card text-rose-accent-deep'
+                  }`}
+                >
+                  <span aria-hidden>{currentPageHidden ? '🚫' : '🛡'}</span>
                   {currentPageHidden ? t('binderHiddenPage') : t('binderAdminMode')}
                 </span>
-                <button
-                  type="button"
-                  onClick={toggleCurrentPageHidden}
-                  disabled={hiddenSaving || !hiddenPagesWritable}
-                  className="rounded-full bg-rose-chip px-3 py-1.5 text-[13px] font-bold text-rose-accent transition hover:bg-rose-accent-deep hover:text-white disabled:opacity-40"
-                >
-                  {currentPageHidden ? t('binderRestorePage') : t('binderHidePage')}
-                </button>
+                {currentPageHidden ? (
+                  <button
+                    type="button"
+                    onClick={toggleCurrentPageHidden}
+                    disabled={hiddenSaving || !hiddenPagesWritable}
+                    className="flex items-center gap-1 rounded-full border border-rose-accent-deep bg-white px-3 py-1.5 text-[13px] font-bold text-rose-accent-deep shadow-sm transition active:scale-95 disabled:opacity-40"
+                  >
+                    <span aria-hidden>↩</span>
+                    {t('binderRestorePage')}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={toggleCurrentPageHidden}
+                    disabled={hiddenSaving || !hiddenPagesWritable}
+                    className="flex items-center gap-1 rounded-full bg-rose-accent-deep px-3 py-1.5 text-[13px] font-extrabold text-white shadow-sm shadow-rose-accent/25 transition active:scale-95 disabled:opacity-40"
+                  >
+                    <span aria-hidden>🚫</span>
+                    {t('binderHidePage')}
+                  </button>
+                )}
               </div>
             )}
 
@@ -1857,15 +1909,17 @@ export default function BinderPage() {
             ) : (
               previewPages.map((previewPage) => {
                 const active = previewPage === pageNumber
+                const hiddenThumb = adminMode && hiddenPageSet.has(previewPage)
                 return (
                   <div
                     key={previewPage}
                     data-preview-page={previewPage}
-                    className={`relative ${adminMode && hiddenPageSet.has(previewPage) ? 'opacity-50' : ''}`}
+                    className={`relative ${hiddenThumb ? 'opacity-40' : ''}`}
                   >
                     <PdfThumbnail pdfDocument={document} pageNumber={previewPage} active={active} />
-                    {adminMode && hiddenPageSet.has(previewPage) && (
-                      <span className="absolute left-1 top-1 rounded-full bg-rose-accent px-1.5 py-0.5 text-[9px] font-black text-white">
+                    {hiddenThumb && (
+                      <span className="absolute left-1 top-1 flex items-center gap-0.5 rounded-full bg-rose-accent-deep px-1.5 py-0.5 text-[9px] font-black text-white shadow-sm">
+                        <span aria-hidden>🚫</span>
                         {t('binderHiddenBadge')}
                       </span>
                     )}
@@ -1876,9 +1930,27 @@ export default function BinderPage() {
           </div>
 
           <article
-            className="relative rounded-3xl border border-rose-line bg-rose-chip/50 p-2.5 sm:p-3"
+            className={`relative rounded-3xl bg-rose-chip/50 p-2.5 sm:p-3 ${
+              currentPageHidden && adminMode
+                ? 'border-4 border-rose-accent-deep'
+                : adminMode
+                  ? 'border-2 border-rose-accent-deep/40'
+                  : 'border border-rose-line'
+            }`}
             style={{ touchAction: 'pan-y' }}
           >
+            {/* 관리자 + 숨김 쪽일 때 프레임 위 배지 — 뷰어 안쪽 상단에 얹어 필기 영역과 분리, pointer-events-none으로 필기 방해 안 함 */}
+            {currentPageHidden && adminMode && (
+              <div className="pointer-events-none absolute left-3 top-3 z-20 flex max-w-[calc(100%-1.5rem)] flex-col gap-0.5 rounded-xl bg-rose-accent-deep px-2.5 py-1.5 text-white shadow-lift">
+                <span className="flex items-center gap-1 text-[11px] font-black tracking-wide">
+                  <span aria-hidden>🚫</span>
+                  {t('binderHiddenPage')}
+                </span>
+                <span className="truncate text-[10px] font-bold opacity-90">
+                  {t('binderHiddenViewerNotice')}
+                </span>
+              </div>
+            )}
             {loadingPdf || !hiddenPagesReady ? (
               <div className="grid min-h-[56vh] place-items-center rounded-2xl bg-rose-card text-rose-key">
                 {t('binderOpening')}

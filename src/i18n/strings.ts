@@ -195,6 +195,9 @@ const ko = {
   binderRestoreAll: '전체 되살리기', binderHiddenEmpty: '숨긴 쪽이 없습니다.', binderHiddenLoading: '숨김 목록을 불러오는 중...', binderHiddenLoadFailed: '숨김 목록을 확인하지 못해 변경할 수 없습니다.',
   binderAllPagesHidden: '관리자가 모든 쪽을 숨겼습니다.',
   binderHiddenSaveFailed: '숨김 설정을 저장하지 못했습니다. 연결을 확인해 주세요.',
+  binderExitAdmin: '관리자 모드 종료',
+  binderHiddenViewerNotice: '독자에게 보이지 않습니다',
+  binderRestoreAllConfirm: (n: number) => `숨긴 쪽 ${n}개를 모두 되살릴까요?`,
 } 
 
 type Catalog = typeof ko
@@ -245,6 +248,9 @@ const en: Catalog = {
   binderRestoreAll: 'Restore all', binderHiddenEmpty: 'No pages are hidden.', binderHiddenLoading: 'Loading hidden pages...', binderHiddenLoadFailed: 'Hidden pages could not be verified, so changes are disabled.',
   binderAllPagesHidden: 'An administrator has hidden every page.',
   binderHiddenSaveFailed: 'Could not save the hidden-page settings. Check your connection.',
+  binderExitAdmin: 'Exit admin mode',
+  binderHiddenViewerNotice: 'Hidden from readers',
+  binderRestoreAllConfirm: (n) => `Restore all ${n} hidden pages?`,
 }
 
 export function t<K extends keyof Catalog>(key: K): Catalog[K] {
