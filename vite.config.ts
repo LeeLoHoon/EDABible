@@ -8,7 +8,11 @@ import { VitePWA } from 'vite-plugin-pwa'
 // 어떤 빌드가 기기에 떴는지 확인용 — package.json 버전을 주입(예: 1.0.0)
 const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8'))
 const base = process.env.VERCEL === '1' ? '/' : '/EDABible/'
-const appTarget = process.env.APP_TARGET === 'binder' || process.env.APP_TARGET === 'all' ? process.env.APP_TARGET : 'note'
+const requestedTarget = process.env.APP_TARGET
+const appTarget =
+  requestedTarget === 'binder' || requestedTarget === 'all' || requestedTarget === 'sermon'
+    ? requestedTarget
+    : 'note'
 // 1.5.74 이하의 autoUpdate 클라이언트는 waiting SW에 SKIP_WAITING을 보내지 못한다.
 // prompt 방식으로 넘어가는 첫 빌드만 즉시 활성화하고, 이후 버전부터 안내를 기다린다.
 const promptUpdateMigrationBuild = '1.5.75'
@@ -27,6 +31,11 @@ const appMeta = {
     name: 'EDABible',
     shortName: 'EDABible',
     description: '말씀 묵상 노트와 에다 SPL 바인더',
+  },
+  sermon: {
+    name: '주간 말씀 묵상',
+    shortName: '말씀 묵상',
+    description: '주일 설교 본문과 묵상 포인트를 한 주 동안 묵상하는 앱',
   },
 }[appTarget]
 const targetAppEntry = resolve(process.cwd(), `src/targetApp.${appTarget}.tsx`)
@@ -54,7 +63,10 @@ function pruneUnusedPublicAssets() {
     },
     closeBundle() {
       const outDir = config.build.outDir
-      if (appTarget === 'note') rmSync(resolve(outDir, 'binder'), { recursive: true, force: true })
+      // 주간 말씀 묵상은 성경 본문을 쓰지만 바인더 PDF(100MB+)는 필요 없다
+      if (appTarget === 'note' || appTarget === 'sermon') {
+        rmSync(resolve(outDir, 'binder'), { recursive: true, force: true })
+      }
       if (appTarget === 'binder') rmSync(resolve(outDir, 'bible'), { recursive: true, force: true })
     },
   }
@@ -88,7 +100,7 @@ export default defineConfig({
         lang: 'ko',
         // base 기준으로 계산해야 GitHub Pages(/EDABible/) 설치 앱이 404 루트를
         // 열지 않는다. Vercel(base '/')에서는 기존 값과 동일하게 유지된다.
-        id: appTarget === 'binder' ? `${base}binder` : base,
+        id: appTarget === 'binder' || appTarget === 'sermon' ? `${base}${appTarget}` : base,
         start_url: base,
         scope: base,
         display: 'standalone',

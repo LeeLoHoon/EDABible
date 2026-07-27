@@ -1,6 +1,7 @@
 import { spawnSync } from 'node:child_process'
 
-const target = process.env.APP_TARGET === 'binder' || process.env.APP_TARGET === 'all' ? process.env.APP_TARGET : 'note'
+const requested = process.env.APP_TARGET
+const target = requested === 'binder' || requested === 'all' || requested === 'sermon' ? requested : 'note'
 
 function run(command, args, env = {}) {
   const result = spawnSync(command, args, {
@@ -18,5 +19,6 @@ run('npx', ['tsc', '-b'], { APP_TARGET: target })
 
 const viteArgs = ['vite', 'build']
 if (target === 'all') viteArgs.push('--outDir', 'dist-all')
+if (target === 'sermon') viteArgs.push('--outDir', 'dist-sermon')
 
 run('npx', viteArgs, { APP_TARGET: target })
