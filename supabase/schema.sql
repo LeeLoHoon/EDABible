@@ -183,3 +183,123 @@ using (
 with check (
   auth.uid() in (select user_id from public.binder_admins)
 );
+
+-- 주간 말씀 묵상. 설교 등록 관리자는 바인더 관리자와 별개 목록이며 쓰기는 service role로만 수행한다.
+create table if not exists public.sermon_admins (
+  user_id uuid primary key references auth.users(id) on delete cascade
+);
+
+create table if not exists public.sermons (
+  id uuid primary key default gen_random_uuid(),
+  service text not null check (service in ('morning', 'afternoon')),
+  -- 주일 날짜. 묵상 기간(다음 날 월요일~토요일)이 이 값에서 계산된다.
+  preached_on date not null,
+  title text not null,
+  preacher text,
+  passages jsonb not null default '[]',
+  summary text,
+  points jsonb not null default '[]',
+  media_url text,
+  published boolean not null default false,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (preached_on, service)
+);
+
+create table if not exists public.sermon_notes (
+  user_id uuid not null references auth.users(id) on delete cascade,
+  sermon_id uuid not null references public.sermons(id) on delete cascade,
+  data jsonb not null,
+  updated_at timestamptz not null default now(),
+  primary key (user_id, sermon_id)
+);
+
+create index if not exists sermons_preached_on_idx
+  on public.sermons (preached_on desc, service);
+
+create or replace function public.touch_sermons_updated_at()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$;
+
+drop trigger if exists sermons_touch_updated_at on public.sermons;
+create trigger sermons_touch_updated_at
+before update on public.sermons
+for each row execute function public.touch_sermons_updated_at();
+
+alter table public.sermon_admins enable row level security;
+alter table public.sermons enable row level security;
+alter table public.sermon_notes enable row level security;
+
+drop policy if exists "users read own sermon admin row" on public.sermon_admins;
+create policy "users read own sermon admin row"
+on public.sermon_admins for select
+to authenticated
+using (auth.uid() = user_id);
+
+-- 미게시 설교는 관리자에게만 보인다. anon은 auth.uid()가 null이라 published 조건만 남는다.
+drop policy if exists "read published sermons" on public.sermons;
+create policy "read published sermons"
+on public.sermons for select
+to anon, authenticated
+using (
+  published or auth.uid() in (select user_id from public.sermon_admins)
+);
+
+drop policy if exists "admins insert sermons" on public.sermons;
+create policy "admins insert sermons"
+on public.sermons for insert
+to authenticated
+with check (
+  auth.uid() in (select user_id from public.sermon_admins)
+);
+
+drop policy if exists "admins update sermons" on public.sermons;
+create policy "admins update sermons"
+on public.sermons for update
+to authenticated
+using (
+  auth.uid() in (select user_id from public.sermon_admins)
+)
+with check (
+  auth.uid() in (select user_id from public.sermon_admins)
+);
+
+drop policy if exists "admins delete sermons" on public.sermons;
+create policy "admins delete sermons"
+on public.sermons for delete
+to authenticated
+using (
+  auth.uid() in (select user_id from public.sermon_admins)
+);
+
+-- 묵상은 본인만 읽고 쓴다. 목사님 열람 기능을 붙일 때 확장할 지점은 아래 select 정책뿐이다.
+drop policy if exists "users read own sermon notes" on public.sermon_notes;
+create policy "users read own sermon notes"
+on public.sermon_notes for select
+to authenticated
+using (auth.uid() = user_id);
+
+drop policy if exists "users insert own sermon notes" on public.sermon_notes;
+create policy "users insert own sermon notes"
+on public.sermon_notes for insert
+to authenticated
+with check (auth.uid() = user_id);
+
+drop policy if exists "users update own sermon notes" on public.sermon_notes;
+create policy "users update own sermon notes"
+on public.sermon_notes for update
+to authenticated
+using (auth.uid() = user_id)
+with check (auth.uid() = user_id);
+
+drop policy if exists "users delete own sermon notes" on public.sermon_notes;
+create policy "users delete own sermon notes"
+on public.sermon_notes for delete
+to authenticated
+using (auth.uid() = user_id);
