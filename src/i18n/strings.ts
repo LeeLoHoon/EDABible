@@ -189,6 +189,12 @@ const ko = {
   binderShareModalTitle: '페이지 JPG 공유', binderClose: '닫기', binderShareHint: '필기한 쪽(✍️)·책갈피(🔖)·현재 쪽이 후보로 나와요. 탭해서 여러 쪽을 고르세요.',
   binderPageNumber: '쪽 번호', binderAddPageAria: '추가할 쪽 번호', binderAddOtherPage: '+ 다른 쪽 추가',
   binderSelectedPages: (n: number) => `선택 ${n}쪽`, binderMakingImages: '이미지 만드는 중...', binderJpgShare: 'JPG로 공유',
+  binderPagePosition: (page: number, ordinal: number, total: number) => `${page}쪽 · ${ordinal}/${total}`,
+  binderAdminMode: '관리자 모드', binderHidePage: '이 쪽 숨기기', binderRestorePage: '되살리기',
+  binderHiddenPage: '숨긴 쪽', binderHiddenBadge: '숨김', binderHiddenListTitle: '숨긴 쪽 목록',
+  binderRestoreAll: '전체 되살리기', binderHiddenEmpty: '숨긴 쪽이 없습니다.', binderHiddenLoading: '숨김 목록을 불러오는 중...', binderHiddenLoadFailed: '숨김 목록을 확인하지 못해 변경할 수 없습니다.',
+  binderAllPagesHidden: '관리자가 모든 쪽을 숨겼습니다.',
+  binderHiddenSaveFailed: '숨김 설정을 저장하지 못했습니다. 연결을 확인해 주세요.',
 } 
 
 type Catalog = typeof ko
@@ -233,6 +239,12 @@ const en: Catalog = {
   binderSetTitle: (kind) => ({ starter: 'Getting Started', meditation: 'Bible Meditation', timothy: 'Raising a Timothy', bookStudy: 'Book Study' })[kind],
   binderSetSelect: 'Select Set', binderSetCount: (n) => `${n} sets`, binderSetPages: (n) => `${n} pages`, binderSelectSetAria: (title) => `Select ${title}`,
   binderInputPlaceholder: 'Type here', binderMove: 'Drag to move', binderResize: 'Drag to resize', binderDelete: 'Delete', binderTapToInput: 'Double-tap where you want to type', binderPage: (n) => `p.${n}`, binderBookmarkName: 'Bookmark name', binderLegacyBookmarkSuffix: ' (old cover)', binderShareTitle: (title) => `EDA SPL Binder · ${title}`, binderShareText: (title, pages) => `${title} · ${pages}`, binderImageFailed: 'Could not create the images. Select fewer pages and try again.', binderBack: '← Back', binderAppTitle: 'EDA SPL Binder', binderNote: 'Notes', binderLogout: 'Log Out', binderIssue: (issue) => `No. ${issue}`, binderCheckpoint: 'Checkpoints', binderAddBookmark: '+ Bookmark', binderMyBookmarks: 'My Bookmarks', binderCurrentPage: 'Current Page', binderBookmarkHint: 'Tap + Bookmark to save the page you are viewing.', binderBookmarkDeleteAria: (label) => `Delete ${label} bookmark`, binderCheckpointAria: 'Go to checkpoint', binderShortcut: 'Jump to', binderShare: 'Share', binderPen: 'Pen', binderEraser: 'Eraser', binderColor: (color) => `Color ${color}`, binderPenSize: 'Pen size', binderUndoAria: 'Undo last stroke', binderUndo: 'Undo', binderClear: 'Clear All', binderPreviewAria: 'Content preview — drag to browse and tap to open', binderPreviewLoading: 'Loading previews...', binderOpening: 'Opening binder...', binderPdfError: 'Could not load the PDF.', binderPrevPage: 'Previous page', binderNextPage: 'Next page', binderPageMove: 'Go to page', binderShareModalTitle: 'Share Pages as JPG', binderClose: 'Close', binderShareHint: 'Written pages (✍️), bookmarks (🔖), and the current page appear here. Tap to select multiple pages.', binderPageNumber: 'Page number', binderAddPageAria: 'Page number to add', binderAddOtherPage: '+ Add Another Page', binderSelectedPages: (n) => `${n} selected`, binderMakingImages: 'Creating images...', binderJpgShare: 'Share as JPG',
+  binderPagePosition: (page, ordinal, total) => `p.${page} · ${ordinal}/${total}`,
+  binderAdminMode: 'Admin mode', binderHidePage: 'Hide this page', binderRestorePage: 'Restore',
+  binderHiddenPage: 'Hidden page', binderHiddenBadge: 'Hidden', binderHiddenListTitle: 'Hidden pages',
+  binderRestoreAll: 'Restore all', binderHiddenEmpty: 'No pages are hidden.', binderHiddenLoading: 'Loading hidden pages...', binderHiddenLoadFailed: 'Hidden pages could not be verified, so changes are disabled.',
+  binderAllPagesHidden: 'An administrator has hidden every page.',
+  binderHiddenSaveFailed: 'Could not save the hidden-page settings. Check your connection.',
 }
 
 export function t<K extends keyof Catalog>(key: K): Catalog[K] {

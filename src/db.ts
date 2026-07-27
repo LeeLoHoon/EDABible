@@ -30,6 +30,13 @@ export interface BinderWork {
   updatedAt: number
 }
 
+/** 세트별 숨긴 원본 PDF 쪽번호의 로컬 캐시. */
+export interface BinderHiddenPages {
+  setId: string
+  pages: number[]
+  updatedAt: number
+}
+
 /** 쪽 위에 얹는 타이핑 상자 — x·y·width·height는 모두 쪽 크기 대비 비율(0~1) */
 export interface BinderTextBox {
   id: string
@@ -64,6 +71,7 @@ class EdaBibleDB extends Dexie {
   bibleIndex!: Table<BibleIndexCache, string>
   bibleBooks!: Table<BibleBookCache, string>
   binderWorks!: Table<BinderWork, string>
+  binderHiddenPages!: Table<BinderHiddenPages, string>
   recordings!: Table<Recording, string>
 
   constructor() {
@@ -89,6 +97,14 @@ class EdaBibleDB extends Dexie {
       bibleBooks: 'file, build',
       binderWorks: 'bookId, updatedAt',
       recordings: 'id, entryId, createdAt',
+    })
+    this.version(5).stores({
+      entries: 'id, date, updatedAt',
+      bibleIndex: 'id, build',
+      bibleBooks: 'file, build',
+      binderWorks: 'bookId, updatedAt',
+      recordings: 'id, entryId, createdAt',
+      binderHiddenPages: 'setId, updatedAt',
     })
   }
 }
@@ -217,4 +233,66 @@ export async function putBinderWork(work: BinderWork, userId?: string): Promise<
     updated_at: new Date(next.updatedAt).toISOString(),
   })
   if (error) throw error
+}
+
+function normalizeHiddenPages(pages: unknown): number[] {
+  if (!Array.isArray(pages)) return []
+  return [...new Set(pages.filter((page): page is number => Number.isInteger(page) && page >= 1))].sort(
+    (a, b) => a - b,
+  )
+}
+
+/** 세트의 숨긴 원본 PDF 쪽번호를 Supabase에서 읽고, 실패하면 Dexie 캐시로 폴백한다. */
+export async function getHiddenPages(setId: string): Promise<number[]> {
+  if (supabase) {
+    try {
+      const { data, error } = await supabase
+        .from('binder_hidden_pages')
+        .select('pages')
+        .eq('set_id', setId)
+        .maybeSingle()
+
+      if (error) throw error
+      const pages = normalizeHiddenPages(data?.pages)
+      await db.binderHiddenPages.put({ setId, pages, updatedAt: Date.now() })
+      return pages
+    } catch {
+      // 오프라인/일시 오류 시 마지막 전역 숨김 캐시를 사용해 바인더 열람을 유지한다.
+    }
+  }
+
+  const cached = await db.binderHiddenPages.get(setId)
+  return normalizeHiddenPages(cached?.pages)
+}
+
+/** 세트의 숨긴 원본 PDF 쪽번호를 정규화해 Supabase와 Dexie 캐시에 저장한다. */
+export async function putHiddenPages(setId: string, pages: number[], userId: string): Promise<void> {
+  const normalized = normalizeHiddenPages(pages)
+  const updatedAt = Date.now()
+  if (supabase && userId) {
+    const { error } = await supabase.from('binder_hidden_pages').upsert({
+      set_id: setId,
+      pages: normalized,
+      updated_at: new Date(updatedAt).toISOString(),
+    })
+    if (error) throw error
+  }
+
+  await db.binderHiddenPages.put({ setId, pages: normalized, updatedAt })
+}
+
+/** 사용자가 바인더 숨김 쪽을 관리할 수 있는지 확인하며, 조회 실패 시 false를 반환한다. */
+export async function isBinderAdmin(userId: string): Promise<boolean> {
+  if (!supabase || !userId) return false
+
+  try {
+    const { data, error } = await supabase
+      .from('binder_admins')
+      .select('user_id')
+      .eq('user_id', userId)
+      .maybeSingle()
+    return !error && data !== null
+  } catch {
+    return false
+  }
 }

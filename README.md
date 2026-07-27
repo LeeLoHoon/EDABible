@@ -113,6 +113,18 @@ SPL 바인더는 Google 로그인 필수입니다. Supabase에서 아래 설정�
 
 바인더 필기와 책갈피는 `binder_works`에 사용자별로 저장됩니다. 기존 기기의 로컬 바인더 기록은 로그인 후 같은 권을 열고 저장 동작이 발생하면 해당 사용자 데이터로 업로드됩니다.
 
+### SPL 바인더 관리자 등록
+
+숨김 쪽 관리자는 클라이언트의 anon key로 등록할 수 없습니다. Supabase SQL Editor 또는 service role 연결에서 Authentication → Users에 표시된 사용자 ID를 등록합니다.
+
+```sql
+insert into public.binder_admins (user_id)
+values ('<auth.users.id>')
+on conflict (user_id) do nothing;
+```
+
+관리자로 로그인한 뒤 앱 제목을 2초 안에 5번 탭하면 관리자 모드가 토글됩니다. 관리자가 정한 숨김 쪽은 모든 사용자에게 공유되며, 원본 PDF와 사용자별 필기·책갈피는 삭제하거나 쪽번호를 다시 매기지 않습니다. service role key는 환경변수나 시크릿 매니저에서만 사용하고 저장소에 커밋하지 마세요.
+
 ## 디비에 있는 성경 내려 받기
 
 npm run pull:supabase-bible

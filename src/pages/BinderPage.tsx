@@ -16,8 +16,11 @@ import { migrateLocalBinderWorks, resolveLegacyResume } from '../binderMigration
 import ModeToggle from '../components/ModeToggle'
 import {
   getBinderWork,
+  getHiddenPages,
   getLastBinderBookId,
+  isBinderAdmin,
   putBinderWork,
+  putHiddenPages,
   type BinderBookmark,
   type BinderTextBox,
   type BinderWork,
@@ -61,30 +64,30 @@ const NEW_TEXT_BOX_WIDTH_RATIO = 0.34
 const NEW_TEXT_BOX_HEIGHT_PX = 56
 const MIN_TEXT_BOX_WIDTH_PX = 90
 const MIN_TEXT_BOX_HEIGHT_PX = 44
+const ADMIN_TAP_COUNT = 5
+const ADMIN_TAP_WINDOW_MS = 2_000
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value))
 }
 
-function nearbyPages(pageNumber: number, pageCount: number, count = 5): number[] {
-  const clamped = Math.max(1, Math.min(pageCount, pageNumber))
-  const limit = Math.min(count, pageCount)
-  const half = Math.floor(count / 2)
-  const pages = new Set<number>()
+function nearbyPages(availablePages: number[], pageNumber: number, count = 5): number[] {
+  if (availablePages.length === 0) return []
+  const exactIndex = availablePages.indexOf(pageNumber)
+  const currentIndex = exactIndex >= 0 ? exactIndex : 0
+  const limit = Math.min(count, availablePages.length)
+  const start = clamp(currentIndex - Math.floor(count / 2), 0, availablePages.length - limit)
+  return availablePages.slice(start, start + limit)
+}
 
-  for (let page = clamped - half; page <= clamped + half; page += 1) {
-    if (page >= 1 && page <= pageCount) pages.add(page)
-  }
-
-  for (let page = clamped + half + 1; pages.size < limit && page <= pageCount; page += 1) {
-    pages.add(page)
-  }
-
-  for (let page = clamped - half - 1; pages.size < limit && page >= 1; page -= 1) {
-    pages.add(page)
-  }
-
-  return [...pages].sort((a, b) => a - b)
+function snapToVisiblePage(visiblePages: number[], target: number): number | null {
+  if (visiblePages.length === 0) return null
+  return visiblePages.reduce((best, page) => {
+    const distance = Math.abs(page - target)
+    const bestDistance = Math.abs(best - target)
+    if (distance < bestDistance || (distance === bestDistance && page > best)) return page
+    return best
+  })
 }
 
 function distToStroke(stroke: Stroke, x: number, y: number): number {
@@ -969,10 +972,15 @@ export default function BinderPage() {
   const [shareExtraInput, setShareExtraInput] = useState('')
   const [pageNumber, setPageNumber] = useState(1)
   const [pageCount, setPageCount] = useState(binderSetList[0]?.pages ?? 1)
+  const [hiddenPages, setHiddenPages] = useState<number[]>([])
+  const [hiddenPagesSetId, setHiddenPagesSetId] = useState('')
+  const [hiddenPagesLoadFailedSetId, setHiddenPagesLoadFailedSetId] = useState<string | null>(null)
+  const [adminModeUserId, setAdminModeUserId] = useState<string | null>(null)
+  const [hiddenSaving, setHiddenSaving] = useState(false)
   const [loadingPdf, setLoadingPdf] = useState(true)
   const [bootReadyUserId, setBootReadyUserId] = useState<string | null>(null)
   const [previewDragging, setPreviewDragging] = useState(false)
-  const previewDragRef = useRef<{ startX: number; startPage: number; lastPage: number } | null>(null)
+  const previewDragRef = useRef<{ startX: number; startIndex: number; lastPage: number } | null>(null)
   const previewMovedRef = useRef(false)
   const activeCheckpointRef = useRef<HTMLButtonElement | null>(null)
   // 이어보기: 부팅 복원이 끝나기 전에는 마지막 위치를 저장하지 않는다
@@ -981,12 +989,32 @@ export default function BinderPage() {
   // 권을 바꾼 뒤 사용자가 직접 페이지를 넘겼으면 복원으로 되돌리지 않는다
   const navigatedSinceSelectRef = useRef(false)
   const workRef = useRef<BinderWork | null>(null)
+  const adminTapRef = useRef({ count: 0, deadline: 0 })
+  const hiddenLoadRef = useRef(0)
+  const selectedSetIdRef = useRef(selectedId)
 
   useEffect(() => {
     workRef.current = work
   }, [work])
 
   const selected = findBinderSet(selectedId) ?? binderSetList[0]
+  const adminMode = adminModeUserId !== null && adminModeUserId === userId
+  const hiddenPagesReady = hiddenPagesSetId === selected.id
+  const hiddenPagesWritable = hiddenPagesReady && hiddenPagesLoadFailedSetId !== selected.id
+  const allPages = Array.from({ length: pageCount }, (_, index) => index + 1)
+  const currentHiddenPages = hiddenPagesReady ? hiddenPages : []
+  const hiddenPageSet = new Set(currentHiddenPages.filter((page) => page <= pageCount))
+  const visiblePages = allPages.filter((page) => !hiddenPageSet.has(page))
+  const browsablePages = hiddenPagesReady ? (adminMode ? allPages : visiblePages) : []
+  const browsableIndex = browsablePages.indexOf(pageNumber)
+  const visibleOrdinal = visiblePages.indexOf(pageNumber) + 1
+  const allPagesHidden = visiblePages.length === 0
+  const currentPageHidden = hiddenPageSet.has(pageNumber)
+  const previousPage = browsableIndex > 0 ? browsablePages[browsableIndex - 1] : undefined
+  const nextPage =
+    browsableIndex >= 0 && browsableIndex + 1 < browsablePages.length
+      ? browsablePages[browsableIndex + 1]
+      : undefined
   const pageKey = String(pageNumber)
   const pageInput = work?.pageInputs[pageKey] ?? emptyField()
   const pageTextBoxes = work?.pageTextBoxes[pageKey] ?? []
@@ -1000,9 +1028,50 @@ export default function BinderPage() {
     [...checkpointSections].reverse().find((section) => pageNumber >= section.page)?.id ?? ''
 
   useEffect(() => {
+    selectedSetIdRef.current = selected.id
+  }, [selected.id])
+
+  useEffect(() => {
     activeCheckpointRef.current?.scrollIntoView({ block: 'nearest' })
   }, [activeCheckpointId])
-  const previewPages = nearbyPages(pageNumber, pageCount)
+
+  useEffect(() => {
+    const requestId = ++hiddenLoadRef.current
+    const setId = selected.id
+    let alive = true
+
+    getHiddenPages(setId)
+      .then((pages) => {
+        if (!alive || requestId !== hiddenLoadRef.current || setId !== selected.id) return
+        setHiddenPages(pages)
+        setHiddenPagesSetId(setId)
+        setHiddenPagesLoadFailedSetId(null)
+      })
+      .catch(() => {
+        if (!alive || requestId !== hiddenLoadRef.current) return
+        setHiddenPages([])
+        setHiddenPagesSetId(setId)
+        setHiddenPagesLoadFailedSetId(setId)
+      })
+
+    return () => {
+      alive = false
+    }
+  }, [selected.id])
+
+  useEffect(() => {
+    if (adminMode || hiddenPagesSetId !== selected.id || !hiddenPages.includes(pageNumber)) return
+    const hidden = new Set(hiddenPages)
+    const available = Array.from({ length: pageCount }, (_, index) => index + 1).filter(
+      (page) => !hidden.has(page),
+    )
+    const target = snapToVisiblePage(available, pageNumber)
+    if (target === null) return
+    const timer = window.setTimeout(() => setPageNumber(target), 0)
+    return () => window.clearTimeout(timer)
+  }, [adminMode, hiddenPages, hiddenPagesSetId, pageCount, pageNumber, selected.id])
+
+  const previewPages = nearbyPages(browsablePages, pageNumber)
   const bookmarks = [...(work?.bookmarks ?? [])].sort((a, b) => a.page - b.page || a.createdAt - b.createdAt)
   const currentPageBookmarked = bookmarks.some((bookmark) => bookmark.page === pageNumber)
   const inputPageSet = work
@@ -1017,11 +1086,11 @@ export default function BinderPage() {
     : new Set<number>()
   const bookmarkPageSet = new Set(bookmarks.map((bookmark) => bookmark.page))
   // 공유 후보: 필기한 쪽 + 책갈피 쪽 + 현재 쪽 + 직접 추가한 쪽
-  const shareCandidates = [
-    ...new Set([pageNumber, ...inputPageSet, ...bookmarkPageSet, ...shareExtraPages]),
-  ]
-    .filter((page) => page >= 1 && page <= pageCount)
-    .sort((a, b) => a - b)
+  const shareCandidates = hiddenPagesReady
+    ? [...new Set([pageNumber, ...inputPageSet, ...bookmarkPageSet, ...shareExtraPages])]
+        .filter((page) => page >= 1 && page <= pageCount && !hiddenPageSet.has(page))
+        .sort((a, b) => a - b)
+    : []
 
   // 부팅 시 로컬 옛 데이터를 먼저 옮긴 뒤 계정의 마지막 사용 세트로 이동
   useEffect(() => {
@@ -1207,16 +1276,20 @@ export default function BinderPage() {
   }
 
   const goPrev = () => {
+    if (previousPage === undefined) return
     navigatedSinceSelectRef.current = true
-    setPageNumber((prev) => Math.max(1, prev - 1))
+    setPageNumber(previousPage)
   }
   const goNext = () => {
+    if (nextPage === undefined) return
     navigatedSinceSelectRef.current = true
-    setPageNumber((prev) => Math.min(pageCount, prev + 1))
+    setPageNumber(nextPage)
   }
   const goToPage = (next: number) => {
+    const target = snapToVisiblePage(browsablePages, clamp(next, 1, pageCount))
+    if (target === null) return
     navigatedSinceSelectRef.current = true
-    setPageNumber(Math.max(1, Math.min(pageCount, next)))
+    setPageNumber(target)
   }
   // 그 구간에서 마지막으로 보던 쪽으로 이어보기 — 기록이 없거나 구간을 벗어났으면 첫 쪽
   const goToCheckpoint = (checkpointId: string) => {
@@ -1224,15 +1297,85 @@ export default function BinderPage() {
     if (!section) return
     const saved = work?.checkpointPages?.[checkpointId]
     const resumable = saved !== undefined && saved >= section.page && saved <= section.endPage
-    goToPage(resumable ? saved : section.page)
+    const requested = resumable ? saved : section.page
+    if (adminMode) {
+      goToPage(requested)
+      return
+    }
+    const nextVisible = visiblePages.find((page) => page >= requested)
+    goToPage(nextVisible ?? requested)
+  }
+
+  const handleAdminTap = () => {
+    // 이벤트가 발생한 실제 시각으로 2초 탭 창을 계산한다.
+    // eslint-disable-next-line react-hooks/purity
+    const now = performance.now()
+    const taps = adminTapRef.current
+    if (now > taps.deadline) {
+      taps.count = 1
+      taps.deadline = now + ADMIN_TAP_WINDOW_MS
+      return
+    }
+
+    taps.count += 1
+    if (taps.count < ADMIN_TAP_COUNT) return
+    taps.count = 0
+    taps.deadline = 0
+    if (!userId) return
+
+    void isBinderAdmin(userId).then((allowed) => {
+      if (!allowed) return
+      if (adminMode) {
+        setAdminModeUserId(null)
+        const target = snapToVisiblePage(visiblePages, pageNumber)
+        if (target !== null) setPageNumber(target)
+      } else {
+        setAdminModeUserId(userId)
+      }
+      navigator.vibrate?.(40)
+    })
+  }
+
+  const saveHiddenPages = async (nextPages: number[]) => {
+    if (!userId || hiddenSaving || !hiddenPagesWritable) return
+    const setId = selected.id
+    const previousPages = currentHiddenPages
+    const normalized = [...new Set(nextPages)].sort((a, b) => a - b)
+    setHiddenPages(normalized)
+    setHiddenPagesSetId(selected.id)
+    setHiddenSaving(true)
+    try {
+      await putHiddenPages(setId, normalized, userId)
+    } catch {
+      if (selectedSetIdRef.current === setId) {
+        setHiddenPages(previousPages)
+        setHiddenPagesSetId(setId)
+      }
+      window.alert(t('binderHiddenSaveFailed'))
+    } finally {
+      setHiddenSaving(false)
+    }
+  }
+
+  const toggleCurrentPageHidden = () => {
+    if (!adminMode) return
+    const next = currentPageHidden
+      ? currentHiddenPages.filter((page) => page !== pageNumber)
+      : [...currentHiddenPages, pageNumber]
+    void saveHiddenPages(next)
+  }
+
+  const restoreHiddenPage = (page: number) => {
+    void saveHiddenPages(currentHiddenPages.filter((hiddenPage) => hiddenPage !== page))
   }
 
   const startPreviewDrag = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (loadingPdf || !document) return
+    if (loadingPdf || !document || browsablePages.length === 0) return
     event.currentTarget.setPointerCapture(event.pointerId)
     event.preventDefault()
     previewMovedRef.current = false
-    previewDragRef.current = { startX: event.clientX, startPage: pageNumber, lastPage: pageNumber }
+    const startIndex = Math.max(0, browsablePages.indexOf(pageNumber))
+    previewDragRef.current = { startX: event.clientX, startIndex, lastPage: pageNumber }
     setPreviewDragging(true)
   }
 
@@ -1242,12 +1385,13 @@ export default function BinderPage() {
     event.preventDefault()
     // 썸네일 한 칸 폭(약 60px)마다 1쪽 — 살짝 움직인 건 탭으로 취급되도록 trunc 사용
     const pageDelta = Math.trunc((drag.startX - event.clientX) / 60)
-    const nextPage = Math.max(1, Math.min(pageCount, drag.startPage + pageDelta))
-    if (nextPage === drag.lastPage) return
+    const nextIndex = clamp(drag.startIndex + pageDelta, 0, browsablePages.length - 1)
+    const draggedPage = browsablePages[nextIndex]
+    if (draggedPage === undefined || draggedPage === drag.lastPage) return
     previewMovedRef.current = true
     navigatedSinceSelectRef.current = true
-    drag.lastPage = nextPage
-    setPageNumber(nextPage)
+    drag.lastPage = draggedPage
+    setPageNumber(draggedPage)
   }
 
   const endPreviewDrag = (event: React.PointerEvent<HTMLDivElement>) => {
@@ -1270,7 +1414,9 @@ export default function BinderPage() {
   }
 
   const openShare = () => {
-    setShareSelected([pageNumber])
+    if (!hiddenPagesReady) return
+    const page = snapToVisiblePage(visiblePages, pageNumber)
+    setShareSelected(page === null ? [] : [page])
     setShareExtraInput('')
     setShareOpen(true)
   }
@@ -1282,19 +1428,22 @@ export default function BinderPage() {
   const addShareExtraPage = () => {
     const page = Number(shareExtraInput)
     if (!Number.isInteger(page) || page < 1 || page > pageCount) return
-    setShareExtraPages((prev) => (prev.includes(page) ? prev : [...prev, page]))
-    setShareSelected((prev) => (prev.includes(page) ? prev : [...prev, page]))
+    const visiblePage = snapToVisiblePage(visiblePages, page)
+    if (visiblePage === null) return
+    setShareExtraPages((prev) => (prev.includes(visiblePage) ? prev : [...prev, visiblePage]))
+    setShareSelected((prev) => (prev.includes(visiblePage) ? prev : [...prev, visiblePage]))
     setShareExtraInput('')
   }
 
   const sharePages = async () => {
-    if (!document || shareBusy || shareSelected.length === 0) return
+    const selectedVisiblePages = shareSelected.filter((page) => !hiddenPageSet.has(page))
+    if (!hiddenPagesReady || !document || shareBusy || selectedVisiblePages.length === 0) return
     setShareBusy(true)
     try {
       await window.document.fonts?.ready
       const displayWidth =
         window.document.querySelector('article canvas')?.getBoundingClientRect().width ?? 720
-      const pages = [...shareSelected].sort((a, b) => a - b)
+      const pages = [...selectedVisiblePages].sort((a, b) => a - b)
       const files: File[] = []
       for (const page of pages) {
         const canvas = await renderSharePage(document, page, work, displayWidth)
@@ -1339,8 +1488,11 @@ export default function BinderPage() {
               </span>
             )}
           </div>
-          <h1 className="min-w-0 flex-1 truncate text-center font-serif text-lg font-extrabold">
-             {t('binderAppTitle')}
+          <h1
+            onClick={handleAdminTap}
+            className="min-w-0 flex-1 truncate text-center font-serif text-lg font-extrabold"
+          >
+            {t('binderAppTitle')}
           </h1>
           <div className="flex shrink-0 items-center justify-end gap-1">
             <LangToggle />
@@ -1425,6 +1577,7 @@ export default function BinderPage() {
               <button
                 type="button"
                 onClick={addBookmark}
+                disabled={browsablePages.length === 0}
                 className="rounded-full bg-rose-chip px-2.5 py-1 text-xs font-bold text-rose-accent transition hover:bg-rose-accent-deep hover:text-white"
               >
                 {t('binderAddBookmark')}
@@ -1467,6 +1620,7 @@ export default function BinderPage() {
                 <div className="space-y-0.5">
                   {bookmarks.map((bookmark) => {
                     const active = pageNumber === bookmark.page
+                    const hidden = hiddenPageSet.has(bookmark.page) && !adminMode
                     return (
                       <div
                         key={bookmark.id}
@@ -1481,12 +1635,17 @@ export default function BinderPage() {
                         >
                           <span
                             className={`block truncate text-sm font-bold ${
-                              active ? 'text-rose-accent' : 'text-rose-key'
+                              hidden ? 'text-rose-key/45' : active ? 'text-rose-accent' : 'text-rose-key'
                             }`}
                           >
                             {bookmark.label}
                           </span>
-                           <span className="shrink-0 text-xs tabular-nums text-rose-key/60">{t('binderPage')(bookmark.page)}</span>
+                          {hidden && (
+                            <span className="shrink-0 rounded-full bg-rose-bg px-1.5 py-0.5 text-[10px] font-bold text-rose-key/60">
+                              {t('binderHiddenBadge')}
+                            </span>
+                          )}
+                          <span className="shrink-0 text-xs tabular-nums text-rose-key/60">{t('binderPage')(bookmark.page)}</span>
                         </button>
                         <button
                           type="button"
@@ -1503,6 +1662,59 @@ export default function BinderPage() {
               )}
             </div>
           </section>
+
+          {adminMode && (
+            <section className="order-4 rounded-2xl border border-rose-accent/40 bg-rose-card p-3">
+              <div className="flex items-center justify-between gap-2 px-1.5">
+                <h2 className="font-serif text-base font-extrabold text-rose-accent">
+                  {t('binderHiddenListTitle')}
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => void saveHiddenPages([])}
+                  disabled={hiddenSaving || currentHiddenPages.length === 0}
+                  className="rounded-full bg-rose-chip px-2.5 py-1 text-xs font-bold text-rose-accent disabled:opacity-40"
+                >
+                  {t('binderRestoreAll')}
+                </button>
+              </div>
+              {!hiddenPagesReady ? (
+                <p className="mt-2 rounded-lg border border-dashed border-rose-line px-3 py-2 text-[13px] text-rose-key/80">
+                  {t('binderHiddenLoading')}
+                </p>
+              ) : !hiddenPagesWritable ? (
+                <p className="mt-2 rounded-lg border border-dashed border-rose-line px-3 py-2 text-[13px] text-rose-key/80">
+                  {t('binderHiddenLoadFailed')}
+                </p>
+              ) : currentHiddenPages.length === 0 ? (
+                <p className="mt-2 rounded-lg border border-dashed border-rose-line px-3 py-2 text-[13px] text-rose-key/80">
+                  {t('binderHiddenEmpty')}
+                </p>
+              ) : (
+                <div className="mt-2 max-h-52 space-y-1 overflow-y-auto">
+                  {currentHiddenPages.map((page) => (
+                    <div key={page} className="flex items-center gap-2 rounded-lg bg-rose-chip/60 px-2.5 py-1.5">
+                      <button
+                        type="button"
+                        onClick={() => goToPage(page)}
+                        className="min-w-0 flex-1 text-left text-sm font-bold text-rose-key"
+                      >
+                        {t('binderPage')(page)}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => restoreHiddenPage(page)}
+                        disabled={hiddenSaving}
+                        className="rounded-full bg-white px-2.5 py-1 text-xs font-bold text-rose-accent disabled:opacity-40"
+                      >
+                        {t('binderRestorePage')}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
 
         </aside>
 
@@ -1531,10 +1743,27 @@ export default function BinderPage() {
             <button
               type="button"
               onClick={openShare}
+              disabled={!hiddenPagesReady || visiblePages.length === 0}
               className="flex shrink-0 items-center gap-1 rounded-full bg-rose-accent-deep px-3 py-1.5 text-[13px] font-bold text-white shadow-sm shadow-rose-accent/25 transition active:scale-95"
             >
               <span aria-hidden>📤</span> {t('binderShare')}
             </button>
+
+            {adminMode && (
+              <div className="flex w-full items-center justify-between gap-2 border-t border-rose-line pt-2">
+                <span className="rounded-full bg-rose-accent px-2.5 py-1 text-xs font-extrabold text-white">
+                  {currentPageHidden ? t('binderHiddenPage') : t('binderAdminMode')}
+                </span>
+                <button
+                  type="button"
+                  onClick={toggleCurrentPageHidden}
+                  disabled={hiddenSaving || !hiddenPagesWritable}
+                  className="rounded-full bg-rose-chip px-3 py-1.5 text-[13px] font-bold text-rose-accent transition hover:bg-rose-accent-deep hover:text-white disabled:opacity-40"
+                >
+                  {currentPageHidden ? t('binderRestorePage') : t('binderHidePage')}
+                </button>
+              </div>
+            )}
 
             {/* 손글씨 도구 줄 — 필기 중 손에 가려지지 않게 상단에 고정 */}
             {inputMode === 'ink' && (
@@ -1621,14 +1850,25 @@ export default function BinderPage() {
             onPointerCancel={endPreviewDrag}
             aria-label={t('binderPreviewAria')}
           >
-            {loadingPdf || !document ? (
+            {loadingPdf || !document || !hiddenPagesReady ? (
               <span className="text-sm font-bold text-rose-key">{t('binderPreviewLoading')}</span>
+            ) : browsablePages.length === 0 ? (
+              <span className="text-sm font-bold text-rose-key">{t('binderAllPagesHidden')}</span>
             ) : (
               previewPages.map((previewPage) => {
                 const active = previewPage === pageNumber
                 return (
-                  <div key={previewPage} data-preview-page={previewPage}>
+                  <div
+                    key={previewPage}
+                    data-preview-page={previewPage}
+                    className={`relative ${adminMode && hiddenPageSet.has(previewPage) ? 'opacity-50' : ''}`}
+                  >
                     <PdfThumbnail pdfDocument={document} pageNumber={previewPage} active={active} />
+                    {adminMode && hiddenPageSet.has(previewPage) && (
+                      <span className="absolute left-1 top-1 rounded-full bg-rose-accent px-1.5 py-0.5 text-[9px] font-black text-white">
+                        {t('binderHiddenBadge')}
+                      </span>
+                    )}
                   </div>
                 )
               })
@@ -1639,9 +1879,13 @@ export default function BinderPage() {
             className="relative rounded-3xl border border-rose-line bg-rose-chip/50 p-2.5 sm:p-3"
             style={{ touchAction: 'pan-y' }}
           >
-            {loadingPdf ? (
+            {loadingPdf || !hiddenPagesReady ? (
               <div className="grid min-h-[56vh] place-items-center rounded-2xl bg-rose-card text-rose-key">
                 {t('binderOpening')}
+              </div>
+            ) : allPagesHidden && !adminMode ? (
+              <div className="grid min-h-[56vh] place-items-center rounded-2xl bg-rose-card px-6 text-center font-bold text-rose-key">
+                {t('binderAllPagesHidden')}
               </div>
             ) : document ? (
               <PdfPage
@@ -1664,12 +1908,12 @@ export default function BinderPage() {
 
             {/* 페이지 위에 떠 있는 좌우 넘김 — 아티클 안쪽에 고정해 좁은 폭에서도 뷰포트를 벗어나지 않는다.
                 필기 중에는 숨긴다: 획이 버튼 위에서 시작하면 쪽이 넘어가 버린다 (하단 바로 이동 가능). */}
-            {inputMode !== 'ink' && (
+            {inputMode !== 'ink' && browsablePages.length > 0 && (
               <>
                 <button
                   type="button"
                   onClick={goPrev}
-                  disabled={pageNumber === 1}
+                  disabled={previousPage === undefined}
                   className="absolute left-2 top-1/2 z-10 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full bg-rose-accent-deep text-xl font-bold text-white shadow-lift transition active:scale-[0.98] disabled:opacity-40 sm:left-3 sm:h-12 sm:w-12"
                   aria-label={t('binderPrevPage')}
                 >
@@ -1678,7 +1922,7 @@ export default function BinderPage() {
                 <button
                   type="button"
                   onClick={goNext}
-                  disabled={pageNumber >= pageCount}
+                  disabled={nextPage === undefined}
                   className="absolute right-2 top-1/2 z-10 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full bg-rose-accent-deep text-xl font-bold text-white shadow-lift transition active:scale-[0.98] disabled:opacity-40 sm:right-3 sm:h-12 sm:w-12"
                   aria-label={t('binderNextPage')}
                 >
@@ -1692,7 +1936,7 @@ export default function BinderPage() {
             <button
               type="button"
               onClick={goPrev}
-              disabled={pageNumber === 1}
+              disabled={previousPage === undefined}
               className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-rose-accent-deep text-xl font-bold text-white shadow-sm shadow-rose-accent/25 transition active:scale-[0.98] disabled:opacity-40"
               aria-label={t('binderPrevPage')}
             >
@@ -1705,20 +1949,23 @@ export default function BinderPage() {
               step={1}
               value={pageNumber}
               onChange={(event) => goToPage(Number(event.target.value))}
+              disabled={browsablePages.length === 0}
               className="pager-range min-w-0 flex-1"
               aria-label={t('binderPageMove')}
             />
             <button
               type="button"
               onClick={goNext}
-              disabled={pageNumber >= pageCount}
+              disabled={nextPage === undefined}
               className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-rose-accent-deep text-xl font-bold text-white shadow-sm shadow-rose-accent/25 transition active:scale-[0.98] disabled:opacity-40"
               aria-label={t('binderNextPage')}
             >
               →
             </button>
             <span className="shrink-0 text-[13px] font-bold tabular-nums text-rose-key">
-              <span className="text-rose-accent">{pageNumber}</span> / {pageCount}
+              {currentPageHidden && adminMode
+                ? `${t('binderPage')(pageNumber)} · ${t('binderHiddenBadge')}`
+                : t('binderPagePosition')(pageNumber, visibleOrdinal, visiblePages.length)}
             </span>
           </div>
         </section>

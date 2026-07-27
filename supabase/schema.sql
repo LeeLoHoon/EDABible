@@ -44,6 +44,18 @@ create table if not exists public.binder_works (
   primary key (user_id, book_id)
 );
 
+-- 바인더 숨김 쪽을 관리할 수 있는 관리자 목록. 쓰기는 service role로만 수행한다.
+create table if not exists public.binder_admins (
+  user_id uuid primary key references auth.users(id) on delete cascade
+);
+
+-- 세트별 원본 PDF 쪽번호를 전역 공유한다. 배열 값은 보이는 순번이 아니다.
+create table if not exists public.binder_hidden_pages (
+  set_id text primary key,
+  pages int[] not null default '{}',
+  updated_at timestamptz not null default now()
+);
+
 create index if not exists bible_chapters_file_idx
   on public.bible_chapters (file, chapter);
 
@@ -68,6 +80,8 @@ for each row execute function public.touch_bible_chapters_updated_at();
 alter table public.bible_chapters enable row level security;
 alter table public.bible_chapter_edits enable row level security;
 alter table public.binder_works enable row level security;
+alter table public.binder_admins enable row level security;
+alter table public.binder_hidden_pages enable row level security;
 
 drop policy if exists "public read bible chapters" on public.bible_chapters;
 create policy "public read bible chapters"
@@ -138,3 +152,34 @@ on public.binder_works for update
 to authenticated
 using (auth.uid() = user_id)
 with check (auth.uid() = user_id);
+
+drop policy if exists "users read own binder admin row" on public.binder_admins;
+create policy "users read own binder admin row"
+on public.binder_admins for select
+to authenticated
+using (auth.uid() = user_id);
+
+drop policy if exists "public read binder hidden pages" on public.binder_hidden_pages;
+create policy "public read binder hidden pages"
+on public.binder_hidden_pages for select
+to anon, authenticated
+using (true);
+
+drop policy if exists "admins insert binder hidden pages" on public.binder_hidden_pages;
+create policy "admins insert binder hidden pages"
+on public.binder_hidden_pages for insert
+to authenticated
+with check (
+  auth.uid() in (select user_id from public.binder_admins)
+);
+
+drop policy if exists "admins update binder hidden pages" on public.binder_hidden_pages;
+create policy "admins update binder hidden pages"
+on public.binder_hidden_pages for update
+to authenticated
+using (
+  auth.uid() in (select user_id from public.binder_admins)
+)
+with check (
+  auth.uid() in (select user_id from public.binder_admins)
+);
