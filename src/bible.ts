@@ -125,6 +125,20 @@ export function loadBook(file: string): Promise<BookDoc> {
   return p
 }
 
+/** 장 본문을 꺼낸다. 한국어 스캔 원본의 창세기 28장만 장 번호가 비어 있어 첫 문장으로 찾는다. */
+export function chapterTextAt(doc: BookDoc, chapter: number): string {
+  const direct = doc.chapters.find((c) => c.chapter === chapter)?.text
+  if (direct) return direct
+
+  if (doc.book === '창세기' && chapter === 28) {
+    return (
+      doc.chapters.find((c) => c.text.includes('야곱은 브엘세바를 떠나 하란을 향해 갔다'))?.text ?? ''
+    )
+  }
+
+  return ''
+}
+
 export async function saveBibleChapterText(file: string, chapter: number, text: string): Promise<BookDoc> {
   if (getLang() === 'en') throw new Error(t('bibleEditBlocked'))
   const doc = await loadBook(file)

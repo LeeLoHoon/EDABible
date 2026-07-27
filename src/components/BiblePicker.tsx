@@ -4,6 +4,7 @@ import {
   loadBook,
   finalizeBibleChapter,
   chapterLabel,
+  chapterTextAt,
   chapterUnit,
   makeRef,
   parseRefs,
@@ -49,6 +50,12 @@ interface Props {
   onChange: (ref: string) => void
   /** 현재 본문(책·장·텍스트·로딩) 변화를 상위로 보고 — 없으면 null */
   onPassage?: (info: PassageInfo | null) => void
+  /**
+   * 성경 책을 한 권으로 고정한다 (index.json의 order 기준, 19 = 시편).
+   * 책 칸은 읽기 전용이 되고 편(장)만 고를 수 있다.
+   * null이면 66권 드롭다운 — 주일 설교 본문은 어느 권이든 올 수 있어 관리자 폼이 쓴다.
+   */
+  fixedBookOrder?: number | null
 }
 
 interface Selection {
@@ -58,39 +65,16 @@ interface Selection {
   endChapter: number | ''
 }
 
-/**
- * 성경 책을 한 권으로 고정한다 (index.json의 order 기준, 19 = 시편).
- * 책 칸은 읽기 전용이 되고 편(장)만 고를 수 있다.
- * null로 두면 다시 66권 드롭다운으로 돌아간다.
- */
-const FIXED_BOOK_ORDER: number | null = 19
-
-const emptySelection = (): Selection => ({
+const emptySelection = (fixedBookOrder: number | null): Selection => ({
   id: crypto.randomUUID(),
-  order: FIXED_BOOK_ORDER ?? '',
+  order: fixedBookOrder ?? '',
   chapter: '',
   endChapter: '',
 })
 
-function chapterText(doc: BookDoc, chapter: number): string {
-  const direct = doc.chapters.find((c) => c.chapter === chapter)?.text
-  if (direct) return direct
-
-  if (doc.book === '창세기' && chapter === 28) {
-    // 한국어 스캔 원본만을 위한 보정이며 영어 데이터에는 적용하지 않는다.
-    return (
-      doc.chapters.find((c) =>
-        c.text.includes('야곱은 브엘세바를 떠나 하란을 향해 갔다'),
-      )?.text ?? ''
-    )
-  }
-
-  return ''
-}
-
-export default function BiblePicker({ value, onChange, onPassage }: Props) {
+export default function BiblePicker({ value, onChange, onPassage, fixedBookOrder = 19 }: Props) {
   const [index, setIndex] = useState<BookMeta[]>([])
-  const [selections, setSelections] = useState<Selection[]>([emptySelection()])
+  const [selections, setSelections] = useState<Selection[]>([emptySelection(fixedBookOrder)])
   const [docs, setDocs] = useState<Map<number, BookDoc>>(new Map())
   const [error, setError] = useState<string | null>(null)
   const [inited, setInited] = useState(false)
@@ -110,7 +94,7 @@ export default function BiblePicker({ value, onChange, onPassage }: Props) {
               const meta = idx.find((b) => b.book === ref.book) ?? idx.find((b) => b.order === order)
               return {
                 id: crypto.randomUUID(),
-                order: meta?.order ?? FIXED_BOOK_ORDER ?? '',
+                order: meta?.order ?? fixedBookOrder ?? '',
                 chapter: ref.chapter,
                 endChapter: ref.endChapter,
               }
@@ -239,7 +223,7 @@ export default function BiblePicker({ value, onChange, onPassage }: Props) {
         if (doc) {
           for (let current = selection.chapter; current <= selection.endChapter; current += 1) {
             const chapter = doc.chapters.find((c) => c.chapter === current)
-            const text = chapter?.text ?? chapterText(doc, current)
+            const text = chapter?.text ?? chapterTextAt(doc, current)
             if (text) {
               texts.push(text)
               chunks.push({ label: chapterLabel(book, current), text })
@@ -378,11 +362,11 @@ export default function BiblePicker({ value, onChange, onPassage }: Props) {
     <div className="bible-picker rounded-2xl bg-rose-chip px-4 py-3">
       <div className="mb-2 flex items-center justify-between gap-3">
         <label className="block text-sm font-semibold text-rose-ink">
-          {FIXED_BOOK_ORDER === null ? t('pickerTitleFull') : t('pickerTitleChapter')}
+          {fixedBookOrder === null ? t('pickerTitleFull') : t('pickerTitleChapter')}
         </label>
         <button
           type="button"
-          onClick={() => setSelections((prev) => [...prev, emptySelection()])}
+          onClick={() => setSelections((prev) => [...prev, emptySelection(fixedBookOrder)])}
           disabled={rebuilding}
           className="shrink-0 rounded-lg bg-white px-2.5 py-1 text-xs font-bold text-rose-accent shadow-sm"
         >
@@ -408,7 +392,7 @@ export default function BiblePicker({ value, onChange, onPassage }: Props) {
               key={selection.id}
               className="bible-picker-row"
             >
-              {FIXED_BOOK_ORDER === null ? (
+              {fixedBookOrder === null ? (
                 <select
                   value={selection.order}
                   onChange={(e) =>
@@ -480,7 +464,7 @@ export default function BiblePicker({ value, onChange, onPassage }: Props) {
                 type="button"
                 onClick={() =>
                   setSelections((prev) =>
-                    prev.length === 1 ? [emptySelection()] : prev.filter((item) => item.id !== selection.id),
+                    prev.length === 1 ? [emptySelection(fixedBookOrder)] : prev.filter((item) => item.id !== selection.id),
                   )
                 }
                 className="bible-picker-remove flex h-10 w-10 items-center justify-center rounded-full text-xl font-bold text-rose-key transition hover:bg-white hover:text-rose-accent"
