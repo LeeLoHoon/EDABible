@@ -28,3 +28,4 @@ dist-ssr
 .vercel
 .env*
 .migration-backup/
+.playwright-mcp/
