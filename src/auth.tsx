@@ -109,6 +109,15 @@ export function RequireGoogleLogin({ children }: { children: React.ReactNode }) 
   const [error, setError] = useState<string | null>(null)
   const [signingIn, setSigningIn] = useState(false)
   const inAppBrowser = useMemo(() => detectInAppBrowser(), [])
+  // 로그인 게이트는 앱 이름·설명·아이콘까지 브랜딩되어 있어 sermon 타깃에서 바인더 문구가
+  // 그대로 노출되던 문제(교인에게 SPL 바인더로 보임)를 이 분기로 교정한다. 다른 타깃은 무변화.
+  const isSermon = __APP_TARGET__ === 'sermon'
+  const appName = isSermon ? t('authSermonName') : t('authBinderName')
+  const eyebrow = isSermon ? t('authSermonEyebrow') : 'EDA BINDER'
+  const spineWord = isSermon ? t('authSermonSpineWord') : 'SPL'
+  const spineLabel = isSermon ? t('authSermonSpineLabel') : t('authBinderShort')
+  const description = isSermon ? t('authSermonDescription') : t('authLoginDescription')
+  const syncNotice = isSermon ? t('authSermonSyncAfterLogin') : t('authSyncAfterLogin')
 
   const handleSignIn = async () => {
     setError(null)
@@ -137,7 +146,7 @@ export function RequireGoogleLogin({ children }: { children: React.ReactNode }) 
       <div className="grid min-h-full place-items-center bg-rose-bg px-6 text-center text-rose-ink">
         <div className="relative max-w-sm rounded-2xl border border-rose-line bg-rose-card p-6 shadow-sm">
           <LangToggle className="absolute right-3 top-3" />
-          <h1 className="font-serif text-2xl font-extrabold">{t('authBinderName')}</h1>
+          <h1 className="font-serif text-2xl font-extrabold">{appName}</h1>
           <p className="mt-4 text-sm leading-6 text-rose-key">
             {t('authMissingSupabase')}
           </p>
@@ -182,8 +191,8 @@ export function RequireGoogleLogin({ children }: { children: React.ReactNode }) 
                 ))}
                 <div className="flex h-full flex-col items-center justify-center pl-3">
                   <p className="text-[8px] font-black tracking-[0.3em] text-rose-key/70">EDA</p>
-                  <p className="mt-1.5 font-serif text-[22px] font-extrabold leading-none">SPL</p>
-                  <p className="mt-1 text-[11px] font-bold text-rose-key">{t('authBinderShort')}</p>
+                  <p className="mt-1.5 font-serif text-[22px] font-extrabold leading-none">{spineWord}</p>
+                  <p className="mt-1 text-[11px] font-bold text-rose-key">{spineLabel}</p>
                   <span className="mt-2.5 h-px w-9 bg-rose-line" />
                   <p className="mt-2 text-[8px] font-black tracking-[0.24em] text-rose-accent/80">
                     EDA BOOKS
@@ -192,12 +201,12 @@ export function RequireGoogleLogin({ children }: { children: React.ReactNode }) 
               </div>
             </div>
 
-            <p className="text-[11px] font-black tracking-[0.3em] text-rose-key/70">EDA BINDER</p>
+            <p className="text-[11px] font-black tracking-[0.3em] text-rose-key/70">{eyebrow}</p>
             <h1 className="mt-2.5 font-serif text-[34px] font-extrabold leading-tight text-rose-ink">
-              {t('authBinderName')}
+              {appName}
             </h1>
             <p className="mx-auto mt-3 max-w-[19rem] text-[14px] font-bold leading-6.5 text-rose-key">
-              {t('authLoginDescription').split('\n').map((line, index) => (
+              {description.split('\n').map((line, index) => (
                 <span key={line}>{index > 0 && <br />}{line}</span>
               ))}
             </p>
@@ -254,7 +263,7 @@ export function RequireGoogleLogin({ children }: { children: React.ReactNode }) 
             )}
 
             <p className="mt-4 text-xs font-bold leading-5 text-rose-key/60">
-              {t('authSyncAfterLogin')}
+              {syncNotice}
             </p>
 
             {(error || authError) && (
