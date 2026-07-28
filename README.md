@@ -7,10 +7,21 @@
 ## Bible Data
 
 ```text
-data/bible-books.json       # 66권 메타데이터
-data/bible-chapters.jsonl   # 장 단위 본문 원본
-public/bible/*.json         # 앱 배포용 산출물
+data/bible-books.json           # 66권 메타데이터 (한국어 역본 공용)
+data/bible-chapters.jsonl       # 메시지성경(기본) 장 단위 본문 원본
+data/bible-chapters.en.jsonl    # The Message 영어
+data/bible-chapters.gae.jsonl   # 개역개정
+data/bible-chapters.nkt.jsonl   # 새한글성경(2024)
+data/bible-chapters.sae.jsonl   # 새번역
+public/bible/*.json             # 앱 배포용 산출물 (en/, gae/, nkt/, sae/ 하위 폴더 포함)
 ```
+
+개역개정·새번역은 dev-dooD/bible-crawler 덤프(`scripts/import_gae_bible.mjs`, 새번역은
+`--version sae`), 새한글성경은 bible.bskorea.or.kr 공식 리더(`scripts/fetch_nkt_bible.mjs` →
+`scripts/import_nkt_bible.mjs`)에서 가져왔다. 세 역본 모두 대한성서공회 저작권이므로 외부 공개
+배포 전에는 이용 허가를 확인해야 한다. 추가 역본은 읽기 전용이며 Supabase 편집 파이프라인은
+메시지성경(`msg`)에만 적용된다. 주간 말씀 묵상 본문 화면에서 역본(메시지/개역개정/새한글/새번역)을
+전환할 수 있고, 형광펜은 역본별로 따로 저장된다.
 
 본문을 코드에서 수정할 때는 `data/bible-chapters.jsonl`을 고친 뒤 아래 명령을 실행합니다.
 

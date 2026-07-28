@@ -1,16 +1,28 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 
-// --lang en 이면 영어(The Message) 데이터셋을 public/bible/en 아래에 생성한다.
+// --lang <version> 으로 역본별 데이터셋을 생성한다.
+//   ko  = 메시지성경(기본, public/bible)
+//   en  = The Message 영어(public/bible/en)
+//   gae = 개역개정(public/bible/gae)
+//   nkt = 새한글성경 2024(public/bible/nkt)
+//   sae = 새번역(public/bible/sae)
+const VERSIONS = {
+  ko: { books: 'data/bible-books.json', chapters: 'data/bible-chapters.jsonl', outDir: 'public/bible' },
+  en: { books: 'data/bible-books.en.json', chapters: 'data/bible-chapters.en.jsonl', outDir: 'public/bible/en' },
+  gae: { books: 'data/bible-books.json', chapters: 'data/bible-chapters.gae.jsonl', outDir: 'public/bible/gae' },
+  nkt: { books: 'data/bible-books.json', chapters: 'data/bible-chapters.nkt.jsonl', outDir: 'public/bible/nkt' },
+  sae: { books: 'data/bible-books.json', chapters: 'data/bible-chapters.sae.jsonl', outDir: 'public/bible/sae' },
+}
 const lang = process.argv.includes('--lang') ? process.argv[process.argv.indexOf('--lang') + 1] : 'ko'
-if (lang !== 'ko' && lang !== 'en') {
+if (!VERSIONS[lang]) {
   console.error(`unsupported lang: ${lang}`)
   process.exit(1)
 }
 
-const BOOKS_PATH = lang === 'en' ? 'data/bible-books.en.json' : 'data/bible-books.json'
-const CHAPTERS_PATH = lang === 'en' ? 'data/bible-chapters.en.jsonl' : 'data/bible-chapters.jsonl'
+const BOOKS_PATH = VERSIONS[lang].books
+const CHAPTERS_PATH = VERSIONS[lang].chapters
 const PACKAGE_PATH = 'package.json'
-const OUT_DIR = lang === 'en' ? 'public/bible/en' : 'public/bible'
+const OUT_DIR = VERSIONS[lang].outDir
 
 async function readJson(path) {
   return JSON.parse(await readFile(path, 'utf8'))
