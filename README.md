@@ -138,12 +138,14 @@ Build Command: npm run build:sermon
 Output Directory: dist-sermon
 ```
 
-Vercel 대시보드에서 Build Command를 바꿀 수 없으면 환경변수만 추가합니다.
+Vercel 대시보드에서 Build Command를 바꿀 수 없으면 환경변수만 추가합니다. 저장소의
+`vercel.json`이 Output Directory를 `dist`로 고정하므로 `npm run build`는 sermon도
+바인더처럼 `dist`에 생성합니다.
 
 ```text
 APP_TARGET=sermon
 Build Command: npm run build
-Output Directory: dist-sermon
+Output Directory: dist
 ```
 
 CLI로 배포할 때는 아래 설정 파일을 사용합니다.
