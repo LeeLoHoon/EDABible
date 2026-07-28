@@ -16,11 +16,16 @@ import {
 import { loadSermonPassages, sermonPassagesLabel, type SermonPassageText } from '../sermon'
 import { isWithinMeditationPeriod, meditationPeriod } from '../sermonWeek'
 import { applyRanges, HIGHLIGHT_COLORS, removeRange } from '../highlights'
+import { BIBLE_VERSIONS, getBibleVersion, setBibleVersion, type BibleVersion } from '../bibleVersion'
+import { getLang } from '../i18n/lang'
 import type { Field, FieldMode, HighlightColor, VerseHighlight } from '../types'
 import { formatEntryDateDot } from '../i18n/format'
 import { t } from '../i18n/strings'
 
 const SAVE_DEBOUNCE_MS = 800
+
+/** memo된 PassageText가 헛되이 재렌더되지 않도록 빈 목록은 안정 참조로 넘긴다 */
+const EMPTY_RANGES: VerseHighlight[] = []
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
 
@@ -45,6 +50,9 @@ export default function SermonNotePage() {
   const [mode, setMode] = useState<FieldMode>('text')
   const [penColor, setPenColor] = useState<HighlightColor | null>(null)
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
+  const [bibleVersion, setBibleVersionState] = useState<BibleVersion>(() => getBibleVersion())
+  // 영어 모드는 역본 축이 없다(항상 영어 The Message) — 형광펜도 기본 저장소를 쓴다
+  const effectiveVersion: BibleVersion = getLang() === 'en' ? 'msg' : bibleVersion
 
   const saveTimerRef = useRef<number | null>(null)
   const pendingNoteRef = useRef<SermonNote | null>(null)
@@ -110,7 +118,8 @@ export default function SermonNotePage() {
     return () => {
       alive = false
     }
-  }, [sermon])
+    // bibleVersion이 바뀌면 같은 본문을 새 역본으로 다시 불러온다(loadBook이 저장된 역본을 읽는다)
+  }, [sermon, bibleVersion])
 
   const scheduleSave = useCallback((next: SermonNote) => {
     pendingNoteRef.current = next
@@ -177,20 +186,44 @@ export default function SermonNotePage() {
   }
   const applyHighlights = useCallback(
     (adds: VerseHighlight[]) =>
-      updateNote((prev) => ({
-        ...prev,
-        highlightRanges: applyRanges(prev.highlightRanges, adds),
-      })),
-    [updateNote],
+      updateNote((prev) =>
+        effectiveVersion === 'msg'
+          ? { ...prev, highlightRanges: applyRanges(prev.highlightRanges, adds) }
+          : {
+              ...prev,
+              highlightVersions: {
+                ...prev.highlightVersions,
+                [effectiveVersion]: applyRanges(prev.highlightVersions[effectiveVersion] ?? [], adds),
+              },
+            },
+      ),
+    [updateNote, effectiveVersion],
   )
   const removeHighlight = useCallback(
     (key: string, start: number, end: number) =>
-      updateNote((prev) => ({
-        ...prev,
-        highlightRanges: removeRange(prev.highlightRanges, key, start, end),
-      })),
-    [updateNote],
+      updateNote((prev) =>
+        effectiveVersion === 'msg'
+          ? { ...prev, highlightRanges: removeRange(prev.highlightRanges, key, start, end) }
+          : {
+              ...prev,
+              highlightVersions: {
+                ...prev.highlightVersions,
+                [effectiveVersion]: removeRange(
+                  prev.highlightVersions[effectiveVersion] ?? [],
+                  key,
+                  start,
+                  end,
+                ),
+              },
+            },
+      ),
+    [updateNote, effectiveVersion],
   )
+  const selectBibleVersion = (next: BibleVersion) => {
+    if (next === bibleVersion) return
+    setBibleVersion(next)
+    setBibleVersionState(next)
+  }
 
   const setModeAll = (nextMode: FieldMode) => {
     setMode(nextMode)
@@ -224,6 +257,12 @@ export default function SermonNotePage() {
   const passageChunks = passages?.chunks ?? []
   const passageStart = passages?.startChapter ?? 1
   const passageLabel = sermonPassagesLabel(sermon.passages)
+  const activeHighlights =
+    effectiveVersion === 'msg'
+      ? note.highlightRanges
+      : note.highlightVersions[effectiveVersion] ?? EMPTY_RANGES
+  const versionNames = t('bibleVersionNames')
+  const showVersionToggle = getLang() === 'ko'
   const serviceLabelText =
     sermon.service === 'morning' ? t('sermonServiceMorning') : t('sermonServiceAfternoon')
 
@@ -318,13 +357,30 @@ export default function SermonNotePage() {
             )}
           </div>
 
+          {showVersionToggle && (
+            <div className="mt-2 inline-flex select-none rounded-full bg-rose-chip p-0.5">
+              {BIBLE_VERSIONS.map((version) => (
+                <button
+                  key={version}
+                  type="button"
+                  onClick={() => selectBibleVersion(version)}
+                  className={`rounded-full px-2.5 py-1 text-xs font-bold transition ${
+                    bibleVersion === version ? 'bg-rose-accent-deep text-white' : 'text-rose-key'
+                  }`}
+                >
+                  {versionNames[version]}
+                </button>
+              ))}
+            </div>
+          )}
+
           <div className="mt-2">
             {passages ? (
               passageChunks.length > 0 ? (
                 <PassageText
                   chunks={passageChunks}
                   startChapter={passageStart}
-                  highlightRanges={note.highlightRanges}
+                  highlightRanges={activeHighlights}
                   onApplyRanges={applyHighlights}
                   onRemoveRange={removeHighlight}
                   penColor={penColor}

@@ -98,7 +98,10 @@ export interface SermonNote {
   sermonId: string
   pointAnswers: Field[]
   freeNote: Field
+  /** 메시지성경(기본 역본) 형광펜 — 기존 데이터와의 호환을 위해 이름을 유지한다 */
   highlightRanges: VerseHighlight[]
+  /** 다른 역본(gae/nkt)의 형광펜 — 역본마다 글자 위치가 달라 분리 저장한다 */
+  highlightVersions: Record<string, VerseHighlight[]>
   updatedAt: number
 }
 
@@ -461,6 +464,7 @@ export function createSermonNote(sermonId: string, pointCount: number): SermonNo
     pointAnswers: Array.from({ length: pointCount }, () => emptyField()),
     freeNote: emptyField(),
     highlightRanges: [],
+    highlightVersions: {},
     updatedAt: Date.now(),
   }
 }
@@ -477,6 +481,7 @@ function normalizeSermonNote(
     pointAnswers: Array.from({ length: pointCount }, (_, index) => answers[index] ?? emptyField()),
     freeNote: note?.freeNote ?? emptyField(),
     highlightRanges: note?.highlightRanges ?? [],
+    highlightVersions: note?.highlightVersions ?? {},
     updatedAt: note?.updatedAt ?? Date.now(),
   }
 }

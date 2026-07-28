@@ -1,6 +1,8 @@
-/** 메시지 성경 로더. IndexedDB 캐시를 우선 사용하고, 없으면 public/bible/ 에서 가져온다. */
+/** 성경 로더. IndexedDB 캐시를 우선 사용하고, 없으면 public/bible/ 에서 가져온다.
+    한국어는 역본(msg/gae/nkt)별 하위 폴더를 읽고, Supabase 원격 본문·편집은 msg 전용이다. */
 
 import { db } from './db'
+import { getBibleVersion } from './bibleVersion'
 import { getLang } from './i18n/lang'
 import { t } from './i18n/strings'
 import {
@@ -48,7 +50,9 @@ let indexCache: Promise<BookMeta[]> | null = null
 const bookCache = new Map<string, Promise<BookDoc>>()
 
 function bibleAssetKey(file: string): string {
-  return getLang() === 'en' ? `en/${file}` : file
+  if (getLang() === 'en') return `en/${file}`
+  const version = getBibleVersion()
+  return version === 'msg' ? file : `${version}/${file}`
 }
 
 async function fetchJson<T>(url: string, message: string): Promise<T> {
@@ -60,9 +64,11 @@ async function fetchJson<T>(url: string, message: string): Promise<T> {
 export function loadIndex(): Promise<BookMeta[]> {
   if (!indexCache) {
     // 언어 전환은 페이지 리로드를 동반하므로 메모리 캐시는 세션당 한 언어만 담는다.
+    // 역본 전환은 리로드 없이 일어나지만 index 내용(책 목록·장수)이 역본 간 동일해 안전하다.
     indexCache = (async () => {
-      const id = getLang() === 'en' ? 'index:en' : 'index'
-      const indexFile = bibleAssetKey('index.json')
+      const indexKey = bibleAssetKey('index.json')
+      const id = indexKey === 'index.json' ? 'index' : `index:${indexKey.split('/')[0]}`
+      const indexFile = indexKey
       const cached = await db.bibleIndex.get(id)
       if (cached?.build === BUILD && Array.isArray(cached.items)) {
         return cached.items as BookMeta[]
@@ -101,7 +107,8 @@ export function loadBook(file: string): Promise<BookDoc> {
         })
       }
 
-      if (getLang() === 'ko') {
+      // Supabase bible_chapters는 메시지성경 원문만 담는다 — 다른 역본은 정적 산출물 그대로
+      if (getLang() === 'ko' && getBibleVersion() === 'msg') {
         try {
           const remoteDoc = await loadRemoteBook(file, doc)
           if (remoteDoc) {
@@ -141,6 +148,7 @@ export function chapterTextAt(doc: BookDoc, chapter: number): string {
 
 export async function saveBibleChapterText(file: string, chapter: number, text: string): Promise<BookDoc> {
   if (getLang() === 'en') throw new Error(t('bibleEditBlocked'))
+  if (getBibleVersion() !== 'msg') throw new Error(t('bibleVersionEditBlocked'))
   const doc = await loadBook(file)
   const existing = doc.chapters.find((item) => item.chapter === chapter)
   const previousText = existing?.text ?? ''
@@ -181,6 +189,7 @@ export async function saveBibleChapterText(file: string, chapter: number, text: 
 
 export async function finalizeBibleChapter(file: string, chapter: number): Promise<BookDoc> {
   if (getLang() === 'en') throw new Error(t('bibleEditBlocked'))
+  if (getBibleVersion() !== 'msg') throw new Error(t('bibleVersionEditBlocked'))
   const doc = await loadBook(file)
   const existing = doc.chapters.find((item) => item.chapter === chapter)
 
@@ -213,6 +222,7 @@ export async function finalizeBibleChapter(file: string, chapter: number): Promi
 /** 완료 처리를 되돌려 다시 수정할 수 있게 한다 (개발자 전용 경로). */
 export async function unfinalizeBibleChapter(file: string, chapter: number): Promise<BookDoc> {
   if (getLang() === 'en') throw new Error(t('bibleEditBlocked'))
+  if (getBibleVersion() !== 'msg') throw new Error(t('bibleVersionEditBlocked'))
   const doc = await loadBook(file)
   const existing = doc.chapters.find((item) => item.chapter === chapter)
 
