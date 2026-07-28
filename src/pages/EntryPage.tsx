@@ -1,5 +1,8 @@
 import { useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+
+/** 묵상 노트 홈 경로 — 통합(all) 배포는 /note, 단독 배포는 앱 루트 */
+const NOTE_HOME_PATH = __APP_TARGET__ === 'all' ? '/note' : '/'
 import { enableBibleCopy } from '../bibleCopy'
 import { useEntry } from '../hooks/useEntry'
 import FieldEditor from '../components/FieldEditor'
@@ -94,7 +97,7 @@ export default function EntryPage() {
     return (
       <div className="p-8 text-center text-rose-key">
         {t('entryNotFound')}
-        <button onClick={() => navigate('/')} className="ml-2 text-rose-accent underline">
+        <button onClick={() => navigate(NOTE_HOME_PATH)} className="ml-2 text-rose-accent underline">
           {t('entryHome')}
         </button>
       </div>
@@ -106,7 +109,7 @@ export default function EntryPage() {
       {/* 헤더 */}
       <header className="sticky top-0 z-10 flex items-center justify-between border-b border-rose-line bg-rose-bg/90 px-4 py-3 backdrop-blur">
         <button
-          onClick={() => navigate('/')}
+          onClick={() => navigate(NOTE_HOME_PATH)}
           className="shrink-0 text-sm text-rose-key hover:text-rose-accent"
         >
           {t('entryBack')}
