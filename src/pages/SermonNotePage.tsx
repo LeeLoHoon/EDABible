@@ -13,7 +13,7 @@ import {
   type Sermon,
   type SermonNote,
 } from '../db'
-import { loadSermonPassages, sermonPassagesLabel, type SermonPassageText } from '../sermon'
+import { loadSermonPassages, SERMON_LIST_PATH, sermonPassagesLabel, type SermonPassageText } from '../sermon'
 import { isWithinMeditationPeriod, meditationPeriod } from '../sermonWeek'
 import { applyRanges, HIGHLIGHT_COLORS, removeRange } from '../highlights'
 import { BIBLE_VERSIONS, getBibleVersion, setBibleVersion, type BibleVersion } from '../bibleVersion'
@@ -243,7 +243,7 @@ export default function SermonNotePage() {
         {t('sermonNotFound')}
         <button
           type="button"
-          onClick={() => navigate('/')}
+          onClick={() => navigate(SERMON_LIST_PATH)}
           className="ml-2 text-rose-accent underline"
         >
           {t('sermonBack')}
@@ -271,7 +271,7 @@ export default function SermonNotePage() {
       <header className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-rose-line bg-rose-bg/90 px-4 py-3 backdrop-blur">
         <button
           type="button"
-          onClick={() => navigate('/')}
+          onClick={() => navigate(SERMON_LIST_PATH)}
           className="shrink-0 text-sm font-bold text-rose-key hover:text-rose-accent"
         >
           {t('sermonBack')}

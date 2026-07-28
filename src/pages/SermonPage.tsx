@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../authState'
 import LangToggle from '../components/LangToggle'
 import SermonAdminForm from '../components/SermonAdminForm'
@@ -219,10 +219,19 @@ export default function SermonPage() {
         )}
         <div className="mx-auto flex max-w-3xl items-center justify-between gap-3">
           <div className="flex w-24 shrink-0 items-center">
-            <span className="flex flex-col leading-tight">
-              <span className="text-[11px] font-black tracking-[0.3em] text-rose-key/70">EDA</span>
-              <span className="font-mono text-[9px] text-rose-key/45">v{__BUILD__}</span>
-            </span>
+            {__APP_TARGET__ === 'all' ? (
+              <Link to="/" className="flex flex-col leading-tight" aria-label={t('sermonGoHome')}>
+                <span className="text-[11px] font-black tracking-[0.3em] text-rose-key/70">
+                  ← EDA
+                </span>
+                <span className="font-mono text-[9px] text-rose-key/45">v{__BUILD__}</span>
+              </Link>
+            ) : (
+              <span className="flex flex-col leading-tight">
+                <span className="text-[11px] font-black tracking-[0.3em] text-rose-key/70">EDA</span>
+                <span className="font-mono text-[9px] text-rose-key/45">v{__BUILD__}</span>
+              </span>
+            )}
           </div>
           <h1
             onClick={handleAdminTap}

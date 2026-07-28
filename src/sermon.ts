@@ -8,6 +8,9 @@ import type { PassageChunk } from './components/BiblePicker'
 import type { SermonPassage } from './db'
 import { bookOrderByName } from './i18n/bibleBookNames'
 
+/** 설교 목록 경로 — 단독 배포는 앱 루트, 통합(all) 배포는 /sermon 아래에 산다 */
+export const SERMON_LIST_PATH = __APP_TARGET__ === 'all' ? '/sermon' : '/'
+
 /** 관리자가 절 범위를 적었으면 그대로 쓰고, 아니면 장 단위 참조로 표기한다 */
 export function sermonPassageLabel(passage: SermonPassage): string {
   if (passage.verseLabel) return `${passage.book} ${passage.verseLabel}`

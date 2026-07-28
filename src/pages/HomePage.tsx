@@ -69,12 +69,18 @@ export default function HomePage() {
   return (
     <div className="relative mx-auto max-w-2xl">
       {__APP_TARGET__ === 'all' && (
-        <div className="absolute left-4 top-4 z-10">
+        <div className="absolute left-4 top-4 z-10 flex flex-wrap gap-2">
           <Link
             to="/binder"
             className="rounded-lg border border-rose-line bg-rose-card/80 px-3 py-2 text-sm font-bold text-rose-key shadow-sm"
           >
             {t('homeBinder')}
+          </Link>
+          <Link
+            to="/sermon"
+            className="rounded-lg border border-rose-line bg-rose-card/80 px-3 py-2 text-sm font-bold text-rose-key shadow-sm"
+          >
+            {t('homeSermon')}
           </Link>
         </div>
       )}

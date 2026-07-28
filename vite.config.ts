@@ -30,7 +30,7 @@ const appMeta = {
   all: {
     name: 'EDABible',
     shortName: 'EDABible',
-    description: '말씀 묵상 노트와 에다 SPL 바인더',
+    description: '말씀 묵상 노트·주간 말씀 묵상·에다 SPL 바인더',
   },
   sermon: {
     name: '주간 말씀 묵상',

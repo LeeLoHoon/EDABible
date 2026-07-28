@@ -80,10 +80,18 @@ npm run pull:supabase-bible
 npm run build:note    # dist: 말씀 묵상 노트만 배포, public/binder 제외
 npm run build:binder  # dist-binder: 에다 SPL 바인더만 배포, public/bible 제외
 npm run build:sermon  # dist-sermon: 주간 말씀 묵상만 배포, public/binder 제외
-npm run build:all     # dist-all: 두 기능을 함께 포함한 통합 배포
+npm run build:all     # dist-all: 노트·바인더·주간 묵상 통합 배포
 ```
 
-Vercel 기본 배포는 `npm run build`를 사용하므로 `dist`에 말씀 묵상 노트만 생성합니다.
+Vercel 기본 배포는 `npm run build`를 사용하며 `APP_TARGET` 환경변수에 따라 대상이 정해지고
+산출물은 항상 `dist`입니다(저장소 `vercel.json`이 Output Directory를 `dist`로 고정).
+
+### 통합 배포 (현행)
+
+노트가 쓰던 `eda-bible` 프로젝트에 `APP_TARGET=all`을 설정해 한 도메인에서 세 기능을 모두
+서비스합니다. 노트 사용자의 로컬 데이터(IndexedDB)는 origin이 그대로라 보존되고, 바인더는
+로그인하면 Supabase에서 복구되며, 기존 바인더·주간 묵상 단독 배포에는 새 주소 안내 배너가
+표시됩니다. 통합 앱 경로: `/#/`(노트 홈), `/#/binder`, `/#/sermon`.
 
 ### Vercel 배포 채널 2개 구성
 
