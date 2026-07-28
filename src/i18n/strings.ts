@@ -185,8 +185,8 @@ const ko = {
 
   /** 새신자 세트 전용 — 00-01 원본 쪽번호와 같다 */
   binderCheckpoints: [
-    { id: 'cover', label: '표지', page: 1 }, { id: 'starter-00', label: '00 목차', page: 7 },
-    { id: 'accept-prayer', label: '영접 기도', page: 53 }, { id: 'starter-01', label: '01 목차', page: 57 },
+    { id: 'cover', label: '표지', page: 1 }, { id: 'starter-00', label: '그리스도인의 확신', page: 9 },
+    { id: 'accept-prayer', label: '영접 기도', page: 53 },
     { id: 'strength', label: '강점 찾기', page: 59 }, { id: 'mission', label: '사명 찾기', page: 63 },
     { id: 'eda-prayer', label: '에다 기도문', page: 71 }, { id: 'deliverance', label: '축사 기도문', page: 95 },
   ],
@@ -343,7 +343,7 @@ const en: Catalog = {
   bibleVersionNames: { msg: 'MSG', gae: 'NKRV', nkt: 'NKT', sae: 'RNKSV' } as Record<string, string>,
   /** 새신자 세트 전용 — 00-01 원본 쪽번호와 같다 */
   binderCheckpoints: [
-    { id: 'cover', label: 'Cover', page: 1 }, { id: 'starter-00', label: '00 Contents', page: 7 }, { id: 'accept-prayer', label: 'Prayer of Acceptance', page: 53 }, { id: 'starter-01', label: '01 Contents', page: 57 }, { id: 'strength', label: 'Find Strengths', page: 59 }, { id: 'mission', label: 'Find Mission', page: 63 }, { id: 'eda-prayer', label: 'EDA Prayer', page: 71 }, { id: 'deliverance', label: 'Deliverance Prayer', page: 95 },
+    { id: 'cover', label: 'Cover', page: 1 }, { id: 'starter-00', label: 'Christian Assurance', page: 9 }, { id: 'accept-prayer', label: 'Prayer of Acceptance', page: 53 }, { id: 'strength', label: 'Find Strengths', page: 59 }, { id: 'mission', label: 'Find Mission', page: 63 }, { id: 'eda-prayer', label: 'EDA Prayer', page: 71 }, { id: 'deliverance', label: 'Deliverance Prayer', page: 95 },
   ],
   binderSetTitle: (kind) => ({ starter: 'Getting Started', meditation: 'Bible Meditation', timothy: 'Raising a Timothy', bookStudy: 'Book Study' })[kind],
   binderSetSelect: 'Select Set', binderSetCount: (n) => `${n} sets`, binderSetPages: (n) => `${n} pages`, binderSelectSetAria: (title) => `Select ${title}`,
