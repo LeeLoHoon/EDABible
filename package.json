@@ -20,6 +20,7 @@
     "pull:supabase-bible": "node scripts/pull_supabase_bible.mjs && npm run build:bible",
     "migrate:binder-works": "node scripts/migrate_binder_works_to_sets.mjs",
     "test:binder-map": "node --test scripts/binder_legacy_map.test.mjs",
+    "test:binder-videos": "node --test scripts/binder_videos.test.mjs",
     "validate:bible": "node scripts/validate-bible.mjs && node scripts/validate-bible.mjs --lang gae && node scripts/validate-bible.mjs --lang nkt && node scripts/validate-bible.mjs --lang sae",
     "lint": "eslint .",
     "preview": "vite preview"

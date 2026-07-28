@@ -221,6 +221,49 @@ textarea {
   }
 }
 
+/* 바인더 뷰어 전환 — PDF↔영상 인터스티셜을 넘길 때 페이지를 넘기는 느낌.
+   전진(다음 쪽)은 오른쪽에서 슬라이드-인, 후진(이전 쪽)은 왼쪽에서. 각 방향
+   클래스는 React key가 바뀔 때 새 요소가 마운트되며 한 번 재생된다. */
+@keyframes binderViewInForward {
+  from {
+    opacity: 0;
+    transform: translate3d(28px, 0, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes binderViewInBackward {
+  from {
+    opacity: 0;
+    transform: translate3d(-28px, 0, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.binder-view-enter-forward {
+  animation: binderViewInForward 260ms ease-out both;
+  will-change: transform, opacity;
+}
+
+.binder-view-enter-backward {
+  animation: binderViewInBackward 260ms ease-out both;
+  will-change: transform, opacity;
+}
+
+/* 사용자가 접근성 이유로 모션을 줄이도록 설정했으면 즉시 표시한다. */
+@media (prefers-reduced-motion: reduce) {
+  .binder-view-enter-forward,
+  .binder-view-enter-backward {
+    animation: none;
+  }
+}
+
 /* 가로 스크롤 영역의 스크롤바 숨김 (책장 등) */
 .no-scrollbar {
   scrollbar-width: none;
