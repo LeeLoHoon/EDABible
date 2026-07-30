@@ -1,5 +1,5 @@
-import { useRef, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useEffect, useRef, useState } from 'react'
+import { useBlocker, useNavigate, useParams } from 'react-router-dom'
 
 /** 묵상 노트 홈 경로 — 통합(all) 배포는 /note, 단독 배포는 앱 루트 */
 const NOTE_HOME_PATH = __APP_TARGET__ === 'all' ? '/note' : '/'
@@ -32,10 +32,26 @@ const TABS: { key: Tab; label: string; icon: string }[] = [
 const DEV_COPY_TAP_COUNT = 5
 const DEV_COPY_TAP_WINDOW_MS = 2_000
 
+const ENTRY_ERROR_MESSAGE_KEYS = {
+  'journal-unavailable': 'entryJournalUnavailable',
+  'save-failed': 'entrySaveFailed',
+  'transition-blocked': 'entryTransitionBlocked',
+  'load-failed': 'entryLoadFailed',
+} as const
+
 export default function EntryPage() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { entry, loading, update } = useEntry(id)
+  const {
+    entry,
+    loading,
+    error,
+    editingBlocked,
+    navigationBlocked,
+    retry,
+    update,
+  } = useEntry(id)
+  const blocker = useBlocker(navigationBlocked)
   const [tab, setTab] = useState<Tab>('meditation')
   const [passage, setPassage] = useState<PassageInfo | null>(null)
   const [shareOpen, setShareOpen] = useState(false)
@@ -52,6 +68,11 @@ export default function EntryPage() {
   // 막던 문제) — 공유를 누를 때만 잠깐 DOM에 올려 캡처한다.
   const [showShareCard, setShowShareCard] = useState(false)
   const canShare = Object.values(shareSections).some(Boolean)
+  const errorMessage = error ? t(ENTRY_ERROR_MESSAGE_KEYS[error]) : null
+
+  useEffect(() => {
+    if (blocker.state === 'blocked') blocker.reset()
+  }, [blocker])
 
   const handleDateTap = () => {
     const now = performance.now()
@@ -90,6 +111,25 @@ export default function EntryPage() {
     }
   }
 
+  if (error && !entry) {
+    return (
+      <div className="grid min-h-full place-items-center px-4 py-8">
+        <section
+          role="alert"
+          className="w-full max-w-sm rounded-2xl border border-rose-accent/40 bg-rose-card px-4 py-5 text-center shadow-sm"
+        >
+          <p className="text-sm font-bold leading-6 text-rose-accent">{errorMessage}</p>
+          <button
+            type="button"
+            onClick={() => void retry()}
+            className="mt-4 min-h-11 rounded-full bg-rose-accent-deep px-5 py-2.5 text-sm font-bold text-white shadow-sm shadow-rose-accent/25 transition active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-rose-accent focus:ring-offset-2 focus:ring-offset-rose-bg"
+          >
+            {t('entryRetrySave')}
+          </button>
+        </section>
+      </div>
+    )
+  }
   if (loading) {
     return <div className="p-8 text-center text-rose-key/70">{t('entryLoading')}</div>
   }
@@ -110,7 +150,9 @@ export default function EntryPage() {
       <header className="sticky top-0 z-10 flex items-center justify-between border-b border-rose-line bg-rose-bg/90 px-4 py-3 backdrop-blur">
         <button
           onClick={() => navigate(NOTE_HOME_PATH)}
-          className="shrink-0 text-sm text-rose-key hover:text-rose-accent"
+          disabled={navigationBlocked}
+          aria-disabled={navigationBlocked}
+          className="shrink-0 text-sm text-rose-key hover:text-rose-accent disabled:cursor-not-allowed disabled:text-rose-key/40 disabled:hover:text-rose-key/40"
         >
           {t('entryBack')}
         </button>
@@ -173,8 +215,30 @@ export default function EntryPage() {
         </div>
       </header>
 
+      {error && (
+        <aside
+          role="alert"
+          className="mx-4 mt-4 flex items-start justify-between gap-3 rounded-xl border border-rose-accent/40 bg-rose-card px-3 py-2.5 shadow-sm"
+        >
+          <p className="min-w-0 py-1 text-sm font-bold leading-5 text-rose-accent">
+            {errorMessage}
+          </p>
+          <button
+            type="button"
+            onClick={() => void retry()}
+            className="min-h-11 shrink-0 rounded-full bg-rose-accent-deep px-4 py-2 text-sm font-bold text-white shadow-sm shadow-rose-accent/25 transition active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-rose-accent focus:ring-offset-2 focus:ring-offset-rose-bg"
+          >
+            {t('entryRetrySave')}
+          </button>
+        </aside>
+      )}
+
       {/* 본문 */}
-      <main className="flex-1 px-4 py-5">
+      <main
+        inert={editingBlocked}
+        aria-disabled={editingBlocked}
+        className={`flex-1 px-4 py-5${editingBlocked ? ' pointer-events-none opacity-50' : ''}`}
+      >
         {/* 탭을 옮겨도 본문을 다시 받아오지 않도록 마운트는 유지하고 보이기만 감춘다 */}
         <div className={tab === 'meditation' ? 'mb-4' : 'hidden'}>
           <BiblePicker

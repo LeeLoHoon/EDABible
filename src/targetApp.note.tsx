@@ -1,14 +1,13 @@
-import { HashRouter, Routes, Route } from 'react-router-dom'
+import { createHashRouter, Navigate, RouterProvider } from 'react-router-dom'
 import HomePage from './pages/HomePage'
 import EntryPage from './pages/EntryPage'
 
+const router = createHashRouter([
+  { path: '/', element: <HomePage /> },
+  { path: '/entry/:id', element: <EntryPage /> },
+  { path: '*', element: <Navigate to="/" replace /> },
+])
+
 export default function NoteApp() {
-  return (
-    <HashRouter>
-      <Routes>
-        <Route path="/" element={<HomePage />} />
-        <Route path="/entry/:id" element={<EntryPage />} />
-      </Routes>
-    </HashRouter>
-  )
+  return <RouterProvider router={router} />
 }
