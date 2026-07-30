@@ -48,3 +48,10 @@ export function migrateLegacyWorks<TField, TTextBox>(
   oldWorks: Array<LegacyBinderWork<TField, TTextBox>>,
   sets: BinderSetSource[],
 ): Array<LegacyBinderWork<TField, TTextBox>>
+
+/** migrated data와 기존 target을 합치며 같은 key에서는 existing target을 보존한다. */
+export function mergeBinderWorks<TField, TTextBox>(
+  migrated: LegacyBinderWork<TField, TTextBox>,
+  existing: LegacyBinderWork<TField, TTextBox>,
+  maximumPage?: number,
+): LegacyBinderWork<TField, TTextBox>

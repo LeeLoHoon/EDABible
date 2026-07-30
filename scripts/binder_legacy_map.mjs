@@ -144,6 +144,60 @@ function cloneWork(work) {
   }
 }
 
+function fieldHasContent(field) {
+  return (
+    (typeof field?.text === 'string' && field.text.trim().length > 0) ||
+    (Array.isArray(field?.strokes) && field.strokes.length > 0)
+  )
+}
+
+function validLastPage(page, maximumPage) {
+  return Number.isInteger(page) && page >= 1 && page <= maximumPage
+}
+
+/** migrated data 아래에 기존 target을 겹쳐 합친다. 같은 key/id에서는 existing이 이긴다. */
+export function mergeBinderWorks(migrated, existing, maximumPage = Number.POSITIVE_INFINITY) {
+  if (migrated.bookId !== existing.bookId) {
+    throw new Error(`BinderWork merge target mismatch: ${migrated.bookId}/${existing.bookId}`)
+  }
+
+  const existingBookmarkIds = new Set()
+  const existingBookmarks = (existing.bookmarks ?? []).filter((bookmark) => {
+    if (existingBookmarkIds.has(bookmark.id)) return false
+    existingBookmarkIds.add(bookmark.id)
+    return true
+  })
+  const migratedBookmarkIds = new Set()
+  const migratedBookmarks = (migrated.bookmarks ?? []).filter((bookmark) => {
+    if (existingBookmarkIds.has(bookmark.id) || migratedBookmarkIds.has(bookmark.id)) return false
+    migratedBookmarkIds.add(bookmark.id)
+    return true
+  })
+  return {
+    bookId: existing.bookId,
+    transcription: fieldHasContent(existing.transcription)
+      ? existing.transcription
+      : migrated.transcription,
+    notes: fieldHasContent(existing.notes) ? existing.notes : migrated.notes,
+    pageInputs: { ...(migrated.pageInputs ?? {}), ...(existing.pageInputs ?? {}) },
+    pageTextBoxes: { ...(migrated.pageTextBoxes ?? {}), ...(existing.pageTextBoxes ?? {}) },
+    bookmarks: [...existingBookmarks, ...migratedBookmarks],
+    ...(validLastPage(existing.lastPageNumber, maximumPage)
+      ? { lastPageNumber: existing.lastPageNumber }
+      : validLastPage(migrated.lastPageNumber, maximumPage)
+        ? { lastPageNumber: migrated.lastPageNumber }
+        : {}),
+    checkpointPages: {
+      ...(migrated.checkpointPages ?? {}),
+      ...(existing.checkpointPages ?? {}),
+    },
+    updatedAt: Math.max(
+      Number.isFinite(migrated.updatedAt) ? migrated.updatedAt : 0,
+      Number.isFinite(existing.updatedAt) ? existing.updatedAt : 0,
+    ),
+  }
+}
+
 function copyPageRecord(source, field, oldBookId, sets, targets) {
   for (const [oldPage, value] of Object.entries(source ?? {})) {
     const mapped = legacyPageToSet(oldBookId, Number(oldPage), sets)

@@ -4,6 +4,7 @@ import test from 'node:test'
 import {
   legacyBinderBooks,
   legacyPageToSet,
+  mergeBinderWorks,
   migrateLegacyWorks,
 } from './binder_legacy_map.mjs'
 
@@ -129,4 +130,62 @@ test('U13: 책갈피 UUID를 보존하고 표지 책갈피에 접미사를 붙�
   assert.ok(bookmark)
   assert.equal(bookmark.id, id)
   assert.equal(bookmark.label, '표지 (구 표지·목차)')
+})
+
+test('U14: migrated와 existing target을 손실 없이 합치고 direct conflict는 existing이 이긴다', () => {
+  const migrated = work('spl-timothy', {
+    transcription: { mode: 'text', text: 'legacy transcription', strokes: [] },
+    notes: { mode: 'text', text: 'legacy notes', strokes: [] },
+    pageInputs: {
+      1: { mode: 'text', text: 'legacy conflict', strokes: [] },
+      2: { mode: 'text', text: 'legacy only', strokes: [] },
+    },
+    pageTextBoxes: { 3: [{ id: 'legacy-box', x: 0, y: 0, width: 0.5, text: 'legacy' }] },
+    bookmarks: [
+      { id: 'same', page: 1, label: 'legacy conflict', createdAt: 1 },
+      { id: 'legacy-only', page: 2, label: 'legacy only', createdAt: 2 },
+    ],
+    checkpointPages: { 'issue-02': 13, 'issue-03': 25 },
+    lastPageNumber: 13,
+    updatedAt: 20,
+  })
+  const existing = work('spl-timothy', {
+    transcription: { mode: 'text', text: '', strokes: [] },
+    notes: { mode: 'text', text: 'existing notes', strokes: [] },
+    pageInputs: { 1: { mode: 'text', text: 'existing conflict', strokes: [] } },
+    pageTextBoxes: { 4: [{ id: 'existing-box', x: 0, y: 0, width: 0.5, text: 'existing' }] },
+    bookmarks: [
+      { id: 'same', page: 4, label: 'existing conflict', createdAt: 4 },
+      { id: 'existing-only', page: 5, label: 'existing only', createdAt: 5 },
+    ],
+    checkpointPages: { 'issue-02': 14 },
+    lastPageNumber: 14,
+    updatedAt: 10,
+  })
+
+  const merged = mergeBinderWorks(migrated, existing)
+  assert.equal(merged.transcription.text, 'legacy transcription')
+  assert.equal(merged.notes.text, 'existing notes')
+  assert.equal(merged.pageInputs['1'].text, 'existing conflict')
+  assert.equal(merged.pageInputs['2'].text, 'legacy only')
+  assert.deepEqual(Object.keys(merged.pageTextBoxes).sort(), ['3', '4'])
+  assert.deepEqual(merged.bookmarks.map((bookmark) => bookmark.id), [
+    'same',
+    'existing-only',
+    'legacy-only',
+  ])
+  assert.equal(merged.bookmarks[0].label, 'existing conflict')
+  assert.deepEqual(merged.checkpointPages, { 'issue-02': 14, 'issue-03': 25 })
+  assert.equal(merged.lastPageNumber, 14)
+  assert.equal(merged.updatedAt, 20)
+})
+
+test('U15: existing lastPageNumber가 invalid면 migrated valid 위치를 보존한다', () => {
+  const merged = mergeBinderWorks(
+    work('spl-bookstudy', { lastPageNumber: 11, updatedAt: 1 }),
+    work('spl-bookstudy', { lastPageNumber: 999, updatedAt: 2 }),
+    205,
+  )
+  assert.equal(merged.lastPageNumber, 11)
+  assert.equal(merged.updatedAt, 2)
 })
