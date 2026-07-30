@@ -18,23 +18,27 @@ const appTarget =
 const promptUpdateMigrationBuild = '1.5.75'
 const appMeta = {
   note: {
-    name: '말씀 묵상 노트',
-    shortName: '묵상 노트',
+    name: 'EDA 바이블',
+    shortName: 'EDA 바이블',
+    htmlTitle: 'EDA 바이블',
     description: '매일 성경 본문을 필사하고 5가지 질문과 기도로 묵상하는 노트',
   },
   binder: {
     name: '에다 SPL 바인더',
     shortName: 'SPL 바인더',
+    htmlTitle: '에다 SPL 바인더 — EDA 바이블',
     description: '에다 SPL 바인더 PDF를 넘기며 필기하고 책갈피를 남기는 앱',
   },
   all: {
-    name: 'EDABible',
-    shortName: 'EDABible',
-    description: '말씀 묵상 노트·주간 말씀 묵상·에다 SPL 바인더',
+    name: 'EDA 바이블',
+    shortName: 'EDA 바이블',
+    htmlTitle: 'EDA 바이블',
+    description: '말씀 묵상 노트·주간 말씀 묵상·에다 SPL 바인더·사용자 Q&A',
   },
   sermon: {
     name: '주간 말씀 묵상',
     shortName: '말씀 묵상',
+    htmlTitle: '주간 말씀 묵상 — EDA 바이블',
     description: '주일 설교 본문과 묵상 포인트를 한 주 동안 묵상하는 앱',
   },
 }[appTarget]
@@ -49,6 +53,25 @@ function emitVersionFile(): Plugin {
         fileName: 'version.json',
         source: `${JSON.stringify({ version: pkg.version, target: appTarget }, null, 2)}\n`,
       })
+    },
+  }
+}
+
+function escapeHtmlAttribute(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('"', '&quot;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+}
+
+function injectAppHtmlMetadata(): Plugin {
+  return {
+    name: 'inject-app-html-metadata',
+    transformIndexHtml(html) {
+      return html
+        .replaceAll('%APP_HTML_TITLE%', escapeHtmlAttribute(appMeta.htmlTitle))
+        .replaceAll('%APP_SHORT_NAME%', escapeHtmlAttribute(appMeta.shortName))
     },
   }
 }
@@ -88,6 +111,7 @@ export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
+    injectAppHtmlMetadata(),
     emitVersionFile(),
     pruneUnusedPublicAssets(),
     VitePWA({
