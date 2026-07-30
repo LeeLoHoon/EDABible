@@ -8,12 +8,25 @@ import PassageText from '../components/PassageText'
 import VoiceRecorder from '../components/VoiceRecorder'
 import {
   getSermonNote,
+  hasSermonNoteConflict,
   listSermons,
   putSermonNote,
+  resolveSermonConflictKeepLocal,
+  resolveSermonConflictUseRemote,
+  stageSermonNoteLocally,
   type Sermon,
   type SermonNote,
 } from '../db'
-import { loadSermonPassages, SERMON_LIST_PATH, sermonPassagesLabel, type SermonPassageText } from '../sermon'
+import {
+  loadSermonPassages,
+  localizedSermonPassageLabel,
+  localizedSermonPoints,
+  localizedSermonPreacher,
+  localizedSermonSummary,
+  localizedSermonTitle,
+  SERMON_LIST_PATH,
+  type SermonPassageText,
+} from '../sermon'
 import { isWithinMeditationPeriod, meditationPeriod } from '../sermonWeek'
 import { applyRanges, HIGHLIGHT_COLORS, removeRange } from '../highlights'
 import { BIBLE_VERSIONS, getBibleVersion, setBibleVersion, type BibleVersion } from '../bibleVersion'
@@ -21,6 +34,8 @@ import { getLang } from '../i18n/lang'
 import type { Field, FieldMode, HighlightColor, VerseHighlight } from '../types'
 import { formatEntryDateDot } from '../i18n/format'
 import { t } from '../i18n/strings'
+import { registerSaveFlush } from '../saveFlush'
+import { drainPendingRef, ResolvedTaskChain, runSingleFlight } from '../persistenceQueue'
 
 const SAVE_DEBOUNCE_MS = 800
 
@@ -29,10 +44,46 @@ const EMPTY_RANGES: VerseHighlight[] = []
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
 
-function statusLabel(status: SaveStatus): string {
+interface PendingSermonSave {
+  note: SermonNote
+  ownerId?: string
+}
+
+function readPendingSermonSave(ref: { current: PendingSermonSave | null }): PendingSermonSave | null {
+  return ref.current
+}
+
+function isStaleSermonNoteError(error: unknown): boolean {
+  if (error instanceof Error) return error.message.includes('SERMON_NOTE_STALE_REVISION')
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'message' in error &&
+    typeof error.message === 'string' &&
+    error.message.includes('SERMON_NOTE_STALE_REVISION')
+  )
+}
+
+function isOwnerChangedError(error: unknown): boolean {
+  const message =
+    error instanceof Error
+      ? error.message
+      : typeof error === 'object' &&
+          error !== null &&
+          'message' in error &&
+          typeof error.message === 'string'
+        ? error.message
+        : ''
+  return (
+    message.includes('SERMON_NOTE_OWNER_CHANGED') ||
+    message.includes('SERMON_NOTE_OWNER_MISMATCH')
+  )
+}
+
+function statusLabel(status: SaveStatus, errorMessage: string): string {
   if (status === 'saving') return t('sermonSaving')
   if (status === 'saved') return t('sermonSaved')
-  if (status === 'error') return t('sermonSaveErrorInline')
+  if (status === 'error') return errorMessage || t('sermonSaveErrorInline')
   return ''
 }
 
@@ -50,30 +101,103 @@ export default function SermonNotePage() {
   const [mode, setMode] = useState<FieldMode>('text')
   const [penColor, setPenColor] = useState<HighlightColor | null>(null)
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
+  const [saveErrorMessage, setSaveErrorMessage] = useState('')
+  const [saveConflict, setSaveConflict] = useState(false)
+  const [displayedOwnerId, setDisplayedOwnerId] = useState<string | undefined>(userId)
   const [bibleVersion, setBibleVersionState] = useState<BibleVersion>(() => getBibleVersion())
   // 영어 모드는 역본 축이 없다(항상 영어 The Message) — 형광펜도 기본 저장소를 쓴다
   const effectiveVersion: BibleVersion = getLang() === 'en' ? 'msg' : bibleVersion
 
   const saveTimerRef = useRef<number | null>(null)
-  const pendingNoteRef = useRef<SermonNote | null>(null)
-  // 언마운트 시 최신 userId로 즉시 저장하기 위해 ref로 보존한다 — 유실 방지
-  const userIdRef = useRef(userId)
+  const pendingNoteRef = useRef<PendingSermonSave | null>(null)
+  const flushPromiseRef = useRef<Promise<void> | null>(null)
+  const saveChainRef = useRef(new ResolvedTaskChain())
+  const displayedOwnerRef = useRef<string | undefined>(userId)
+  const activeAuthOwnerRef = useRef<string | undefined>(userId)
+  const saveConflictRef = useRef(false)
 
   useEffect(() => {
-    userIdRef.current = userId
+    activeAuthOwnerRef.current = userId
   }, [userId])
+
+  const runOneSave = useCallback(async (pending: PendingSermonSave) => {
+    try {
+      if (pending.ownerId && activeAuthOwnerRef.current !== pending.ownerId) {
+        throw new Error('SERMON_NOTE_OWNER_CHANGED')
+      }
+      const saved = await putSermonNote({ ...pending.note }, pending.ownerId)
+      if (displayedOwnerRef.current === pending.ownerId) {
+        setNote((current) =>
+          current?.sermonId === saved.sermonId
+            ? { ...current, revision: saved.revision }
+            : current,
+        )
+      }
+      const newer = pendingNoteRef.current
+      const hasNewerPending = newer !== null && newer !== pending
+      if (
+        hasNewerPending &&
+        newer.ownerId === pending.ownerId &&
+        newer.note.sermonId === saved.sermonId &&
+        newer.note.revision < saved.revision
+      ) {
+        pendingNoteRef.current = {
+          ...newer,
+          note: { ...newer.note, revision: saved.revision },
+        }
+      }
+      saveConflictRef.current = false
+      setSaveConflict(false)
+      setSaveErrorMessage('')
+      if (!hasNewerPending) setSaveStatus('saved')
+    } catch (error) {
+      if (!pendingNoteRef.current) pendingNoteRef.current = pending
+      const conflict = isStaleSermonNoteError(error)
+      if (conflict && saveTimerRef.current !== null) {
+        window.clearTimeout(saveTimerRef.current)
+        saveTimerRef.current = null
+      }
+      saveConflictRef.current = conflict
+      setSaveConflict(conflict)
+      setSaveErrorMessage(
+        isOwnerChangedError(error) ? t('sermonSaveOwnerChanged') : t('sermonSaveErrorInline'),
+      )
+      setSaveStatus('error')
+      throw error
+    }
+  }, [])
+
+  const flush = useCallback((): Promise<void> => {
+    if (saveTimerRef.current !== null) {
+      window.clearTimeout(saveTimerRef.current)
+      saveTimerRef.current = null
+    }
+    if (flushPromiseRef.current) return flushPromiseRef.current
+    if (saveConflictRef.current) return Promise.reject(new Error('SERMON_NOTE_STALE_REVISION'))
+    return runSingleFlight(flushPromiseRef, () =>
+      drainPendingRef(pendingNoteRef, (pending) =>
+        saveChainRef.current.run(() => runOneSave(pending)),
+      ),
+    )
+  }, [runOneSave])
 
   useEffect(() => {
     if (!id) return
     let alive = true
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setLoading(true)
-    setNotFound(false)
-    setSermon(null)
-    setNote(null)
-    setPassages(null)
 
     ;(async () => {
+      try {
+        await flush()
+      } catch {
+        if (alive) setLoading(false)
+        return
+      }
+      if (!alive) return
+      setLoading(true)
+      setNotFound(false)
+      setSermon(null)
+      setNote(null)
+      setPassages(null)
       const list = await listSermons()
       if (!alive) return
       const target = list.find((s) => s.id === id)
@@ -82,10 +206,20 @@ export default function SermonNotePage() {
         setLoading(false)
         return
       }
-      const loadedNote = await getSermonNote(target.id, target.points.length, userId)
+      const loadedNote = await getSermonNote(
+        target.id,
+        localizedSermonPoints(target, getLang()).length,
+        userId,
+      )
+      const loadedConflict = await hasSermonNoteConflict(target.id, userId)
       if (!alive) return
+      displayedOwnerRef.current = userId
+      setDisplayedOwnerId(userId)
       setSermon(target)
       setNote(loadedNote)
+      saveConflictRef.current = loadedConflict
+      setSaveConflict(loadedConflict)
+      setSaveErrorMessage(loadedConflict ? t('sermonSaveErrorInline') : '')
       // 이전에 저장해둔 입력 방식으로 시작해야 손글씨 획이 갑자기 텍스트 영역 뒤로 사라지지 않는다
       setMode(loadedNote.freeNote.mode)
       setLoading(false)
@@ -99,7 +233,7 @@ export default function SermonNotePage() {
     return () => {
       alive = false
     }
-  }, [id, userId])
+  }, [flush, id, userId])
 
   useEffect(() => {
     if (!sermon) return
@@ -112,7 +246,13 @@ export default function SermonNotePage() {
         // null로 두면 '불러오는 중' 문구에 영영 갇힌다. 빈 본문으로 떨어뜨려 안내를 띄운다.
         console.warn('Sermon passage load failed.', error)
         if (alive) {
-          setPassages({ ref: sermonPassagesLabel(sermon.passages), chunks: [], startChapter: 1 })
+          setPassages({
+            ref: sermon.passages
+              .map((passage) => localizedSermonPassageLabel(passage, getLang()))
+              .join(', '),
+            chunks: [],
+            startChapter: 1,
+          })
         }
       })
     return () => {
@@ -121,53 +261,153 @@ export default function SermonNotePage() {
     // bibleVersion이 바뀌면 같은 본문을 새 역본으로 다시 불러온다(loadBook이 저장된 역본을 읽는다)
   }, [sermon, bibleVersion])
 
-  const scheduleSave = useCallback((next: SermonNote) => {
-    pendingNoteRef.current = next
-    setSaveStatus('saving')
-    if (saveTimerRef.current !== null) window.clearTimeout(saveTimerRef.current)
-    saveTimerRef.current = window.setTimeout(() => {
-      saveTimerRef.current = null
-      const toSave = pendingNoteRef.current
-      if (!toSave) {
-        setSaveStatus('idle')
-        return
-      }
-      putSermonNote(toSave, userIdRef.current)
-        .then(() => {
-          // 저장 도중 새 편집이 들어왔으면 상태를 덮어쓰지 않는다 — 다음 debounce가 계속 처리한다
-          if (pendingNoteRef.current === toSave) {
-            pendingNoteRef.current = null
-            setSaveStatus('saved')
-          }
-        })
-        .catch(() => {
-          if (pendingNoteRef.current === toSave) setSaveStatus('error')
-        })
-    }, SAVE_DEBOUNCE_MS)
-  }, [])
+  const scheduleSave = useCallback(
+    (next: SermonNote) => {
+      pendingNoteRef.current = { note: next, ownerId: userId }
+      void stageSermonNoteLocally(next, userId).catch((error) => {
+        console.warn('Sermon note could not be staged locally.', error)
+        setSaveErrorMessage(t('sermonSaveErrorInline'))
+        setSaveStatus('error')
+      })
+      if (saveConflictRef.current) return
+      setSaveConflict(false)
+      setSaveErrorMessage('')
+      setSaveStatus('saving')
+      if (saveTimerRef.current !== null) window.clearTimeout(saveTimerRef.current)
+      saveTimerRef.current = window.setTimeout(() => {
+        saveTimerRef.current = null
+        void flush().catch(() => undefined)
+      }, SAVE_DEBOUNCE_MS)
+    },
+    [flush, userId],
+  )
 
   useEffect(() => {
-    // 화면을 옮기거나 앱이 닫혀도 debounce 중이던 마지막 편집은 잃지 않고 흘려보낸다
-    return () => {
-      if (saveTimerRef.current !== null) {
-        window.clearTimeout(saveTimerRef.current)
-        saveTimerRef.current = null
-      }
-      const pending = pendingNoteRef.current
-      if (pending) {
-        void putSermonNote(pending, userIdRef.current).catch((error) => {
-          console.warn('Sermon note flush on unmount failed.', error)
-        })
-        pendingNoteRef.current = null
-      }
+    const unregister = registerSaveFlush(flush)
+    const onPageHide = () => void flush().catch(() => undefined)
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') void flush().catch(() => undefined)
     }
-  }, [])
+    window.addEventListener('pagehide', onPageHide)
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    return () => {
+      unregister()
+      window.removeEventListener('pagehide', onPageHide)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+      void flush().catch(() => undefined)
+    }
+  }, [flush])
+
+  const leaveForList = async () => {
+    try {
+      await flush()
+      navigate(SERMON_LIST_PATH)
+    } catch (error) {
+      // 저장 오류를 화면에 유지하고 현재 계정의 편집 화면을 떠나지 않는다.
+      console.warn('Sermon navigation was blocked by an unfinished save.', error)
+    }
+  }
+
+  const handleSignOut = async () => {
+    try {
+      await flush()
+      await signOut()
+    } catch (error) {
+      // 계정 소유 저장이 끝나지 않으면 로그아웃하지 않는다.
+      console.warn('Sermon sign-out was blocked by an unfinished save.', error)
+    }
+  }
+
+  const reloadAfterConflict = async () => {
+    if (!sermon || !userId) return
+    if (saveTimerRef.current !== null) {
+      window.clearTimeout(saveTimerRef.current)
+      saveTimerRef.current = null
+    }
+    pendingNoteRef.current = null
+    setLoading(true)
+    try {
+      await saveChainRef.current.wait()
+      const loaded = await resolveSermonConflictUseRemote(
+        sermon.id,
+        localizedSermonPoints(sermon, getLang()).length,
+        userId,
+      )
+      displayedOwnerRef.current = userId
+      setDisplayedOwnerId(userId)
+      setNote(loaded)
+      setMode(loaded.freeNote.mode)
+      saveChainRef.current.reset()
+      pendingNoteRef.current = null
+      saveConflictRef.current = false
+      setSaveConflict(false)
+      setSaveErrorMessage('')
+      setSaveStatus('idle')
+    } catch (error) {
+      setSaveErrorMessage(
+        isOwnerChangedError(error) ? t('sermonSaveOwnerChanged') : t('sermonSaveErrorInline'),
+      )
+      setSaveStatus('error')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const keepMineAfterConflict = async () => {
+    if (!note || !userId) return
+    if (saveTimerRef.current !== null) {
+      window.clearTimeout(saveTimerRef.current)
+      saveTimerRef.current = null
+    }
+    pendingNoteRef.current = null
+    setSaveStatus('saving')
+    try {
+      await saveChainRef.current.wait()
+      const saved = await resolveSermonConflictKeepLocal(note, userId)
+      if (displayedOwnerRef.current !== userId) return
+      setNote((current) =>
+        current?.sermonId === saved.sermonId
+          ? { ...current, revision: saved.revision }
+          : current,
+      )
+      const newer = readPendingSermonSave(pendingNoteRef)
+      if (newer && newer.ownerId === userId && newer.note.sermonId === saved.sermonId) {
+        pendingNoteRef.current = {
+          ...newer,
+          note: { ...newer.note, revision: saved.revision },
+        }
+      }
+      saveChainRef.current.reset()
+      saveConflictRef.current = false
+      setSaveConflict(false)
+      setSaveErrorMessage('')
+      if (pendingNoteRef.current) {
+        setSaveStatus('saving')
+        saveTimerRef.current = window.setTimeout(() => {
+          saveTimerRef.current = null
+          void flush().catch(() => undefined)
+        }, SAVE_DEBOUNCE_MS)
+      } else {
+        setSaveStatus('saved')
+      }
+    } catch (error) {
+      saveConflictRef.current = true
+      setSaveConflict(true)
+      setSaveErrorMessage(
+        isOwnerChangedError(error) ? t('sermonSaveOwnerChanged') : t('sermonSaveErrorInline'),
+      )
+      setSaveStatus('error')
+    }
+  }
 
   const updateNote = useCallback(
     (updater: (prev: SermonNote) => SermonNote) => {
       setNote((prev) => {
         if (!prev) return prev
-        const next = updater(prev)
+        const next = {
+          ...updater(prev),
+          updatedAt: Math.max(Date.now(), prev.updatedAt + 1),
+        }
         scheduleSave(next)
         return next
       })
@@ -183,6 +423,12 @@ export default function SermonNotePage() {
   }
   const updateFreeNote = (field: Field) => {
     updateNote((prev) => ({ ...prev, freeNote: field }))
+  }
+  const updateImpression = (field: Field) => {
+    updateNote((prev) => ({ ...prev, impression: field }))
+  }
+  const updateApplication = (field: Field) => {
+    updateNote((prev) => ({ ...prev, application: field }))
   }
   const applyHighlights = useCallback(
     (adds: VerseHighlight[]) =>
@@ -230,6 +476,8 @@ export default function SermonNotePage() {
     updateNote((prev) => ({
       ...prev,
       pointAnswers: prev.pointAnswers.map((field) => ({ ...field, mode: nextMode })),
+      impression: { ...prev.impression, mode: nextMode },
+      application: { ...prev.application, mode: nextMode },
       freeNote: { ...prev.freeNote, mode: nextMode },
     }))
   }
@@ -237,13 +485,13 @@ export default function SermonNotePage() {
   if (loading) {
     return <div className="p-8 text-center text-rose-key/70">{t('sermonNoteLoading')}</div>
   }
-  if (notFound || !sermon || !note) {
+  if (notFound || !sermon || !note || displayedOwnerId !== userId) {
     return (
       <div className="p-8 text-center text-rose-key">
         {t('sermonNotFound')}
         <button
           type="button"
-          onClick={() => navigate(SERMON_LIST_PATH)}
+          onClick={() => void leaveForList()}
           className="ml-2 text-rose-accent underline"
         >
           {t('sermonBack')}
@@ -254,9 +502,16 @@ export default function SermonNotePage() {
 
   const period = meditationPeriod(sermon.preachedOn)
   const thisWeek = isWithinMeditationPeriod(sermon.preachedOn, new Date())
+  const lang = getLang()
+  const sermonTitle = localizedSermonTitle(sermon, lang)
+  const sermonPreacher = localizedSermonPreacher(sermon, lang)
+  const sermonSummary = localizedSermonSummary(sermon, lang)
+  const sermonPoints = localizedSermonPoints(sermon, lang)
   const passageChunks = passages?.chunks ?? []
   const passageStart = passages?.startChapter ?? 1
-  const passageLabel = sermonPassagesLabel(sermon.passages)
+  const passageLabel = sermon.passages
+    .map((passage) => localizedSermonPassageLabel(passage, lang))
+    .join(', ')
   const activeHighlights =
     effectiveVersion === 'msg'
       ? note.highlightRanges
@@ -271,18 +526,18 @@ export default function SermonNotePage() {
       <header className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-rose-line bg-rose-bg/90 px-4 py-3 backdrop-blur">
         <button
           type="button"
-          onClick={() => navigate(SERMON_LIST_PATH)}
+          onClick={() => void leaveForList()}
           className="shrink-0 text-sm font-bold text-rose-key hover:text-rose-accent"
         >
           {t('sermonBack')}
         </button>
         <div className="min-w-0 flex-1 text-center">
           <h1 className="min-w-0 truncate font-serif text-base font-extrabold text-rose-ink">
-            {sermon.title}
+            {sermonTitle}
           </h1>
           <p className="mt-0.5 truncate text-xs font-medium text-rose-key">
             {formatEntryDateDot(sermon.preachedOn)} · {serviceLabelText}
-            {sermon.preacher ? ` · ${sermon.preacher}` : ''}
+            {sermonPreacher ? ` · ${sermonPreacher}` : ''}
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
@@ -290,13 +545,13 @@ export default function SermonNotePage() {
             aria-live="polite"
             className="hidden min-w-14 text-right text-[11px] font-bold text-rose-key/70 sm:inline"
           >
-            {statusLabel(saveStatus)}
+            {statusLabel(saveStatus, saveErrorMessage)}
           </span>
           <LangToggle />
           {user && (
             <button
               type="button"
-              onClick={signOut}
+              onClick={() => void handleSignOut()}
               className="hidden whitespace-nowrap rounded-full px-2 py-1.5 text-[13px] font-bold text-rose-key/80 transition hover:text-rose-accent sm:inline-flex"
             >
               {t('sermonLogout')}
@@ -306,6 +561,27 @@ export default function SermonNotePage() {
       </header>
 
       <main className="flex-1 space-y-5 px-4 py-5">
+        {saveConflict && (
+          <div role="alert" className="rounded-xl border border-rose-accent/50 bg-rose-card px-4 py-3 text-sm text-rose-key shadow-sm">
+            <p className="font-bold text-rose-accent">{t('sermonSaveConflict')}</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => void reloadAfterConflict()}
+                className="min-h-11 rounded-full border border-rose-accent/60 bg-white px-4 py-2 font-bold text-rose-accent transition hover:bg-rose-accent hover:text-white focus:outline-none focus:ring-2 focus:ring-rose-accent"
+              >
+                {t('sermonConflictReload')}
+              </button>
+              <button
+                type="button"
+                onClick={() => void keepMineAfterConflict()}
+                className="min-h-11 rounded-full bg-rose-accent px-4 py-2 font-bold text-white transition hover:bg-rose-accent-deep focus:outline-none focus:ring-2 focus:ring-rose-accent"
+              >
+                {t('sermonConflictKeepMine')}
+              </button>
+            </div>
+          </div>
+        )}
         {period && (
           <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-rose-line bg-rose-card px-3 py-2">
             <span className="text-xs font-bold text-rose-key">
@@ -394,15 +670,15 @@ export default function SermonNotePage() {
           </div>
         </section>
 
-        {(sermon.summary || sermon.mediaUrl) && (
+        {(sermonSummary || sermon.mediaUrl) && (
           <section className="space-y-3 rounded-xl border border-rose-line bg-rose-card px-4 py-3 shadow-sm">
-            {sermon.summary && (
+            {sermonSummary && (
               <div>
                 <h3 className="text-[13px] font-black tracking-[0.14em] text-rose-ink">
                   {t('sermonSummaryTitle')}
                 </h3>
                 <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-rose-ink">
-                  {sermon.summary}
+                  {sermonSummary}
                 </p>
               </div>
             )}
@@ -426,13 +702,13 @@ export default function SermonNotePage() {
           <ModeToggle mode={mode} onChange={setModeAll} />
         </div>
 
-        {sermon.points.length > 0 && (
+        {sermonPoints.length > 0 && (
           <section className="space-y-3">
             <h3 className="flex items-center gap-2 font-serif text-base font-extrabold text-rose-ink">
               <span aria-hidden className="h-3.5 w-[3px] rounded-full bg-rose-accent" />
               {t('sermonPointsTitle')}
             </h3>
-            {sermon.points.map((point, index) => (
+            {sermonPoints.map((point, index) => (
               <div key={index} className="space-y-1.5">
                 <div className="rounded-xl bg-rose-chip/60 px-3 py-2 text-sm leading-relaxed text-rose-ink">
                   <span className="mr-1.5 font-black text-rose-accent">
@@ -454,6 +730,32 @@ export default function SermonNotePage() {
         <section className="space-y-2">
           <h3 className="flex items-center gap-2 font-serif text-base font-extrabold text-rose-ink">
             <span aria-hidden className="h-3.5 w-[3px] rounded-full bg-rose-accent" />
+            {t('sermonImpression')}
+          </h3>
+          <FieldEditor
+            field={note.impression}
+            onChange={updateImpression}
+            placeholder={t('sermonImpressionPlaceholder')}
+            rows={4}
+          />
+        </section>
+
+        <section className="space-y-2">
+          <h3 className="flex items-center gap-2 font-serif text-base font-extrabold text-rose-ink">
+            <span aria-hidden className="h-3.5 w-[3px] rounded-full bg-rose-accent" />
+            {t('sermonApplication')}
+          </h3>
+          <FieldEditor
+            field={note.application}
+            onChange={updateApplication}
+            placeholder={t('sermonApplicationPlaceholder')}
+            rows={4}
+          />
+        </section>
+
+        <section className="space-y-2">
+          <h3 className="flex items-center gap-2 font-serif text-base font-extrabold text-rose-ink">
+            <span aria-hidden className="h-3.5 w-[3px] rounded-full bg-rose-accent" />
             {t('sermonFreeNote')}
           </h3>
           <FieldEditor
@@ -471,12 +773,12 @@ export default function SermonNotePage() {
 
       <div className="safe-pad flex items-center justify-between gap-3 border-t border-rose-line bg-rose-card px-4 py-2.5 sm:hidden">
         <span aria-live="polite" className="text-[12px] font-bold text-rose-key/80">
-          {statusLabel(saveStatus)}
+            {statusLabel(saveStatus, saveErrorMessage)}
         </span>
         {user && (
           <button
             type="button"
-            onClick={signOut}
+            onClick={() => void handleSignOut()}
             className="text-[12px] font-bold text-rose-key/80 transition hover:text-rose-accent"
           >
             {t('sermonLogout')}

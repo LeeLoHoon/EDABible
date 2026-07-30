@@ -3,18 +3,67 @@
    그냥 읽기만 하므로 같은 조각 조립을 UI 없이 수행한다. 조각 시퀀스를 BiblePicker와
    똑같이 맞춰야 PassageText가 만드는 형광펜 키가 두 앱에서 같은 규칙으로 나온다. */
 
-import { chapterLabel, chapterTextAt, loadBook, loadIndex, makeRef, type BookDoc } from './bible'
+import { chapterLabel, chapterTextAt, loadBook, loadIndex, type BookDoc } from './bible'
 import type { PassageChunk } from './components/BiblePicker'
-import type { SermonPassage } from './db'
-import { bookOrderByName } from './i18n/bibleBookNames'
+import type { Sermon, SermonPassage } from './db'
+import { EN_BOOK_NAMES, KO_BOOK_NAMES, bookOrderByName } from './i18n/bibleBookNames'
+import { getLang, type Lang } from './i18n/lang'
 
 /** 설교 목록 경로 — 단독 배포는 앱 루트, 통합(all) 배포는 /sermon 아래에 산다 */
 export const SERMON_LIST_PATH = __APP_TARGET__ === 'all' ? '/sermon' : '/'
 
+function translatedBookName(book: string, lang: Lang): string {
+  const order = bookOrderByName(book)
+  if (order === null) return book
+  return (lang === 'en' ? EN_BOOK_NAMES : KO_BOOK_NAMES)[order - 1] ?? book
+}
+
+function localizedField(korean: string, english: string | undefined, lang: Lang): string {
+  if (lang === 'en' && english?.trim()) return english
+  return korean
+}
+
+/** 번역이 비어 있으면 원문(한국어)을 그대로 사용하며 번역문을 만들어내지 않는다. */
+export function localizedSermonTitle(sermon: Sermon, lang: Lang): string {
+  return localizedField(sermon.title, sermon.titleEn, lang)
+}
+
+export function localizedSermonPreacher(sermon: Sermon, lang: Lang): string {
+  return localizedField(sermon.preacher, sermon.preacherEn, lang)
+}
+
+export function localizedSermonSummary(sermon: Sermon, lang: Lang): string {
+  return localizedField(sermon.summary, sermon.summaryEn, lang)
+}
+
+/** 영어 point가 빠진 위치만 같은 index의 한국어 point로 fallback한다. */
+export function localizedSermonPoints(sermon: Sermon, lang: Lang): string[] {
+  if (lang === 'ko') return [...sermon.points]
+  const english = sermon.pointsEn ?? []
+  return sermon.points.map((point, index) => (english[index]?.trim() ? english[index] : point))
+}
+
+export function localizedSermonPassage(passage: SermonPassage, lang: Lang): SermonPassage {
+  return { ...passage, book: translatedBookName(passage.book, lang) }
+}
+
+export function localizedSermonPassageLabel(passage: SermonPassage, lang: Lang): string {
+  const localized = localizedSermonPassage(passage, lang)
+  if (localized.verseLabel) return `${localized.book} ${localized.verseLabel}`
+  if (lang === 'en') {
+    return localized.endChapter !== localized.chapter
+      ? `${localized.book} ${localized.chapter}-${localized.endChapter}`
+      : `${localized.book} ${localized.chapter}`
+  }
+  const unit = localized.book === '시편' ? '편' : '장'
+  return localized.endChapter !== localized.chapter
+    ? `${localized.book} ${localized.chapter}~${localized.endChapter}${unit}`
+    : `${localized.book} ${localized.chapter}${unit}`
+}
+
 /** 관리자가 절 범위를 적었으면 그대로 쓰고, 아니면 장 단위 참조로 표기한다 */
 export function sermonPassageLabel(passage: SermonPassage): string {
-  if (passage.verseLabel) return `${passage.book} ${passage.verseLabel}`
-  return makeRef(passage.book, passage.chapter, passage.endChapter)
+  return localizedSermonPassageLabel(passage, getLang())
 }
 
 export function sermonPassagesLabel(passages: readonly SermonPassage[]): string {

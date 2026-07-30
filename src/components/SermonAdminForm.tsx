@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { parseRefs } from '../bible'
 import BiblePicker from './BiblePicker'
 import {
@@ -24,13 +24,17 @@ interface FormDraft {
   service: SermonService
   preachedOn: string
   title: string
+  titleEn: string
   preacher: string
+  preacherEn: string
   /** BiblePicker가 요구하는 참조 문자열 — 절 라벨은 여기 담지 않는다 */
   refText: string
   /** 파싱된 본문마다 짝지어 저장할 절 범위 표기(관리자 표시용) */
   verseLabels: string[]
   summary: string
+  summaryEn: string
   points: string[]
+  pointsEn: string[]
   mediaUrl: string
   published: boolean
 }
@@ -42,11 +46,15 @@ function makeDraft(sermon: Sermon | null): FormDraft {
       service: 'morning',
       preachedOn: '',
       title: '',
+      titleEn: '',
       preacher: '',
+      preacherEn: '',
       refText: '',
       verseLabels: [],
       summary: '',
+      summaryEn: '',
       points: [''],
+      pointsEn: [''],
       mediaUrl: '',
       published: false,
     }
@@ -57,14 +65,21 @@ function makeDraft(sermon: Sermon | null): FormDraft {
     service: sermon.service,
     preachedOn: sermon.preachedOn,
     title: sermon.title,
+    titleEn: sermon.titleEn ?? '',
     preacher: sermon.preacher,
+    preacherEn: sermon.preacherEn ?? '',
     // BiblePicker는 절 라벨을 모르니 장 단위 문자열만 넘긴다 — 절 라벨은 verseLabels로 분리 보관
     refText: sermon.passages
       .map((p) => sermonPassageLabel({ ...p, verseLabel: undefined }))
       .join(', '),
     verseLabels: sermon.passages.map((p) => p.verseLabel ?? ''),
     summary: sermon.summary,
+    summaryEn: sermon.summaryEn ?? '',
     points: sermon.points.length > 0 ? sermon.points : [''],
+    pointsEn: Array.from(
+      { length: Math.max(1, sermon.points.length) },
+      (_, index) => sermon.pointsEn?.[index] ?? '',
+    ),
     mediaUrl: sermon.mediaUrl,
     published: sermon.published,
   }
@@ -74,6 +89,14 @@ export default function SermonAdminForm({ initial, onClose, onSaved }: Props) {
   const [draft, setDraft] = useState<FormDraft>(() => makeDraft(initial))
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const closeButtonRef = useRef<HTMLButtonElement>(null)
+  const previousFocusRef = useRef<HTMLElement | null>(null)
+  const savingRef = useRef(saving)
+
+  useEffect(() => {
+    savingRef.current = saving
+  }, [saving])
 
   const parsedPassages = useMemo(() => parseRefs(draft.refText), [draft.refText])
 
@@ -91,6 +114,42 @@ export default function SermonAdminForm({ initial, onClose, onSaved }: Props) {
     })
   }, [parsedPassages.length])
 
+  useEffect(() => {
+    previousFocusRef.current = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null
+    const focusFrame = window.requestAnimationFrame(() => closeButtonRef.current?.focus())
+    const handleDialogKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        if (!savingRef.current) onClose()
+        return
+      }
+      if (event.key !== 'Tab') return
+      const focusable = dialogRef.current?.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), summary, [tabindex]:not([tabindex="-1"])',
+      )
+      if (!focusable || focusable.length === 0) return
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault()
+        first.focus()
+      }
+    }
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    document.addEventListener('keydown', handleDialogKey)
+    return () => {
+      window.cancelAnimationFrame(focusFrame)
+      document.body.style.overflow = previousOverflow
+      document.removeEventListener('keydown', handleDialogKey)
+      previousFocusRef.current?.focus()
+    }
+  }, [onClose])
+
   const sundayWarn = draft.preachedOn.length > 0 && !isSunday(draft.preachedOn)
 
   const patch = (updates: Partial<FormDraft>) => setDraft((prev) => ({ ...prev, ...updates }))
@@ -101,11 +160,24 @@ export default function SermonAdminForm({ initial, onClose, onSaved }: Props) {
       points: prev.points.map((point, i) => (i === index ? value : point)),
     }))
   }
-  const addPoint = () => setDraft((prev) => ({ ...prev, points: [...prev.points, ''] }))
+  const updatePointEn = (index: number, value: string) => {
+    setDraft((prev) => ({
+      ...prev,
+      pointsEn: prev.pointsEn.map((point, i) => (i === index ? value : point)),
+    }))
+  }
+  const addPoint = () =>
+    setDraft((prev) => ({
+      ...prev,
+      points: [...prev.points, ''],
+      pointsEn: [...prev.pointsEn, ''],
+    }))
   const removePoint = (index: number) => {
     setDraft((prev) => ({
       ...prev,
       points: prev.points.length <= 1 ? prev.points : prev.points.filter((_, i) => i !== index),
+      pointsEn:
+        prev.pointsEn.length <= 1 ? prev.pointsEn : prev.pointsEn.filter((_, i) => i !== index),
     }))
   }
   const updateVerseLabel = (index: number, value: string) => {
@@ -141,17 +213,23 @@ export default function SermonAdminForm({ initial, onClose, onSaved }: Props) {
         ...(label ? { verseLabel: label } : {}),
       }
     })
-    const points = draft.points.map((p) => p.trim()).filter((p) => p.length > 0)
+    const pointRows = draft.points
+      .map((point, index) => ({ point: point.trim(), pointEn: draft.pointsEn[index]?.trim() ?? '' }))
+      .filter((row) => row.point.length > 0)
 
     const sermon: Sermon = {
       id: draft.id,
       service: draft.service,
       preachedOn: draft.preachedOn,
       title: draft.title.trim(),
+      titleEn: draft.titleEn.trim(),
       preacher: draft.preacher.trim(),
+      preacherEn: draft.preacherEn.trim(),
       passages,
       summary: draft.summary.trim(),
-      points,
+      summaryEn: draft.summaryEn.trim(),
+      points: pointRows.map((row) => row.point),
+      pointsEn: pointRows.map((row) => row.pointEn),
       mediaUrl: draft.mediaUrl.trim(),
       published: draft.published,
       updatedAt: Date.now(),
@@ -190,18 +268,23 @@ export default function SermonAdminForm({ initial, onClose, onSaved }: Props) {
       }}
     >
       <div
+        ref={dialogRef}
         className="flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-rose-line bg-rose-card shadow-xl"
         onClick={(event) => event.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="sermon-admin-form-title"
       >
         <header className="flex shrink-0 items-center justify-between border-b border-rose-line px-4 py-3">
-          <h2 className="font-serif text-lg font-extrabold text-rose-ink">
+          <h2 id="sermon-admin-form-title" className="font-serif text-lg font-extrabold text-rose-ink">
             {initial ? t('sermonAdminEditTitle') : t('sermonAdminNewTitle')}
           </h2>
           <button
+            ref={closeButtonRef}
             type="button"
             onClick={onClose}
             disabled={saving}
-            className="grid h-8 w-8 place-items-center rounded-full text-rose-key transition hover:bg-rose-chip disabled:opacity-40"
+            className="grid h-11 w-11 place-items-center rounded-full text-rose-key transition hover:bg-rose-chip focus:outline-none focus:ring-2 focus:ring-rose-accent disabled:opacity-40"
             aria-label={t('sermonCancel')}
           >
             ✕
@@ -364,6 +447,65 @@ export default function SermonAdminForm({ initial, onClose, onSaved }: Props) {
               </div>
             ))}
           </div>
+
+          <details className="rounded-2xl border border-rose-line bg-rose-chip/35">
+            <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 font-serif text-sm font-extrabold text-rose-ink focus:outline-none focus:ring-2 focus:ring-inset focus:ring-rose-accent">
+              <span>{t('sermonEnglishSection')}</span>
+              <span aria-hidden className="text-rose-key">▾</span>
+            </summary>
+            <div className="space-y-4 border-t border-rose-line px-4 py-4">
+              <p className="rounded-xl bg-rose-card px-3 py-2 text-xs font-bold leading-5 text-rose-key">
+                {t('sermonEnglishFallbackHint')}
+              </p>
+              <label className="block space-y-1">
+                <span className="block text-sm font-bold text-rose-ink">{t('sermonFieldTitleEn')}</span>
+                <input
+                  type="text"
+                  value={draft.titleEn}
+                  onChange={(event) => patch({ titleEn: event.target.value })}
+                  placeholder={t('sermonTitleEnPlaceholder')}
+                  className="block min-h-11 w-full rounded-xl border border-rose-line bg-white px-3 py-2 text-base text-rose-ink outline-none focus:border-rose-accent focus:ring-2 focus:ring-rose-accent"
+                />
+              </label>
+              <label className="block space-y-1">
+                <span className="block text-sm font-bold text-rose-ink">{t('sermonFieldPreacherEn')}</span>
+                <input
+                  type="text"
+                  value={draft.preacherEn}
+                  onChange={(event) => patch({ preacherEn: event.target.value })}
+                  placeholder={t('sermonPreacherEnPlaceholder')}
+                  className="block min-h-11 w-full rounded-xl border border-rose-line bg-white px-3 py-2 text-base text-rose-ink outline-none focus:border-rose-accent focus:ring-2 focus:ring-rose-accent"
+                />
+              </label>
+              <label className="block space-y-1">
+                <span className="block text-sm font-bold text-rose-ink">{t('sermonFieldSummaryEn')}</span>
+                <textarea
+                  value={draft.summaryEn}
+                  onChange={(event) => patch({ summaryEn: event.target.value })}
+                  rows={4}
+                  placeholder={t('sermonSummaryEnPlaceholder')}
+                  className="block w-full resize-y rounded-xl border border-rose-line bg-white p-3 text-base leading-relaxed text-rose-ink outline-none focus:border-rose-accent focus:ring-2 focus:ring-rose-accent"
+                />
+              </label>
+              <div className="space-y-2">
+                <span className="block text-sm font-bold text-rose-ink">{t('sermonFieldPointsEn')}</span>
+                {draft.pointsEn.map((point, index) => (
+                  <label key={index} className="block space-y-1">
+                    <span className="block text-xs font-bold text-rose-key">
+                      {t('sermonPointLabel')(index + 1)} · {draft.points[index] || t('sermonKoreanPointEmpty')}
+                    </span>
+                    <textarea
+                      value={point}
+                      onChange={(event) => updatePointEn(index, event.target.value)}
+                      rows={2}
+                      placeholder={t('sermonPointEnPlaceholder')(index + 1)}
+                      className="block w-full resize-y rounded-xl border border-rose-line bg-white p-2.5 text-sm leading-relaxed text-rose-ink outline-none focus:border-rose-accent focus:ring-2 focus:ring-rose-accent"
+                    />
+                  </label>
+                ))}
+              </div>
+            </div>
+          </details>
 
           <label className="block space-y-1">
             <span className="block text-sm font-bold text-rose-ink">

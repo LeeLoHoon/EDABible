@@ -11,11 +11,16 @@ import {
   type Sermon,
   type SermonService,
 } from '../db'
-import { sermonPassagesLabel } from '../sermon'
+import {
+  localizedSermonPassageLabel,
+  localizedSermonPreacher,
+  localizedSermonTitle,
+} from '../sermon'
 import { pickCurrentPreachedOn } from '../sermonWeek'
 import { isFieldEmpty } from '../types'
 import { formatEntryDateDot } from '../i18n/format'
 import { t } from '../i18n/strings'
+import { getLang } from '../i18n/lang'
 
 const ADMIN_TAP_COUNT = 5
 const ADMIN_TAP_WINDOW_MS = 2_000
@@ -34,6 +39,7 @@ function serviceLabel(service: SermonService): string {
 }
 
 export default function SermonPage() {
+  const lang = getLang()
   const navigate = useNavigate()
   const { user, signInWithGoogle, signOut } = useAuth()
   // 토큰 갱신으로 user 참조가 바뀌어도 id 문자열이 같으면 재로드하지 않는다 (BinderPage와 동일 패턴)
@@ -80,8 +86,11 @@ export default function SermonPage() {
         for (const note of notes) {
           const hasContent =
             !isFieldEmpty(note.freeNote) ||
+            (!!note.impression && !isFieldEmpty(note.impression)) ||
+            (!!note.application && !isFieldEmpty(note.application)) ||
             note.pointAnswers.some((answer) => !isFieldEmpty(answer)) ||
-            note.highlightRanges.length > 0
+            note.highlightRanges.length > 0 ||
+            Object.values(note.highlightVersions ?? {}).some((ranges) => ranges.length > 0)
           meta[note.sermonId] = { updatedAt: note.updatedAt, hasContent }
         }
         setNoteMeta(meta)
@@ -152,6 +161,8 @@ export default function SermonPage() {
     const meta = noteMeta[sermon.id]
     const showLastWritten = meta?.hasContent === true
     const daysAgo = showLastWritten ? daysSince(now, meta.updatedAt) : null
+    const title = localizedSermonTitle(sermon, lang)
+    const preacher = localizedSermonPreacher(sermon, lang)
 
     return (
       <article
@@ -166,8 +177,8 @@ export default function SermonPage() {
           <span className="rounded-full bg-rose-chip px-2 py-0.5 text-xs font-black text-rose-accent">
             {serviceLabel(sermon.service)}
           </span>
-          {sermon.preacher && (
-            <span className="text-sm font-bold text-rose-key">· {sermon.preacher}</span>
+          {preacher && (
+            <span className="text-sm font-bold text-rose-key">· {preacher}</span>
           )}
           {adminMode && !sermon.published && (
             <span className="rounded-full bg-rose-accent-deep px-2 py-0.5 text-[11px] font-black text-white">
@@ -175,10 +186,10 @@ export default function SermonPage() {
             </span>
           )}
         </div>
-        <h3 className="mt-1.5 font-serif text-lg font-extrabold text-rose-ink">{sermon.title}</h3>
+        <h3 className="mt-1.5 font-serif text-lg font-extrabold text-rose-ink">{title}</h3>
         {sermon.passages.length > 0 && (
           <p className="mt-1 text-sm font-medium text-rose-key">
-            {sermonPassagesLabel(sermon.passages)}
+            {sermon.passages.map((passage) => localizedSermonPassageLabel(passage, lang)).join(', ')}
           </p>
         )}
         <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
@@ -217,8 +228,8 @@ export default function SermonPage() {
             className="pointer-events-none absolute inset-x-0 top-0 h-1.5 bg-rose-accent-deep"
           />
         )}
-        <div className="mx-auto flex max-w-3xl items-center justify-between gap-3">
-          <div className="flex w-24 shrink-0 items-center">
+        <div className="mx-auto flex max-w-3xl flex-wrap items-center justify-between gap-x-3 gap-y-1 sm:flex-nowrap sm:gap-y-0">
+          <div className="flex w-auto shrink-0 items-center sm:w-24">
             {__APP_TARGET__ === 'all' ? (
               <Link to="/" className="flex flex-col leading-tight" aria-label={t('sermonGoHome')}>
                 <span className="text-[11px] font-black tracking-[0.3em] text-rose-key/70">
@@ -239,7 +250,7 @@ export default function SermonPage() {
           >
             {t('sermonAppTitle')}
           </h1>
-          <div className="flex shrink-0 items-center justify-end gap-1">
+          <div className="order-3 flex w-full shrink-0 items-center justify-end gap-1 sm:order-none sm:w-auto">
             {adminMode && (
               <button
                 type="button"
@@ -252,6 +263,12 @@ export default function SermonPage() {
                 <span aria-hidden className="sm:hidden">✕</span>
               </button>
             )}
+            <Link
+              to="/qa"
+              className="flex min-h-11 items-center rounded-full px-2 text-xs font-bold text-rose-key transition hover:text-rose-accent focus:outline-none focus:ring-2 focus:ring-rose-accent sm:px-3 sm:text-sm"
+            >
+              {t('sermonQaLink')}
+            </Link>
             <LangToggle />
             <button
               type="button"
