@@ -1,6 +1,22 @@
 import Dexie, { type Table } from 'dexie'
 import { emptyField, type Entry, type Field, type VerseHighlight } from './types'
 import { supabase } from './supabase'
+import { SerializedSaveQueue } from './serializedSaveQueue'
+import { commitEntryInTransaction, type EntryCommitResult } from './entryCommit'
+import {
+  migrateBinderCacheRecord,
+  normalizeBinderWork,
+  shouldReplaceLocalBinderCache,
+  toBinderCacheRecord,
+  toRemoteBinderPayload,
+  type BinderWorkCacheRecord,
+} from './binderCache'
+import {
+  shouldInheritAnonymousSermonNote,
+  type SermonNoteClaim,
+} from './sermonClaim'
+
+export { normalizeBinderWork } from './binderCache'
 
 export interface BibleIndexCache {
   id: string
@@ -28,6 +44,12 @@ export interface BinderWork {
   /** 체크포인트 구간별로 마지막에 보던 쪽 — 체크포인트를 다시 누르면 그 자리로 돌아간다 */
   checkpointPages?: Record<string, number>
   updatedAt: number
+}
+
+interface BinderClaim {
+  id: string
+  ownerId: string
+  claimedAt: number
 }
 
 /** 세트별 숨긴 원본 PDF 쪽번호의 로컬 캐시. */
@@ -83,32 +105,47 @@ export interface Sermon {
   /** 주일 날짜 'YYYY-MM-DD' — sermonWeek.ts가 이 값으로 묵상 기간을 계산한다 */
   preachedOn: string
   title: string
+  titleEn?: string
   preacher: string
+  preacherEn?: string
   passages: SermonPassage[]
   summary: string
+  summaryEn?: string
   points: string[]
+  pointsEn?: string[]
   mediaUrl: string
   published: boolean
   updatedAt: number
 }
+
+const preservedSermonNoteData: unique symbol = Symbol('preservedSermonNoteData')
 
 /** 교인의 묵상 — sermon_notes.data에 통째로 들어가는 jsonb.
     binder_works와 같은 방식이라 스키마 변경 없이 필드를 늘릴 수 있다. */
 export interface SermonNote {
   sermonId: string
   pointAnswers: Field[]
+  impression: Field
+  application: Field
   freeNote: Field
   /** 메시지성경(기본 역본) 형광펜 — 기존 데이터와의 호환을 위해 이름을 유지한다 */
   highlightRanges: VerseHighlight[]
-  /** 다른 역본(gae/nkt)의 형광펜 — 역본마다 글자 위치가 달라 분리 저장한다 */
+  /** 다른 역본의 형광펜 — 제거된 역본 key도 사용자 기록 보존을 위해 그대로 둔다 */
   highlightVersions: Record<string, VerseHighlight[]>
+  /** 원격 sermon_notes의 optimistic concurrency revision. 로컬 전용 기록은 0이다. */
+  revision: number
   updatedAt: number
+  [preservedSermonNoteData]?: Map<string, unknown>
 }
 
 /** 로컬 캐시 레코드 — 한 기기를 여러 계정이 함께 쓸 때 묵상이 섞이지 않도록 사용자별로 키를 나눈다 */
 interface SermonNoteCache extends SermonNote {
   key: string
   userId: string
+  preservedEntries?: Array<[string, unknown]>
+  dirty?: boolean
+  conflict?: boolean
+  baseRevision?: number
 }
 
 /** 로컬(IndexedDB) 저장소 — 묵상 노트 저장 및 바인더 오프라인 캐시. */
@@ -117,10 +154,13 @@ class EdaBibleDB extends Dexie {
   bibleIndex!: Table<BibleIndexCache, string>
   bibleBooks!: Table<BibleBookCache, string>
   binderWorks!: Table<BinderWork, string>
+  binderWorksByOwner!: Table<BinderWorkCacheRecord, [string, string]>
+  binderClaims!: Table<BinderClaim, string>
   binderHiddenPages!: Table<BinderHiddenPages, string>
   recordings!: Table<Recording, string>
   sermons!: Table<Sermon, string>
   sermonNotes!: Table<SermonNoteCache, string>
+  sermonNoteClaims!: Table<SermonNoteClaim, string>
 
   constructor() {
     super('edabible')
@@ -164,10 +204,78 @@ class EdaBibleDB extends Dexie {
       sermons: 'id, preachedOn, updatedAt',
       sermonNotes: 'key, sermonId, updatedAt',
     })
+    this.version(7).stores({
+      entries: 'id, date, updatedAt',
+      bibleIndex: 'id, build',
+      bibleBooks: 'file, build',
+      binderWorks: 'bookId, updatedAt',
+      binderWorksByOwner: '[ownerId+bookId], ownerId, updatedAt',
+      binderClaims: 'id',
+      recordings: 'id, entryId, createdAt',
+      binderHiddenPages: 'setId, updatedAt',
+      sermons: 'id, preachedOn, updatedAt',
+      sermonNotes: 'key, sermonId, updatedAt',
+    })
+    this.version(8)
+      .stores({
+        entries: 'id, date, updatedAt',
+        bibleIndex: 'id, build',
+        bibleBooks: 'file, build',
+        binderWorks: 'bookId, updatedAt',
+        binderWorksByOwner: '[ownerId+bookId], ownerId, updatedAt',
+        binderClaims: 'id',
+        recordings: 'id, entryId, createdAt',
+        binderHiddenPages: 'setId, updatedAt',
+        sermons: 'id, preachedOn, updatedAt',
+        sermonNotes: 'key, sermonId, updatedAt',
+        sermonNoteClaims: 'sermonId',
+      })
+      .upgrade(async (transaction) => {
+        await transaction
+          .table('binderWorksByOwner')
+          .toCollection()
+          .modify((row: Record<string, unknown>) => {
+            const migrated = migrateBinderCacheRecord(row)
+            if (!migrated) return
+            for (const key of Object.keys(row)) delete row[key]
+            Object.assign(row, migrated)
+          })
+      })
   }
 }
 
 export const db = new EdaBibleDB()
+
+const binderSaveQueue = new SerializedSaveQueue()
+const sermonSaveQueue = new SerializedSaveQueue()
+
+export const BINDER_LOCAL_OWNER = 'local'
+const BINDER_LEGACY_CLAIM_ID = 'legacy-binder-works:v1'
+
+const REMOVED_BIBLE_CACHE_PRUNE_KEY = 'edabible:cache-pruned:removed-nkt:v1'
+
+/**
+ * 제거된 역본의 본문 cache만 한 번 지운다. sermon note의 과거 highlightVersions.nkt는
+ * 사용자 데이터이므로 이 migration에서 읽거나 수정하지 않는다.
+ */
+export async function pruneRemovedBibleVersionCaches(): Promise<void> {
+  try {
+    if (localStorage.getItem(REMOVED_BIBLE_CACHE_PRUNE_KEY) === 'done') return
+  } catch (error) {
+    console.warn('Bible cache migration marker could not be read.', error)
+  }
+
+  await db.transaction('rw', db.bibleIndex, db.bibleBooks, async () => {
+    await db.bibleIndex.delete('index:nkt')
+    await db.bibleBooks.filter((record) => record.file.startsWith('nkt/')).delete()
+  })
+
+  try {
+    localStorage.setItem(REMOVED_BIBLE_CACHE_PRUNE_KEY, 'done')
+  } catch (error) {
+    console.warn('Bible cache migration marker could not be saved.', error)
+  }
+}
 
 export async function getEntry(id: string): Promise<Entry | undefined> {
   return db.entries.get(id)
@@ -175,6 +283,20 @@ export async function getEntry(id: string): Promise<Entry | undefined> {
 
 export async function putEntry(entry: Entry): Promise<void> {
   await db.entries.put(entry)
+}
+
+export async function commitEntrySnapshot(snapshot: Entry): Promise<EntryCommitResult> {
+  return db.transaction('rw', db.entries, () =>
+    commitEntryInTransaction(
+      {
+        get: (id) => db.entries.get(id),
+        put: async (entry) => {
+          await db.entries.put(entry)
+        },
+      },
+      snapshot,
+    ),
+  )
 }
 
 export async function deleteEntry(id: string): Promise<void> {
@@ -204,6 +326,48 @@ export async function deleteRecording(id: string): Promise<void> {
   await db.recordings.delete(id)
 }
 
+/** 기존 bookId-only cache는 최초 authenticated owner 한 명에게만 원자적으로 귀속한다. */
+export async function claimLegacyBinderWorks(ownerId: string): Promise<void> {
+  if (!ownerId || ownerId === BINDER_LOCAL_OWNER) return
+  await db.transaction(
+    'rw',
+    db.binderWorks,
+    db.binderWorksByOwner,
+    db.binderClaims,
+    async () => {
+      if (await db.binderClaims.get(BINDER_LEGACY_CLAIM_ID)) return
+      const legacy = await db.binderWorks.toArray()
+      const owned = await db.binderWorksByOwner.where('ownerId').equals(ownerId).toArray()
+      const existing = new Set(owned.map((work) => work.bookId))
+      const additions = legacy
+        .filter((work) => !existing.has(work.bookId))
+        .map((work) => toBinderCacheRecord(ownerId, normalizeBinderWork(work.bookId, work), false))
+      if (additions.length > 0) await db.binderWorksByOwner.bulkPut(additions)
+      await db.binderClaims.put({
+        id: BINDER_LEGACY_CLAIM_ID,
+        ownerId,
+        claimedAt: Date.now(),
+      })
+    },
+  )
+}
+
+export async function isLegacyBinderClaimOwner(ownerId: string): Promise<boolean> {
+  const claim = await db.binderClaims.get(BINDER_LEGACY_CLAIM_ID)
+  return claim?.ownerId === ownerId
+}
+
+export async function assertActiveSupabaseOwner(
+  ownerId: string,
+  errorCode: string,
+): Promise<void> {
+  if (!supabase) throw new Error(errorCode)
+  const { data, error } = await supabase.auth.getSession()
+  if (error || !data.session?.user.id || data.session.user.id !== ownerId) {
+    throw new Error(errorCode)
+  }
+}
+
 export function createBinderWork(bookId: string): BinderWork {
   return {
     bookId,
@@ -217,18 +381,9 @@ export function createBinderWork(bookId: string): BinderWork {
   }
 }
 
-function normalizeBinderWork(bookId: string, work: Partial<BinderWork> | null | undefined): BinderWork {
-  return {
-    ...createBinderWork(bookId),
-    ...work,
-    pageInputs: work?.pageInputs ?? {},
-    pageTextBoxes: work?.pageTextBoxes ?? {},
-    bookmarks: work?.bookmarks ?? [],
-    checkpointPages: work?.checkpointPages ?? {},
-  }
-}
-
 export async function getBinderWork(bookId: string, userId?: string): Promise<BinderWork> {
+  const ownerId = userId ?? BINDER_LOCAL_OWNER
+  const local = await db.binderWorksByOwner.get([ownerId, bookId])
   if (supabase && userId) {
     try {
       const { data, error } = await supabase
@@ -240,16 +395,26 @@ export async function getBinderWork(bookId: string, userId?: string): Promise<Bi
 
       if (error) throw error
       if (data?.data) {
-        const work = normalizeBinderWork(bookId, data.data as Partial<BinderWork>)
-        await db.binderWorks.put(work)
-        return work
+        const remote = normalizeBinderWork(bookId, data.data)
+        let resolved = remote
+        await db.transaction('rw', db.binderWorksByOwner, async () => {
+          const latestLocal = await db.binderWorksByOwner.get([ownerId, bookId])
+          if (!shouldReplaceLocalBinderCache(latestLocal, remote)) {
+            resolved = latestLocal?.work ?? remote
+            return
+          }
+          await db.binderWorksByOwner.put(toBinderCacheRecord(ownerId, remote, false))
+        })
+        return resolved
       }
-    } catch {
+    } catch (error) {
       // 오프라인/일시 오류 시 로컬 캐시로 폴백 — 바인더가 아예 안 열리는 것 방지
+      console.warn('Binder remote load failed; using owner-scoped cache.', error)
     }
   }
 
-  return normalizeBinderWork(bookId, await db.binderWorks.get(bookId))
+  const latestLocal = await db.binderWorksByOwner.get([ownerId, bookId])
+  return normalizeBinderWork(bookId, latestLocal?.work ?? local?.work)
 }
 
 /** 계정에서 가장 최근에 사용한 권의 bookId — 선택 필터를 만족하는 기록이 없으면 undefined */
@@ -257,6 +422,7 @@ export async function getLastBinderBookId(
   userId?: string,
   isKnown?: (id: string) => boolean,
 ): Promise<string | undefined> {
+  const ownerId = userId ?? BINDER_LOCAL_OWNER
   if (supabase && userId) {
     try {
       const { data, error } = await supabase
@@ -269,28 +435,63 @@ export async function getLastBinderBookId(
         const matched = data.find((row) => !isKnown || isKnown(row.book_id as string))
         if (matched?.book_id) return matched.book_id as string
       }
-    } catch {
+    } catch (error) {
       // 네트워크 실패 시 로컬 캐시로 폴백
+      console.warn('Last Binder work lookup failed; using owner-scoped cache.', error)
     }
   }
 
-  const localWorks = await db.binderWorks.orderBy('updatedAt').reverse().toArray()
+  const localWorks = await db.binderWorksByOwner.where('ownerId').equals(ownerId).sortBy('updatedAt')
+  localWorks.reverse()
   return localWorks.find((work) => !isKnown || isKnown(work.bookId))?.bookId
 }
 
 export async function putBinderWork(work: BinderWork, userId?: string): Promise<void> {
-  const next = { ...work, updatedAt: Date.now() }
-  await db.binderWorks.put(next)
-
-  if (!supabase || !userId) return
-
-  const { error } = await supabase.from('binder_works').upsert({
-    user_id: userId,
-    book_id: next.bookId,
-    data: next,
-    updated_at: new Date(next.updatedAt).toISOString(),
+  const ownerId = userId ?? BINDER_LOCAL_OWNER
+  let staged: BinderWorkCacheRecord | undefined
+  await db.transaction('rw', db.binderWorksByOwner, async () => {
+    const local = await db.binderWorksByOwner.get([ownerId, work.bookId])
+    const normalized = normalizeBinderWork(work.bookId, work)
+    const next = {
+      ...normalized,
+      updatedAt: Math.max(Date.now(), normalized.updatedAt, (local?.work.updatedAt ?? 0) + 1),
+    }
+    staged = toBinderCacheRecord(
+      ownerId,
+      next,
+      userId !== undefined,
+      local?.syncedUpdatedAt ?? 0,
+    )
+    await db.binderWorksByOwner.put(staged)
   })
-  if (error) throw error
+  if (!staged) throw new Error('BINDER_LOCAL_STAGE_FAILED')
+
+  if (!supabase || !userId) {
+    return
+  }
+  const client = supabase
+  const pending = staged
+
+  await binderSaveQueue.run(`${userId}:${pending.bookId}`, async () => {
+    await assertActiveSupabaseOwner(userId, 'BINDER_OWNER_CHANGED')
+    const payload = toRemoteBinderPayload(pending)
+    const { error } = await client.from('binder_works').upsert({
+      user_id: userId,
+      book_id: payload.bookId,
+      data: payload,
+      updated_at: new Date(payload.updatedAt).toISOString(),
+    })
+    if (error) throw error
+    await db.transaction('rw', db.binderWorksByOwner, async () => {
+      const latest = await db.binderWorksByOwner.get([ownerId, payload.bookId])
+      if (!latest || latest.work.updatedAt > payload.updatedAt) return
+      await db.binderWorksByOwner.put({
+        ...latest,
+        dirty: false,
+        syncedUpdatedAt: payload.updatedAt,
+      })
+    })
+  })
 }
 
 function normalizeHiddenPages(pages: unknown): number[] {
@@ -400,10 +601,14 @@ interface SermonRow {
   service: string
   preached_on: string
   title: string
+  title_en: string | null
   preacher: string | null
+  preacher_en: string | null
   passages: unknown
   summary: string | null
+  summary_en: string | null
   points: unknown
+  points_en: unknown
   media_url: string | null
   published: boolean
   updated_at: string
@@ -415,17 +620,22 @@ function rowToSermon(row: SermonRow): Sermon {
     service: row.service === 'afternoon' ? 'afternoon' : 'morning',
     preachedOn: row.preached_on,
     title: row.title ?? '',
+    ...(row.title_en ? { titleEn: row.title_en } : {}),
     preacher: row.preacher ?? '',
+    ...(row.preacher_en ? { preacherEn: row.preacher_en } : {}),
     passages: normalizePassages(row.passages),
     summary: row.summary ?? '',
+    ...(row.summary_en ? { summaryEn: row.summary_en } : {}),
     points: normalizePoints(row.points),
+    ...(Array.isArray(row.points_en) ? { pointsEn: normalizePoints(row.points_en) } : {}),
     mediaUrl: row.media_url ?? '',
     published: !!row.published,
     updatedAt: Date.parse(row.updated_at) || Date.now(),
   }
 }
 
-const SERMON_COLUMNS = 'id, service, preached_on, title, preacher, passages, summary, points, media_url, published, updated_at'
+const SERMON_COLUMNS =
+  'id, service, preached_on, title, title_en, preacher, preacher_en, passages, summary, summary_en, points, points_en, media_url, published, updated_at'
 
 /**
  * 설교 목록을 최신 주일 순으로 읽는다. 미게시 설교가 섞여 오는지는 RLS가 결정하므로
@@ -462,27 +672,127 @@ export function createSermonNote(sermonId: string, pointCount: number): SermonNo
   return {
     sermonId,
     pointAnswers: Array.from({ length: pointCount }, () => emptyField()),
+    impression: emptyField(),
+    application: emptyField(),
     freeNote: emptyField(),
     highlightRanges: [],
     highlightVersions: {},
+    revision: 0,
     updatedAt: Date.now(),
   }
 }
 
-/** 묵상 포인트가 나중에 늘거나 줄어도 이미 쓴 답이 밀리지 않도록 길이만 맞춘다 */
-function normalizeSermonNote(
+const SERMON_NOTE_KNOWN_KEYS = new Set([
+  'sermonId',
+  'pointAnswers',
+  'impression',
+  'application',
+  'freeNote',
+  'highlightRanges',
+  'highlightVersions',
+  'revision',
+  'updatedAt',
+  'key',
+  'userId',
+  'preservedEntries',
+  'dirty',
+  'conflict',
+  'baseRevision',
+])
+
+function preservedEntriesFrom(note: unknown): Map<string, unknown> {
+  const preserved = new Map<string, unknown>()
+  if (typeof note !== 'object' || note === null || Array.isArray(note)) return preserved
+
+  const cache = note as Partial<SermonNoteCache>
+  for (const [key, value] of cache[preservedSermonNoteData] ?? []) preserved.set(key, value)
+  if (Array.isArray(cache.preservedEntries)) {
+    for (const entry of cache.preservedEntries) {
+      if (Array.isArray(entry) && entry.length === 2 && typeof entry[0] === 'string') {
+        preserved.set(entry[0], entry[1])
+      }
+    }
+  }
+  for (const [key, value] of Object.entries(note)) {
+    if (!SERMON_NOTE_KNOWN_KEYS.has(key)) preserved.set(key, value)
+  }
+  return preserved
+}
+
+function attachPreservedData(note: SermonNote, preserved: Map<string, unknown>): SermonNote {
+  if (preserved.size === 0) return note
+  Object.defineProperty(note, preservedSermonNoteData, {
+    configurable: false,
+    enumerable: true,
+    value: preserved,
+    writable: false,
+  })
+  return note
+}
+
+/** 묵상 포인트가 줄어도 저장된 답은 보존하고, 늘어난 위치에만 빈 답을 만든다. */
+export function normalizeSermonNoteData(
   sermonId: string,
   pointCount: number,
-  note: Partial<SermonNote> | null | undefined,
+  note: unknown,
+  remoteRevision?: number,
 ): SermonNote {
-  const answers = Array.isArray(note?.pointAnswers) ? note.pointAnswers : []
-  return {
+  const source =
+    typeof note === 'object' && note !== null && !Array.isArray(note)
+      ? (note as Partial<SermonNote>)
+      : undefined
+  const answers = Array.isArray(source?.pointAnswers) ? source.pointAnswers : []
+  const normalizedCount = Math.max(Math.max(0, pointCount), answers.length)
+  const revisionCandidate = remoteRevision ?? source?.revision ?? 0
+  const normalized = {
     sermonId,
-    pointAnswers: Array.from({ length: pointCount }, (_, index) => answers[index] ?? emptyField()),
-    freeNote: note?.freeNote ?? emptyField(),
-    highlightRanges: note?.highlightRanges ?? [],
-    highlightVersions: note?.highlightVersions ?? {},
-    updatedAt: note?.updatedAt ?? Date.now(),
+    pointAnswers: Array.from({ length: normalizedCount }, (_, index) => answers[index] ?? emptyField()),
+    impression: source?.impression ?? emptyField(),
+    application: source?.application ?? emptyField(),
+    freeNote: source?.freeNote ?? emptyField(),
+    highlightRanges: source?.highlightRanges ?? [],
+    highlightVersions: source?.highlightVersions ?? {},
+    revision:
+      Number.isInteger(revisionCandidate) && revisionCandidate >= 0 ? revisionCandidate : 0,
+    updatedAt: source?.updatedAt ?? Date.now(),
+  }
+  return attachPreservedData(normalized, preservedEntriesFrom(note))
+}
+
+/** helper symbol을 제외하고 legacy unknown key 위에 현재 known field를 덮어 원격 JSON을 만든다. */
+export function serializeSermonNoteData(note: SermonNote): object {
+  return {
+    ...Object.fromEntries(note[preservedSermonNoteData] ?? []),
+    sermonId: note.sermonId,
+    pointAnswers: note.pointAnswers,
+    impression: note.impression,
+    application: note.application,
+    freeNote: note.freeNote,
+    highlightRanges: note.highlightRanges,
+    highlightVersions: note.highlightVersions,
+    updatedAt: note.updatedAt,
+  }
+}
+
+function sermonNoteCache(
+  note: SermonNote,
+  owner: string,
+  metadata: Pick<SermonNoteCache, 'dirty' | 'conflict' | 'baseRevision'> = {},
+): SermonNoteCache {
+  return {
+    sermonId: note.sermonId,
+    pointAnswers: note.pointAnswers,
+    impression: note.impression,
+    application: note.application,
+    freeNote: note.freeNote,
+    highlightRanges: note.highlightRanges,
+    highlightVersions: note.highlightVersions,
+    revision: note.revision,
+    updatedAt: note.updatedAt,
+    key: sermonNoteKey(owner, note.sermonId),
+    userId: owner,
+    preservedEntries: [...(note[preservedSermonNoteData] ?? [])],
+    ...metadata,
   }
 }
 
@@ -493,6 +803,105 @@ function sermonNoteKey(userId: string, sermonId: string): string {
   return `${userId}:${sermonId}`
 }
 
+function isStaleSermonNoteError(error: unknown): boolean {
+  if (error instanceof Error) return error.message.includes('SERMON_NOTE_STALE_REVISION')
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'message' in error &&
+    typeof error.message === 'string' &&
+    error.message.includes('SERMON_NOTE_STALE_REVISION')
+  )
+}
+
+function sermonRevisionFromResponse(data: unknown): number {
+  if (
+    typeof data !== 'object' ||
+    data === null ||
+    !('revision' in data) ||
+    typeof data.revision !== 'number' ||
+    !Number.isInteger(data.revision) ||
+    data.revision < 1
+  ) {
+    throw new Error('SERMON_NOTE_INVALID_RESPONSE')
+  }
+  return data.revision
+}
+
+async function verifySermonSessionOwner(userId: string): Promise<void> {
+  // Defense-in-depth only. SQL validates p_owner_user_id against auth.uid() at the write boundary.
+  await assertActiveSupabaseOwner(userId, 'SERMON_NOTE_OWNER_CHANGED')
+}
+
+/** 편집 직후 debounce와 무관하게 owner-scoped local cache에 먼저 기록한다. */
+export async function stageSermonNoteLocally(
+  note: SermonNote,
+  userId?: string,
+): Promise<SermonNote> {
+  const owner = userId ?? SERMON_LOCAL_USER
+  const key = sermonNoteKey(owner, note.sermonId)
+  const next = normalizeSermonNoteData(note.sermonId, note.pointAnswers.length, note)
+  await db.transaction('rw', db.sermonNotes, async () => {
+    const current = await db.sermonNotes.get(key)
+    if (current && current.updatedAt > next.updatedAt) return
+    await db.sermonNotes.put(
+      sermonNoteCache(next, owner, {
+        dirty: userId ? true : false,
+        conflict: current?.conflict ?? false,
+        baseRevision: current?.baseRevision ?? next.revision,
+      }),
+    )
+  })
+  return next
+}
+
+async function completeSermonLocalSave(
+  saved: SermonNote,
+  owner: string,
+  revision: number,
+): Promise<SermonNote> {
+  const key = sermonNoteKey(owner, saved.sermonId)
+  let completed = { ...saved, revision }
+  await db.transaction('rw', db.sermonNotes, async () => {
+    const latestCache = await db.sermonNotes.get(key)
+    const latest = latestCache
+      ? normalizeSermonNoteData(saved.sermonId, saved.pointAnswers.length, latestCache, revision)
+      : completed
+    latest.revision = revision
+    const hasNewerFields = latest.updatedAt > saved.updatedAt
+    await db.sermonNotes.put(
+      sermonNoteCache(latest, owner, {
+        dirty: hasNewerFields,
+        conflict: false,
+        baseRevision: revision,
+      }),
+    )
+    completed = latest
+  })
+  return completed
+}
+
+async function markSermonLocalSaveFailed(
+  note: SermonNote,
+  owner: string,
+  conflict: boolean,
+): Promise<void> {
+  const key = sermonNoteKey(owner, note.sermonId)
+  await db.transaction('rw', db.sermonNotes, async () => {
+    const latestCache = await db.sermonNotes.get(key)
+    const latest = latestCache
+      ? normalizeSermonNoteData(note.sermonId, note.pointAnswers.length, latestCache)
+      : note
+    await db.sermonNotes.put(
+      sermonNoteCache(latest, owner, {
+        dirty: true,
+        conflict: conflict || latestCache?.conflict === true,
+        baseRevision: latestCache?.baseRevision ?? note.revision,
+      }),
+    )
+  })
+}
+
 export async function getSermonNote(
   sermonId: string,
   pointCount: number,
@@ -501,52 +910,213 @@ export async function getSermonNote(
   // 로그인 없이도 묵상은 이 기기(IndexedDB)에 남는다 — 말씀 묵상 노트 앱과 같은 방식
   if (!userId) {
     const local = await db.sermonNotes.get(sermonNoteKey(SERMON_LOCAL_USER, sermonId))
-    return normalizeSermonNote(sermonId, pointCount, local)
+    return normalizeSermonNoteData(sermonId, pointCount, local)
   }
+
+  const key = sermonNoteKey(userId, sermonId)
+  const local = await db.sermonNotes.get(key)
 
   if (supabase) {
     try {
       const { data, error } = await supabase
         .from('sermon_notes')
-        .select('data')
+        .select('data, revision')
         .eq('user_id', userId)
         .eq('sermon_id', sermonId)
         .maybeSingle()
 
       if (error) throw error
+      const remoteRevision =
+        typeof data?.revision === 'number' && Number.isInteger(data.revision) && data.revision >= 0
+          ? data.revision
+          : 0
+      const latestLocal = await db.sermonNotes.get(key)
+      if (latestLocal?.dirty) {
+        const localNote = normalizeSermonNoteData(sermonId, pointCount, latestLocal)
+        await db.sermonNotes.put(
+          sermonNoteCache(localNote, userId, {
+            dirty: true,
+            conflict: remoteRevision !== localNote.revision,
+            baseRevision: latestLocal.baseRevision ?? localNote.revision,
+          }),
+        )
+        return localNote
+      }
       if (data?.data) {
-        const note = normalizeSermonNote(sermonId, pointCount, data.data as Partial<SermonNote>)
-        await db.sermonNotes.put({ ...note, key: sermonNoteKey(userId, sermonId), userId })
+        const note = normalizeSermonNoteData(sermonId, pointCount, data.data, remoteRevision)
+        await db.sermonNotes.put(
+          sermonNoteCache(note, userId, {
+            dirty: false,
+            conflict: false,
+            baseRevision: remoteRevision,
+          }),
+        )
         return note
       }
-    } catch {
+    } catch (error) {
       // 오프라인/일시 오류 시 로컬 캐시로 폴백 — 묵상이 아예 안 열리는 것 방지
+      console.warn('Sermon note remote load failed; using owner-scoped cache.', error)
     }
   }
 
-  const cached = await db.sermonNotes.get(sermonNoteKey(userId, sermonId))
-  if (cached) return normalizeSermonNote(sermonId, pointCount, cached)
+  if (local) return normalizeSermonNoteData(sermonId, pointCount, local)
 
-  // 계정에 아무 기록이 없으면 로그인 전에 이 기기에서 쓴 묵상을 이어받는다 —
-  // 바인더의 로컬→계정 업로드와 같은 규칙. 다음 저장 때 계정으로 올라간다.
-  const anonymous = await db.sermonNotes.get(sermonNoteKey(SERMON_LOCAL_USER, sermonId))
-  return normalizeSermonNote(sermonId, pointCount, anonymous)
+  const inherited = await claimAnonymousSermonNote(sermonId, pointCount, userId)
+  return inherited ?? normalizeSermonNoteData(sermonId, pointCount, undefined, 0)
 }
 
-export async function putSermonNote(note: SermonNote, userId?: string): Promise<void> {
-  const next = { ...note, updatedAt: Date.now() }
-  const owner = userId ?? SERMON_LOCAL_USER
-  await db.sermonNotes.put({ ...next, key: sermonNoteKey(owner, next.sermonId), userId: owner })
+/** Each anonymous sermon note can be copied into at most one authenticated owner cache. */
+export async function claimAnonymousSermonNote(
+  sermonId: string,
+  pointCount: number,
+  userId: string,
+): Promise<SermonNote | undefined> {
+  let inherited: SermonNote | undefined
+  await db.transaction('rw', db.sermonNotes, db.sermonNoteClaims, async () => {
+    const claim = await db.sermonNoteClaims.get(sermonId)
+    if (claim) return
+    const ownerCache = await db.sermonNotes.get(sermonNoteKey(userId, sermonId))
+    const anonymousCache = await db.sermonNotes.get(sermonNoteKey(SERMON_LOCAL_USER, sermonId))
+    if (!shouldInheritAnonymousSermonNote(claim, ownerCache, anonymousCache)) return
 
-  if (!supabase || !userId) return
-
-  const { error } = await supabase.from('sermon_notes').upsert({
-    user_id: userId,
-    sermon_id: next.sermonId,
-    data: next,
-    updated_at: new Date(next.updatedAt).toISOString(),
+    await db.sermonNoteClaims.put({ sermonId, ownerId: userId, claimedAt: Date.now() })
+    const copy = normalizeSermonNoteData(sermonId, pointCount, anonymousCache, 0)
+    await db.sermonNotes.put(
+      sermonNoteCache(copy, userId, {
+        dirty: true,
+        conflict: false,
+        baseRevision: 0,
+      }),
+    )
+    inherited = copy
   })
+  return inherited
+}
+
+export async function hasSermonNoteConflict(
+  sermonId: string,
+  userId?: string,
+): Promise<boolean> {
+  const owner = userId ?? SERMON_LOCAL_USER
+  const cached = await db.sermonNotes.get(sermonNoteKey(owner, sermonId))
+  return cached?.conflict === true
+}
+
+export async function putSermonNote(note: SermonNote, userId?: string): Promise<SermonNote> {
+  const owner = userId ?? SERMON_LOCAL_USER
+  const key = sermonNoteKey(owner, note.sermonId)
+  const next = normalizeSermonNoteData(note.sermonId, note.pointAnswers.length, note)
+  await stageSermonNoteLocally(next, userId)
+
+  if (!supabase || !userId) {
+    return next
+  }
+  const client = supabase
+
+  await sermonSaveQueue.run(key, async () => {
+    try {
+      await verifySermonSessionOwner(userId)
+      const { data, error } = await client.rpc('put_sermon_note', {
+        p_owner_user_id: userId,
+        p_sermon_id: next.sermonId,
+        p_expected_revision: next.revision,
+        p_data: serializeSermonNoteData(next),
+      })
+      if (error) throw error
+      const revision = sermonRevisionFromResponse(data)
+      next.revision = revision
+      note.revision = revision
+      await completeSermonLocalSave(next, owner, revision)
+    } catch (error) {
+      await markSermonLocalSaveFailed(next, owner, isStaleSermonNoteError(error))
+      throw error
+    }
+  })
+  return next
+}
+
+/** 충돌 배너에서 사용자가 명시적으로 local 내용을 선택했을 때만 원격 revision 위에 저장한다. */
+export async function resolveSermonConflictKeepLocal(
+  note: SermonNote,
+  userId: string,
+): Promise<SermonNote> {
+  if (!supabase || !userId) throw new Error('SERMON_NOTE_OWNER_CHANGED')
+  const client = supabase
+  const key = sermonNoteKey(userId, note.sermonId)
+  const next = await stageSermonNoteLocally(note, userId)
+  let saved = next
+
+  await sermonSaveQueue.run(key, async () => {
+    try {
+      await verifySermonSessionOwner(userId)
+      const { data: remote, error: revisionError } = await client
+        .from('sermon_notes')
+        .select('revision')
+        .eq('user_id', userId)
+        .eq('sermon_id', next.sermonId)
+        .maybeSingle()
+      if (revisionError) throw revisionError
+      const expectedRevision =
+        typeof remote?.revision === 'number' && Number.isInteger(remote.revision)
+          ? remote.revision
+          : 0
+
+      await verifySermonSessionOwner(userId)
+      const { data, error } = await client.rpc('put_sermon_note', {
+        p_owner_user_id: userId,
+        p_sermon_id: next.sermonId,
+        p_expected_revision: expectedRevision,
+        p_data: serializeSermonNoteData(next),
+      })
+      if (error) throw error
+      const revision = sermonRevisionFromResponse(data)
+      next.revision = revision
+      note.revision = revision
+      saved = await completeSermonLocalSave(next, userId, revision)
+    } catch (error) {
+      await markSermonLocalSaveFailed(next, userId, true)
+      throw error
+    }
+  })
+  return saved
+}
+
+/** 충돌 배너에서 원격을 선택했을 때, 원격 조회 성공 뒤에만 dirty cache를 교체한다. */
+export async function resolveSermonConflictUseRemote(
+  sermonId: string,
+  pointCount: number,
+  userId: string,
+): Promise<SermonNote> {
+  if (!supabase || !userId) throw new Error('SERMON_NOTE_OWNER_CHANGED')
+  const key = sermonNoteKey(userId, sermonId)
+  const localBefore = await db.sermonNotes.get(key)
+  await verifySermonSessionOwner(userId)
+  const { data, error } = await supabase
+    .from('sermon_notes')
+    .select('data, revision')
+    .eq('user_id', userId)
+    .eq('sermon_id', sermonId)
+    .maybeSingle()
   if (error) throw error
+  const revision =
+    typeof data?.revision === 'number' && Number.isInteger(data.revision) && data.revision >= 0
+      ? data.revision
+      : 0
+  const remote = normalizeSermonNoteData(sermonId, pointCount, data?.data, revision)
+  await db.transaction('rw', db.sermonNotes, async () => {
+    const latest = await db.sermonNotes.get(key)
+    if (latest && localBefore && latest.updatedAt > localBefore.updatedAt) {
+      throw new Error('SERMON_NOTE_NEWER_LOCAL_EDIT')
+    }
+    await db.sermonNotes.put(
+      sermonNoteCache(remote, userId, {
+        dirty: false,
+        conflict: false,
+        baseRevision: revision,
+      }),
+    )
+  })
+  return remote
 }
 
 /** 설교 등록·수정. 같은 주일·예배가 이미 있으면 덮어쓴다(unique 제약과 같은 기준). */
@@ -565,8 +1135,12 @@ export async function upsertSermon(sermon: Sermon): Promise<void> {
       points: sermon.points,
       media_url: sermon.mediaUrl || null,
       published: sermon.published,
+      ...(sermon.titleEn !== undefined ? { title_en: sermon.titleEn || null } : {}),
+      ...(sermon.preacherEn !== undefined ? { preacher_en: sermon.preacherEn || null } : {}),
+      ...(sermon.summaryEn !== undefined ? { summary_en: sermon.summaryEn || null } : {}),
+      ...(sermon.pointsEn !== undefined ? { points_en: sermon.pointsEn } : {}),
     },
-    { onConflict: 'preached_on,service' },
+    { onConflict: 'preached_on,service', defaultToNull: false },
   )
   if (error) throw error
 }

@@ -13,5 +13,11 @@ export function registerSaveFlush(fn: Flush): () => void {
 }
 
 export async function flushPendingSaves(): Promise<void> {
-  await Promise.allSettled([...flushers].map((fn) => fn()))
+  const results = await Promise.allSettled(
+    [...flushers].map((fn) => Promise.resolve().then(() => fn())),
+  )
+  const errors = results.flatMap((result) =>
+    result.status === 'rejected' ? [result.reason] : [],
+  )
+  if (errors.length > 0) throw new AggregateError(errors, 'PENDING_SAVES_FAILED')
 }

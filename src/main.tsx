@@ -5,25 +5,47 @@ import { announceAppUpdate, isNewerVersion } from './appUpdate'
 import { clearBibleCache } from './bible'
 import { isBibleCopyEnabled } from './bibleCopy'
 import UpdateNotice from './components/UpdateNotice'
+import { pruneRemovedBibleVersionCaches } from './db'
+import { getLang } from './i18n/lang'
 import { flushPendingSaves } from './saveFlush'
 import './index.css'
 import App from 'virtual:target-app'
 
 const UPDATE_CHECK_INTERVAL_MS = 60 * 60 * 1000
 
+document.documentElement.lang = getLang()
+
+void pruneRemovedBibleVersionCaches().catch((error) => {
+  console.warn('Removed Bible version cache pruning failed.', error)
+})
+
 let reloadingForServiceWorker = false
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, ms))
+}
 
 // 새 SW가 활성화돼도 필기 중(ink-active: 노트·바인더 잉크 엔진이 관리)에는
 // 리로드를 보류하고, 리로드 직전에 대기 중인 저장을 확정한다 — 설치형
 // PWA에서 업데이트 리로드가 필기 도중에 터져 방금 쓴 글씨가 날아가는 것 방지.
-async function reloadWhenSafe() {
-  if (reloadingForServiceWorker) return
+async function reloadWhenSafe(): Promise<boolean> {
+  if (reloadingForServiceWorker) return false
   reloadingForServiceWorker = true
-  while (document.body.classList.contains('ink-active')) {
-    await new Promise((resolve) => setTimeout(resolve, 500))
+  try {
+    while (document.body.classList.contains('ink-active')) await sleep(500)
+    try {
+      await flushPendingSaves()
+    } catch {
+      await sleep(1000)
+      await flushPendingSaves()
+    }
+  } catch (error) {
+    console.warn('Pending saves are unfinished; the update reload was cancelled.', error)
+    reloadingForServiceWorker = false
+    return false
   }
-  await flushPendingSaves()
   window.location.reload()
+  return true
 }
 
 if ('serviceWorker' in navigator) {
@@ -176,7 +198,7 @@ async function refreshToLatestBuild() {
       await clearBibleCache()
       await removeRuntimeBibleCaches()
     }
-    await reloadWhenSafe()
+    if (!(await reloadWhenSafe())) throw new Error('PENDING_SAVES_FAILED')
     return
   }
 
@@ -189,7 +211,7 @@ async function refreshToLatestBuild() {
   const waitingWorker = registration.waiting
   if (!waitingWorker) {
     if (navigator.serviceWorker.controller !== previousController) {
-      await reloadWhenSafe()
+      if (!(await reloadWhenSafe())) throw new Error('PENDING_SAVES_FAILED')
       return
     }
     throw new Error('The updated service worker is not ready yet.')
@@ -201,7 +223,7 @@ async function refreshToLatestBuild() {
   }
 
   await activateWaitingWorker(waitingWorker)
-  await reloadWhenSafe()
+  if (!(await reloadWhenSafe())) throw new Error('PENDING_SAVES_FAILED')
 }
 
 void checkForAppUpdate()
