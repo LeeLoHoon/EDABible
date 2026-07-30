@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { Link } from 'react-router-dom'
 import * as pdfjsLib from 'pdfjs-dist'
@@ -12,9 +12,14 @@ import {
   isKnownBinderSetId,
   type BinderCheckpoint,
 } from '../binderLibrary'
-import { migrateLocalBinderWorks, resolveLegacyResume } from '../binderMigration'
+import {
+  convertLegacyPageText,
+  migrateLocalBinderWorks,
+  resolveLegacyResume,
+} from '../binderMigration'
 import BinderVideoInterstitial from '../components/BinderVideoInterstitial'
 import BinderVideoSheet from '../components/BinderVideoSheet'
+import BinderGuideSheet from '../components/BinderGuideSheet'
 import ModeToggle from '../components/ModeToggle'
 import {
   getBinderWork,
@@ -23,6 +28,7 @@ import {
   isBinderAdmin,
   putBinderWork,
   putHiddenPages,
+  BINDER_LOCAL_OWNER,
   type BinderBookmark,
   type BinderTextBox,
   type BinderWork,
@@ -30,7 +36,10 @@ import {
 import { canvasToJpegFile, shareOrDownloadFiles } from '../shareImage'
 import { emptyField, type Field, type FieldMode, type Stroke } from '../types'
 import { t } from '../i18n/strings'
+import { getLang } from '../i18n/lang'
 import LangToggle from '../components/LangToggle'
+import { registerSaveFlush } from '../saveFlush'
+import { LatestValueDrain } from '../persistenceQueue'
 import {
   lessonVideoBeforePage,
   videoStagesFor,
@@ -47,6 +56,11 @@ type InkTool = 'pen' | 'eraser'
 type PreviewItem =
   | { kind: 'page'; page: number }
   | { kind: 'video'; page: number; lesson: BinderVideoLesson }
+
+interface PendingBinderSave {
+  work: BinderWork
+  ownerId?: string
+}
 
 const PEN_COLORS = ['#3a3626', '#7e7a28', '#348a44', '#2563eb', '#d97706', '#be185d']
 
@@ -290,19 +304,6 @@ function PageOverlay({
   useEffect(() => {
     textBoxesRef.current = textBoxes
   }, [textBoxes])
-
-  useEffect(() => {
-    if (textBoxes.length > 0 || !field.text.trim()) return
-    const box = {
-      id: crypto.randomUUID(),
-      x: 0.08,
-      y: 0.08,
-      width: 0.52,
-      text: field.text,
-    }
-    onTextBoxesChange([box])
-    onChange({ ...field, text: '' })
-  }, [field, onChange, onTextBoxesChange, textBoxes.length])
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -1007,8 +1008,16 @@ export default function BinderPage() {
   const { user, signOut } = useAuth()
   // 토큰 갱신 등으로 user 객체 참조가 바뀌어도 재조회하지 않도록 id 문자열만 의존
   const userId = user?.id
+  const workOwnerId = userId ?? BINDER_LOCAL_OWNER
   const [selectedId, setSelectedId] = useState(binderSetList[0]?.id ?? '')
-  const [work, setWork] = useState<BinderWork | null>(null)
+  const [ownedWork, setOwnedWork] = useState<{ ownerId: string; work: BinderWork } | null>(null)
+  const work = ownedWork?.ownerId === workOwnerId ? ownedWork.work : null
+  const setWork = useCallback(
+    (next: BinderWork | null) => {
+      setOwnedWork(next ? { ownerId: workOwnerId, work: next } : null)
+    },
+    [workOwnerId],
+  )
   const [document, setDocument] = useState<PdfDocument | null>(null)
   // 뷰어 wrapper의 세로 길이를 PDF 쪽과 영상 인터스티셜 사이에서 항상 같게 유지하기 위해
   // 이 권의 첫 쪽 viewport를 그대로 aspect-ratio로 쓴다. 로드 실패나 최초 렌더는
@@ -1025,6 +1034,7 @@ export default function BinderPage() {
   const [interstitialPage, setInterstitialPage] = useState<number | null>(null)
   const [viewDir, setViewDir] = useState<'forward' | 'backward'>('forward')
   const [videosOpen, setVideosOpen] = useState(false)
+  const [guideOpen, setGuideOpen] = useState(false)
   const [shareOpen, setShareOpen] = useState(false)
   const [shareBusy, setShareBusy] = useState(false)
   const [shareSelected, setShareSelected] = useState<number[]>([])
@@ -1040,6 +1050,7 @@ export default function BinderPage() {
   const [loadingPdf, setLoadingPdf] = useState(true)
   const [bootReadyUserId, setBootReadyUserId] = useState<string | null>(null)
   const [previewDragging, setPreviewDragging] = useState(false)
+  const [workSaveError, setWorkSaveError] = useState<string | null>(null)
   const previewDragRef = useRef<{ startX: number; startIndex: number; lastPage: number } | null>(null)
   const previewMovedRef = useRef(false)
   const activeCheckpointRef = useRef<HTMLButtonElement | null>(null)
@@ -1049,13 +1060,68 @@ export default function BinderPage() {
   // 권을 바꾼 뒤 사용자가 직접 페이지를 넘겼으면 복원으로 되돌리지 않는다
   const navigatedSinceSelectRef = useRef(false)
   const workRef = useRef<BinderWork | null>(null)
+  const workOwnerRef = useRef(workOwnerId)
+  const workDrainRef = useRef(new LatestValueDrain<PendingBinderSave>())
   const adminTapRef = useRef({ count: 0, deadline: 0 })
   const hiddenLoadRef = useRef(0)
   const selectedSetIdRef = useRef(selectedId)
 
+  const flushWork = useCallback(async () => {
+    try {
+      await workDrainRef.current.flush(async (pending) => {
+        await putBinderWork(pending.work, pending.ownerId)
+      })
+      if (!workDrainRef.current.getPending()) setWorkSaveError(null)
+    } catch (error) {
+      setWorkSaveError(t('binderSaveFailed'))
+      throw error
+    }
+  }, [])
+
+  const persistWork = useCallback((next: BinderWork, ownerId?: string) => {
+    workDrainRef.current.schedule({ work: next, ownerId })
+    void flushWork().catch((error) => {
+      console.warn('Binder save remains pending for retry.', error)
+    })
+  }, [flushWork])
+
   useEffect(() => {
+    const reportBestEffortFailure = (error: unknown) => {
+      console.warn('Binder lifecycle flush could not finish.', error)
+    }
+    const onPageHide = () => {
+      void flushWork().catch(reportBestEffortFailure)
+    }
+    const onVisibilityChange = () => {
+      if (window.document.visibilityState === 'hidden') {
+        void flushWork().catch(reportBestEffortFailure)
+      }
+    }
+    const unregister = registerSaveFlush(flushWork)
+    window.addEventListener('pagehide', onPageHide)
+    window.document.addEventListener('visibilitychange', onVisibilityChange)
+    return () => {
+      unregister()
+      window.removeEventListener('pagehide', onPageHide)
+      window.document.removeEventListener('visibilitychange', onVisibilityChange)
+      void flushWork().catch(reportBestEffortFailure)
+    }
+  }, [flushWork])
+
+  const handleSignOut = useCallback(async () => {
+    try {
+      await flushWork()
+      await signOut()
+    } catch (error) {
+      console.warn('Binder sign-out was blocked by an unfinished save.', error)
+      setWorkSaveError(t('binderSignOutBlocked'))
+    }
+  }, [flushWork, signOut])
+
+  useEffect(() => {
+    workOwnerRef.current = workOwnerId
     workRef.current = work
-  }, [work])
+  }, [work, workOwnerId])
 
   const selected = findBinderSet(selectedId) ?? binderSetList[0]
   const interstitialVideo =
@@ -1094,6 +1160,7 @@ export default function BinderPage() {
   }))
   const activeCheckpointId =
     [...checkpointSections].reverse().find((section) => pageNumber >= section.page)?.id ?? ''
+  const activeCheckpoint = checkpointSections.find((section) => section.id === activeCheckpointId)
 
   useEffect(() => {
     selectedSetIdRef.current = selected.id
@@ -1195,8 +1262,9 @@ export default function BinderPage() {
         if (!resume || !isKnownBinderSetId(resume.setId)) return
         legacyResumeRef.current = resume
         setSelectedId(resume.setId)
-      } catch {
+      } catch (error) {
         // 복원 실패 시 첫 세트를 그대로 열어 바인더 사용을 막지 않는다.
+        console.warn('Binder startup restoration failed.', error)
       } finally {
         if (alive) setBootReadyUserId(userId)
       }
@@ -1218,44 +1286,56 @@ export default function BinderPage() {
         setPageNumber(1)
       }
     }, 0)
-    getBinderWork(selected.id, userId).then((next) => {
-      if (!alive) return
-      window.clearTimeout(resetTimer)
-      // 이 권에서 마지막으로 보던 쪽으로 이어보기 (이미 직접 넘겼으면 유지)
-      const legacyResume = legacyResumeRef.current?.setId === selected.id
-        ? legacyResumeRef.current.page
-        : undefined
-      if (legacyResume !== undefined) legacyResumeRef.current = null
-      const target = legacyResume ?? (next.lastPageNumber && next.lastPageNumber > 0 ? next.lastPageNumber : 1)
-      const restored = Math.max(1, Math.min(selected.pages, target))
-      setInterstitialPage(null)
-      if (!navigatedSinceSelectRef.current) setPageNumber(restored)
+    getBinderWork(selected.id, userId)
+      .then((loaded) => {
+        if (!alive) return
+        window.clearTimeout(resetTimer)
+        const converted = convertLegacyPageText(loaded)
+        const next = converted.work
+        // 이 권에서 마지막으로 보던 쪽으로 이어보기 (이미 직접 넘겼으면 유지)
+        const legacyResume =
+          legacyResumeRef.current?.setId === selected.id
+            ? legacyResumeRef.current.page
+            : undefined
+        if (legacyResume !== undefined) legacyResumeRef.current = null
+        const target =
+          legacyResume ??
+          (next.lastPageNumber && next.lastPageNumber > 0 ? next.lastPageNumber : 1)
+        const restored = Math.max(1, Math.min(selected.pages, target))
+        setInterstitialPage(null)
+        if (!navigatedSinceSelectRef.current) setPageNumber(restored)
 
-      if (bootRef.current) {
-        // 부팅 복원: 열람만으로 최근 사용 순서를 바꾸지 않는다
-        bootRef.current = false
-        workRef.current = next
-        setWork(next)
-        return
-      }
-      // 사용자가 직접 고른 권: 페이지를 안 넘겨도 "마지막 사용 권"으로 기록
-      const touched = { ...next, lastPageNumber: restored }
-      workRef.current = touched
-      setWork(touched)
-      void putBinderWork(touched, userId).catch(() => {})
-    })
+        if (bootRef.current) {
+          // 부팅 복원: 열람만으로 최근 사용 순서를 바꾸지 않는다
+          bootRef.current = false
+          workOwnerRef.current = workOwnerId
+          workRef.current = next
+          setWork(next)
+          if (converted.changed) persistWork(next, userId)
+          return
+        }
+        // 사용자가 직접 고른 권: 페이지를 안 넘겨도 "마지막 사용 권"으로 기록
+        const touched = { ...next, lastPageNumber: restored }
+        workOwnerRef.current = workOwnerId
+        workRef.current = touched
+        setWork(touched)
+        persistWork(touched, userId)
+      })
+      .catch(() => {
+        if (alive) setWorkSaveError(t('binderSaveFailed'))
+      })
     return () => {
       alive = false
       window.clearTimeout(resetTimer)
     }
-  }, [bootReadyUserId, selected.id, selected.pages, userId])
+  }, [bootReadyUserId, persistWork, selected.id, selected.pages, setWork, userId, workOwnerId])
 
   // 마지막 위치(권·쪽 + 체크포인트 구간별 쪽) 저장 — 계정별 이어보기용
   useEffect(() => {
     if (!userId || bootRef.current) return
     const timer = window.setTimeout(() => {
       const current = workRef.current
-      if (!current || current.bookId !== selected.id) return
+      if (!current || workOwnerRef.current !== workOwnerId || current.bookId !== selected.id) return
       const savedCheckpoints = current.checkpointPages ?? {}
       const checkpointChanged =
         activeCheckpointId !== '' && savedCheckpoints[activeCheckpointId] !== pageNumber
@@ -1269,10 +1349,10 @@ export default function BinderPage() {
       }
       workRef.current = next
       setWork(next)
-      void putBinderWork(next, userId).catch(() => {})
+      persistWork(next, userId)
     }, 800)
     return () => window.clearTimeout(timer)
-  }, [activeCheckpointId, pageNumber, selected.id, userId])
+  }, [activeCheckpointId, pageNumber, persistWork, selected.id, setWork, userId, workOwnerId])
 
   useEffect(() => {
     let alive = true
@@ -1313,7 +1393,7 @@ export default function BinderPage() {
 
   const updateWork = (next: BinderWork) => {
     setWork(next)
-    void putBinderWork(next, user?.id)
+    persistWork(next, user?.id)
   }
 
   const updatePageInput = (field: Field) => {
@@ -1682,7 +1762,7 @@ export default function BinderPage() {
             {__APP_TARGET__ !== 'all' && (
               <button
                 type="button"
-                onClick={signOut}
+                onClick={() => void handleSignOut()}
                 className="whitespace-nowrap rounded-full px-2 py-1.5 text-[13px] font-bold text-rose-key/80 transition hover:text-rose-accent"
               >
                 {t('binderLogout')}
@@ -1691,6 +1771,14 @@ export default function BinderPage() {
           </div>
         </div>
       </header>
+
+      {workSaveError && (
+        <div aria-live="polite" className="mx-auto mt-3 max-w-6xl px-4">
+          <p className="rounded-xl border border-rose-accent/40 bg-rose-card px-3 py-2 text-sm font-bold text-rose-accent shadow-sm">
+            {workSaveError}
+          </p>
+        </div>
+      )}
 
       <main className="mx-auto flex max-w-6xl flex-col gap-5 px-4 py-5 xl:grid xl:grid-cols-[15rem_minmax(0,1fr)] xl:items-start">
         {/* 폰·태블릿에서는 세트 선택 → 체크포인트를 헤더 바로 아래로 올린다.
@@ -1743,6 +1831,12 @@ export default function BinderPage() {
             </div>
           </section>
 
+          {getLang() === 'en' && (
+            <p className="order-2 rounded-xl border border-rose-line bg-rose-chip/50 px-3 py-2.5 text-[13px] font-bold leading-5 text-rose-key xl:order-3">
+              {t('binderEnglishCoverageNotice')}
+            </p>
+          )}
+
           <section className="order-2 rounded-2xl border border-rose-line bg-rose-card p-3 xl:order-3">
             <div className="mb-2 flex items-center justify-between px-1.5">
               <h2 className="flex items-center gap-2 font-serif text-base font-extrabold">
@@ -1768,7 +1862,7 @@ export default function BinderPage() {
                     ref={active ? activeCheckpointRef : null}
                     onClick={() => goToCheckpoint(checkpoint.id)}
                     title={`${checkpoint.label} · ${t('binderPage')(checkpoint.page)}`}
-                    className={`min-w-0 truncate rounded-lg px-2.5 py-1.5 text-left text-sm transition ${
+                    className={`min-h-11 min-w-0 truncate rounded-lg px-2.5 py-2 text-left text-sm transition focus:outline-none focus:ring-2 focus:ring-rose-accent ${
                       active
                         ? 'bg-rose-chip font-extrabold text-rose-accent'
                         : 'font-bold text-rose-key hover:bg-rose-chip/50 hover:text-rose-ink'
@@ -1906,7 +2000,8 @@ export default function BinderPage() {
             <select
               value={activeCheckpointId}
               onChange={(event) => goToCheckpoint(event.target.value)}
-              className="min-w-0 flex-1 rounded-full border border-rose-line bg-rose-bg px-3 py-1.5 text-[13px] font-bold text-rose-key outline-none focus:border-rose-accent sm:max-w-40 sm:flex-none"
+              title={activeCheckpoint ? `${activeCheckpoint.label} · ${t('binderPage')(activeCheckpoint.page)}` : t('binderShortcut')}
+              className="min-h-11 min-w-0 max-w-[min(18rem,70vw)] flex-1 truncate rounded-full border border-rose-line bg-rose-bg px-3 py-1.5 text-[13px] font-bold text-rose-key outline-none focus:border-rose-accent focus:ring-2 focus:ring-rose-accent sm:flex-none"
               aria-label={t('binderCheckpointAria')}
             >
               <option value="" disabled>
@@ -1919,6 +2014,14 @@ export default function BinderPage() {
               ))}
             </select>
             <ModeToggle mode={inputMode} onChange={setInputMode} />
+            <button
+              type="button"
+              onClick={() => setGuideOpen(true)}
+              className="flex min-h-11 shrink-0 items-center gap-1 rounded-full bg-rose-chip px-3 py-1.5 text-[13px] font-bold text-rose-accent-deep transition active:scale-95 focus:outline-none focus:ring-2 focus:ring-rose-accent"
+              aria-label={t('binderGuideOpen')}
+            >
+              <span aria-hidden>?</span> {t('binderGuideEntry')}
+            </button>
             {videoStagesFor(selected.id) && (
               <button
                 type="button"
@@ -2245,6 +2348,18 @@ export default function BinderPage() {
           setId={selected.id}
           currentPage={pageNumber}
           onClose={() => setVideosOpen(false)}
+        />
+      )}
+
+      {guideOpen && (
+        <BinderGuideSheet
+          setId={selected.id}
+          setTitle={t('binderSetTitle')(selected.kind)}
+          checkpoints={checkpoints}
+          currentPage={pageNumber}
+          pageCount={pageCount}
+          onJumpPage={goToPage}
+          onClose={() => setGuideOpen(false)}
         />
       )}
 

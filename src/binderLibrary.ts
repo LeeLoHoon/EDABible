@@ -1,6 +1,7 @@
 import { binderSets, type BinderSetCheckpoint } from './binderSets'
 import { getLang, type Lang } from './i18n/lang'
 import { t } from './i18n/strings'
+import { checkpointTitle } from '../scripts/binder_checkpoint_titles.mjs'
 
 /** 바인더 세트의 주제 종류다. */
 export type BinderSetKind = 'starter' | 'meditation' | 'timothy' | 'bookStudy'
@@ -64,7 +65,10 @@ export function checkpointsForSet(set: BinderSet): BinderCheckpoint[] {
     .filter((checkpoint) => checkpoint.page <= set.pages)
     .map((checkpoint) => ({
       id: checkpoint.id,
-      label: t('binderIssue')(checkpoint.issue),
+      label:
+        (set.kind === 'timothy' || set.kind === 'bookStudy'
+          ? checkpointTitle(set.id, checkpoint.id, getLang())
+          : undefined) ?? t('binderIssue')(checkpoint.issue),
       page: checkpoint.page,
     }))
 }
