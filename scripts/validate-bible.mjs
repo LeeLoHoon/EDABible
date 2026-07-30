@@ -1,9 +1,9 @@
 import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
-// --lang <version> 으로 역본별 산출물을 검증한다(en/gae/nkt는 하위 폴더).
+// --lang <version> 으로 역본별 산출물을 검증한다(en/gae/sae는 하위 폴더).
 // 한국어 전용 규칙(편집 제목·페이지 헤더)은 다른 역본과 매칭되지 않으므로 그대로 적용해도 안전하다.
-const VERSION_DIRS = { ko: '', en: 'en/', gae: 'gae/', nkt: 'nkt/', sae: 'sae/' };
+const VERSION_DIRS = { ko: '', en: 'en/', gae: 'gae/', sae: 'sae/' };
 const lang = process.argv.includes('--lang') ? process.argv[process.argv.indexOf('--lang') + 1] : 'ko';
 if (!(lang in VERSION_DIRS)) {
   console.error(`unsupported lang: ${lang}`);

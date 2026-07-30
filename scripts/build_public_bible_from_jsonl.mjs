@@ -4,13 +4,11 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises'
 //   ko  = 메시지성경(기본, public/bible)
 //   en  = The Message 영어(public/bible/en)
 //   gae = 개역개정(public/bible/gae)
-//   nkt = 새한글성경 2024(public/bible/nkt)
 //   sae = 새번역(public/bible/sae)
 const VERSIONS = {
   ko: { books: 'data/bible-books.json', chapters: 'data/bible-chapters.jsonl', outDir: 'public/bible' },
   en: { books: 'data/bible-books.en.json', chapters: 'data/bible-chapters.en.jsonl', outDir: 'public/bible/en' },
   gae: { books: 'data/bible-books.json', chapters: 'data/bible-chapters.gae.jsonl', outDir: 'public/bible/gae' },
-  nkt: { books: 'data/bible-books.json', chapters: 'data/bible-chapters.nkt.jsonl', outDir: 'public/bible/nkt' },
   sae: { books: 'data/bible-books.json', chapters: 'data/bible-chapters.sae.jsonl', outDir: 'public/bible/sae' },
 }
 const lang = process.argv.includes('--lang') ? process.argv[process.argv.indexOf('--lang') + 1] : 'ko'

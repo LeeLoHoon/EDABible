@@ -1,5 +1,5 @@
 /** 성경 로더. IndexedDB 캐시를 우선 사용하고, 없으면 public/bible/ 에서 가져온다.
-    한국어는 역본(msg/gae/nkt)별 하위 폴더를 읽고, Supabase 원격 본문·편집은 msg 전용이다. */
+    한국어는 역본(msg/gae/sae)별 경로를 읽고, Supabase 원격 본문·편집은 msg 전용이다. */
 
 import { db } from './db'
 import { getBibleVersion } from './bibleVersion'

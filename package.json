@@ -1,7 +1,7 @@
 {
   "name": "edabible",
   "private": true,
-  "version": "1.6.2",
+  "version": "1.6.3",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -13,7 +13,7 @@
     "build:binder": "APP_TARGET=binder tsc -b && APP_TARGET=binder vite build --outDir dist-binder",
     "build:all": "npm run build:bible && APP_TARGET=all tsc -b && APP_TARGET=all vite build --outDir dist-all",
     "build:sermon": "npm run build:bible && APP_TARGET=sermon tsc -b && APP_TARGET=sermon vite build --outDir dist-sermon",
-    "build:bible": "node scripts/build_public_bible_from_jsonl.mjs && node scripts/build_public_bible_from_jsonl.mjs --lang en && node scripts/build_public_bible_from_jsonl.mjs --lang gae && node scripts/build_public_bible_from_jsonl.mjs --lang nkt && node scripts/build_public_bible_from_jsonl.mjs --lang sae",
+    "build:bible": "node scripts/build_public_bible_from_jsonl.mjs && node scripts/build_public_bible_from_jsonl.mjs --lang en && node scripts/build_public_bible_from_jsonl.mjs --lang gae && node scripts/build_public_bible_from_jsonl.mjs --lang sae",
     "build:binder-sets": "node scripts/build_binder_sets.mjs",
     "import:msg-bible": "node scripts/import_msg_bible.mjs",
     "seed:supabase-bible": "node scripts/seed_supabase_bible.mjs",
@@ -21,7 +21,14 @@
     "migrate:binder-works": "node scripts/migrate_binder_works_to_sets.mjs",
     "test:binder-map": "node --test scripts/binder_legacy_map.test.mjs",
     "test:binder-videos": "node --test scripts/binder_videos.test.mjs",
-    "validate:bible": "node scripts/validate-bible.mjs && node scripts/validate-bible.mjs --lang gae && node scripts/validate-bible.mjs --lang nkt && node scripts/validate-bible.mjs --lang sae",
+    "test:binder-titles": "node --test scripts/binder_checkpoint_titles.test.mjs",
+    "test:bible-version": "node --test scripts/bible_version.test.mjs",
+    "test:sermon-localization": "node --test scripts/sermon_localization.test.mjs",
+    "check:binder-titles": "node scripts/check_binder_checkpoint_titles.mjs",
+    "import:qa-history": "node scripts/import_qa_history.mjs",
+    "check:qa-security": "node scripts/check_qa_security.mjs",
+    "test:qa-security": "node --test scripts/qa_security.test.mjs",
+    "validate:bible": "node scripts/validate-bible.mjs && node scripts/validate-bible.mjs --lang gae && node scripts/validate-bible.mjs --lang sae",
     "lint": "eslint .",
     "preview": "vite preview"
   },
