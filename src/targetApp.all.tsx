@@ -1,4 +1,4 @@
-import { HashRouter, Routes, Route } from 'react-router-dom'
+import { createHashRouter, Navigate, RouterProvider } from 'react-router-dom'
 import { AuthProvider, RequireGoogleLogin } from './auth'
 import LandingPage from './pages/LandingPage'
 import HomePage from './pages/HomePage'
@@ -6,27 +6,32 @@ import EntryPage from './pages/EntryPage'
 import BinderPage from './pages/BinderPage'
 import SermonPage from './pages/SermonPage'
 import SermonNotePage from './pages/SermonNotePage'
+import QaPage from './pages/QaPage'
+import QaThreadPage from './pages/QaThreadPage'
+
+const router = createHashRouter([
+  { path: '/', element: <LandingPage /> },
+  { path: '/note', element: <HomePage /> },
+  {
+    path: '/binder',
+    element: (
+      <RequireGoogleLogin>
+        <BinderPage />
+      </RequireGoogleLogin>
+    ),
+  },
+  { path: '/entry/:id', element: <EntryPage /> },
+  { path: '/sermon', element: <SermonPage /> },
+  { path: '/sermon/:id', element: <SermonNotePage /> },
+  { path: '/qa', element: <QaPage /> },
+  { path: '/qa/:id', element: <QaThreadPage /> },
+  { path: '*', element: <Navigate to="/" replace /> },
+])
 
 export default function AllApp() {
   return (
     <AuthProvider>
-      <HashRouter>
-        <Routes>
-          <Route path="/" element={<LandingPage />} />
-          <Route path="/note" element={<HomePage />} />
-          <Route
-            path="/binder"
-            element={
-              <RequireGoogleLogin>
-                <BinderPage />
-              </RequireGoogleLogin>
-            }
-          />
-          <Route path="/entry/:id" element={<EntryPage />} />
-          <Route path="/sermon" element={<SermonPage />} />
-          <Route path="/sermon/:id" element={<SermonNotePage />} />
-        </Routes>
-      </HashRouter>
+      <RouterProvider router={router} />
     </AuthProvider>
   )
 }

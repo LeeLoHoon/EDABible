@@ -1,4 +1,4 @@
-import { HashRouter, Routes, Route } from 'react-router-dom'
+import { HashRouter, Navigate, Routes, Route } from 'react-router-dom'
 import { AuthProvider, RequireGoogleLogin } from './auth'
 import BinderPage from './pages/BinderPage'
 import MovedNotice from './components/MovedNotice'
@@ -24,6 +24,7 @@ export default function BinderApp() {
           <Routes>
             <Route path="/" element={<BinderPage />} />
             <Route path="/binder" element={<BinderPage />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </HashRouter>
       </RequireGoogleLogin>

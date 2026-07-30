@@ -46,6 +46,16 @@ function BinderEmblem() {
   )
 }
 
+function QaEmblem() {
+  return (
+    <svg viewBox="0 0 40 40" fill="none" stroke="currentColor" className="h-10 w-10" aria-hidden>
+      <path d="M7 9.5h26v18H18l-7 5v-5H7z" strokeWidth="1.5" strokeLinejoin="round" />
+      <path d="M15.5 16.5a4.5 4.5 0 0 1 8.2 2.6c0 2.4-3.7 2.6-3.7 5" strokeWidth="1.4" strokeLinecap="round" />
+      <circle cx="20" cy="27" r="0.8" fill="currentColor" stroke="none" />
+    </svg>
+  )
+}
+
 export default function LandingPage() {
   const isEn = getLang() === 'en'
   const cards: CardDef[] = [
@@ -66,6 +76,12 @@ export default function LandingPage() {
       title: t('landingBinderTitle'),
       description: t('landingBinderDesc'),
       emblem: <BinderEmblem />,
+    },
+    {
+      to: '/qa',
+      title: t('landingQaTitle'),
+      description: t('landingQaDesc'),
+      emblem: <QaEmblem />,
     },
   ]
 
