@@ -11,16 +11,14 @@ data/bible-books.json           # 66권 메타데이터 (한국어 역본 공용
 data/bible-chapters.jsonl       # 메시지성경(기본) 장 단위 본문 원본
 data/bible-chapters.en.jsonl    # The Message 영어
 data/bible-chapters.gae.jsonl   # 개역개정
-data/bible-chapters.nkt.jsonl   # 새한글성경(2024)
 data/bible-chapters.sae.jsonl   # 새번역
-public/bible/*.json             # 앱 배포용 산출물 (en/, gae/, nkt/, sae/ 하위 폴더 포함)
+public/bible/*.json             # 앱 배포용 산출물 (en/, gae/, sae/ 하위 폴더 포함)
 ```
 
 개역개정·새번역은 dev-dooD/bible-crawler 덤프(`scripts/import_gae_bible.mjs`, 새번역은
-`--version sae`), 새한글성경은 bible.bskorea.or.kr 공식 리더(`scripts/fetch_nkt_bible.mjs` →
-`scripts/import_nkt_bible.mjs`)에서 가져왔다. 세 역본 모두 대한성서공회 저작권이므로 외부 공개
-배포 전에는 이용 허가를 확인해야 한다. 추가 역본은 읽기 전용이며 Supabase 편집 파이프라인은
-메시지성경(`msg`)에만 적용된다. 주간 말씀 묵상 본문 화면에서 역본(메시지/개역개정/새한글/새번역)을
+`--version sae`)에서 가져왔다. 두 역본 모두 대한성서공회 저작권이므로 외부 공개 배포 전에는
+이용 허가를 확인해야 한다. 추가 역본은 읽기 전용이며 Supabase 편집 파이프라인은
+메시지성경(`msg`)에만 적용된다. 주간 말씀 묵상 본문 화면에서 역본(메시지/개역개정/새번역)을
 전환할 수 있고, 형광펜은 역본별로 따로 저장된다.
 
 본문을 코드에서 수정할 때는 `data/bible-chapters.jsonl`을 고친 뒤 아래 명령을 실행합니다.
@@ -91,7 +89,11 @@ Vercel 기본 배포는 `npm run build`를 사용하며 `APP_TARGET` 환경변�
 노트가 쓰던 `eda-bible` 프로젝트에 `APP_TARGET=all`을 설정해 한 도메인에서 세 기능을 모두
 서비스합니다. 노트 사용자의 로컬 데이터(IndexedDB)는 origin이 그대로라 보존되고, 바인더는
 로그인하면 Supabase에서 복구되며, 기존 바인더·주간 묵상 단독 배포에는 새 주소 안내 배너가
-표시됩니다. 통합 앱 경로: `/#/`(노트 홈), `/#/binder`, `/#/sermon`.
+표시됩니다. 통합 앱 경로: `/#/`(랜딩), `/#/note`(노트 홈), `/#/binder`, `/#/sermon`, `/#/qa`.
+
+`.github/workflows/deploy.yml`의 GitHub Pages workflow는 `APP_TARGET` 없이 `npm run build`를
+실행하는 **note-only legacy 배포**입니다. Vercel 통합 배포를 대신하지 않으며, 별도 요청 없이
+workflow를 all target으로 변경하지 않습니다.
 
 ### Vercel 배포 채널 2개 구성
 
@@ -188,6 +190,112 @@ on conflict (user_id) do nothing;
 설교 본문은 **장 단위**로 저장합니다. `로마서 8:28-30` 같은 절 범위는 표기(`verseLabel`)로만 남고 화면에는 해당 장 전체가 보입니다. 성경 1189장 중 697장에 절 마커가 없어 본문을 절 단위로 잘라낼 수 없고, 잘라내면 형광펜 하이라이트 키가 어긋나기 때문입니다.
 
 묵상은 `sermon_notes`에 사용자별로 저장되며 본인만 읽고 쓸 수 있습니다. 목사님 열람 기능을 나중에 붙일 때는 `sermon_notes`의 select policy만 확장하면 됩니다.
+
+설교의 영어 제목·설교자·요약·포인트는 nullable입니다. 영어 내용이 아직 승인되지 않은 칸은
+한국어 원문으로 fallback하며 번역문을 자동 생성하지 않습니다. 바인더의 디모데 만들기·책공부
+checkpoint 제목도 `scripts/binder_checkpoint_titles.mjs`에 승인된 값이 없으면 기존 호수 label을
+그대로 표시합니다. `npm run check:binder-titles`는 실제 등록 영상 제목을 후보로만 보고하며
+자동 선택하지 않습니다.
+
+## 사용자 Q&A (admin-only AI draft)
+
+통합 all target과 sermon target에는 모두 Q&A route가 포함됩니다. 두 배포 모두 질문 목록은
+`/#/qa`, 개별 thread는 `/#/qa/<questionId>`에서 엽니다. note-only/binder target에는 Q&A route가
+없습니다.
+
+사용자는 stable client token으로 질문만 제출합니다. AI 초안은 `qa_admins`에 등록된 관리자가
+명시적으로 요청할 때만 생성되고, 관리자가 검토·수정한 뒤 승인해야 사용자에게 published answer와
+정제된 citation이 보입니다. Edge Function은 승인 corpus에 대한 FTS evidence gate를 먼저 통과한
+경우에만 embedding/generation provider를 호출합니다. 근거가 부족하면 provider 호출 없이 고정
+안내문을 editable admin draft로 저장하며, 소유자는 publish 전 draft를 읽을 수 없습니다. Q&A는
+Dexie/offline cache에 저장하지 않습니다.
+
+질문 embedding은 retrieval query에만 사용하며 answer embedding으로 저장하거나 재사용하지 않습니다.
+관리자가 승인하면 DB가 normalized 최종 답변의 SHA-256을 검증하고, retrieval body를
+`Question: <question>\nAnswer: <final answer>` 형식으로 만든 뒤 별도의 SHA-256을 계산합니다. 같은 transaction에서
+revision/publication/citation과 `published_answer` source/chunk를 만듭니다. 새 chunk의 embedding은
+NULL이지만 FTS-first hybrid retrieval에 즉시 포함되고, 남은 slot만 non-NULL embedding의 exact
+cosine 결과로 채웁니다. 검증된 service 작업은 `qa_backfill_approved_chunk_embedding`에 chunk ID와
+expected hash를 전달해 embedding을 한 번만 채울 수 있습니다. 이 backfill RPC는 `qa-draft` Edge
+Function에서 호출하지 않습니다.
+
+승인 corpus/source/chunk의 일반 client insert/update는 허용하지 않습니다. private `qa-sources`
+bucket은 app-owned RESTRICTIVE policy로 anon/authenticated만 차단하며 다른 bucket policy는 수정하지
+않습니다.
+
+### Schema와 Edge Function 배포
+
+배포 순서는 **schema → Edge Function → Function Secrets → 승인 corpus dry-run/apply**입니다.
+
+1. Supabase SQL Editor에서 `supabase/schema.sql`을 다시 실행합니다. 파일은 sermon 영문 nullable
+   column, pgvector(`extensions` schema), Q&A RPC/RLS/grant, private `qa-sources` bucket을 idempotent하게
+   구성합니다.
+2. `supabase functions deploy qa-draft`로 Edge Function을 배포합니다.
+3. Supabase Function Secrets에 아래 이름만 설정합니다.
+
+```text
+QA_AI_PROVIDER
+QA_AI_API_KEY
+QA_AI_MODEL
+QA_AI_EMBEDDING_MODEL
+QA_MIN_FTS_RANK
+QA_TOP_K
+QA_DRAFT_TIMEOUT_MS
+```
+
+`QA_AI_EMBEDDING_MODEL`은 승인 corpus와 같은 `text-embedding-3-small`(1536차원)이어야 합니다.
+OpenAI provider는 embedding과 draft를 모두 수행합니다. Anthropic adapter는 Messages API draft를
+구현하지만 Anthropic에 native embedding API가 없으므로 fixed OpenAI embedding corpus를 다른
+vector로 우회하거나 end-to-end 지원을 주장하지 않고, draft claim 전에 안전하게 거부합니다.
+별도 검증된 embedding provider 설계 전에는
+end-to-end 운영값으로 `openai`를 사용합니다.
+
+이 이름들에 `VITE_`나 `NEXT_PUBLIC_` prefix를 붙이지 마세요. service role key와 model key는
+client source, Vercel client env, 로그, 응답에 넣지 않습니다. Edge Function의 service client는
+요청 JWT를 `auth.getUser`로 검증한 뒤에만 만들며 admin/evidence RPC에만 사용합니다.
+
+### Q&A 관리자 등록과 진입
+
+Q&A 관리자는 binder/sermon 관리자와 별도인 `qa_admins`에 등록합니다. anon key로 등록하지 말고
+Supabase SQL Editor 또는 service role 연결에서 Authentication → Users의 사용자 ID를 사용합니다.
+
+```sql
+insert into public.qa_admins (user_id)
+values ('<auth.users.id>')
+on conflict (user_id) do nothing;
+```
+
+등록된 관리자로 로그인한 뒤 Q&A 화면 제목을 2초 안에 5번 탭하면 admin review mode가
+토글됩니다. 일반 사용자는 질문과 published answer만 볼 수 있으며 draft/internal source는 볼 수
+없습니다.
+
+### 승인 corpus import
+
+실제 역사 Q&A나 신학 자료는 저장소의 `data/`에 두지 말고
+`/tmp/opencode/EDABible-qna-import`에서 검토·승인·staging합니다.
+`data/qa-history.example.jsonl`은 형식 표시만 하는 빈 예시이며 corpus 내용이 아닙니다. 각 source는
+`embeddingModel: "text-embedding-3-small"`과 `approved: true`를 명시해야 하고, 실제 각 entry에는
+질문, 승인 답변, 해당 고정 모델로 생성된 1536개 finite embedding 값이 필요합니다.
+
+```bash
+npm run import:qa-history -- --file /tmp/opencode/EDABible-qna-import/qa-history.jsonl
+npm run import:qa-history -- --file /tmp/opencode/EDABible-qna-import/qa-history.jsonl --apply
+```
+
+기본 동작은 dry-run입니다. 출력의 `datasetHash`는 입력 batch 검토용 fingerprint일 뿐 corpus
+identity가 아닙니다. `qa_corpus_versions`의 v1 row는 `text-embedding-3-small`·1536차원 retrieval
+contract만 고정하므로 역사 자료가 하나도 없어도 첫 승인 답변을 즉시 FTS corpus로 승격할 수
+있습니다. `--apply`는 각 원본을 source hash 기반 `v1/sources/<sourceHash>.json` 경로에 올리고
+service-role import RPC로 새 source만 incrementally 추가합니다. 같은 source를 다시 실행하면 기존
+row를 반환하므로 idempotent하며, 명령은 secret 값을 출력하지 않습니다.
+
+정적 보안 검사는 다음과 같이 실행합니다. 이 검사는 credential을 읽지 않으며 live Supabase
+통합 테스트를 통과했다고 주장하지 않습니다.
+
+```bash
+npm run check:qa-security
+npm run test:qa-security
+```
 
 ## 디비에 있는 성경 내려 받기
 
