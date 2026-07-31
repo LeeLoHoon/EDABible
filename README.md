@@ -197,7 +197,7 @@ checkpoint 제목도 `scripts/binder_checkpoint_titles.mjs`에 승인된 값이 
 그대로 표시합니다. `npm run check:binder-titles`는 실제 등록 영상 제목을 후보로만 보고하며
 자동 선택하지 않습니다.
 
-## 사용자 Q&A (admin-only AI draft)
+## 질의응답 (admin-only AI draft)
 
 통합 all target과 sermon target에는 모두 Q&A route가 포함됩니다. 두 배포 모두 질문 목록은
 `/#/qa`, 개별 thread는 `/#/qa/<questionId>`에서 엽니다. note-only/binder target에는 Q&A route가
@@ -210,6 +210,11 @@ checkpoint 제목도 `scripts/binder_checkpoint_titles.mjs`에 승인된 값이 
 안내문을 editable admin draft로 저장하며, 소유자는 publish 전 draft를 읽을 수 없습니다. Q&A는
 Dexie/offline cache에 저장하지 않습니다.
 
+이 흐름은 별도 학습 모델이나 fine-tuning이 아니라, 계속 바뀌는 **승인된 질의응답을 검색해 근거로
+제공하는 RAG**입니다. fine-tuning은 나중에 말투·출력 형식을 맞추는 선택지가 될 수 있지만 승인
+지식의 추가·수정·철회를 대신하지 않습니다. 검색된 근거로 만든 초안도 목회자가 반드시 검토하고
+편집해야 하며, 승인 전에는 공개되지 않습니다.
+
 질문 embedding은 retrieval query에만 사용하며 answer embedding으로 저장하거나 재사용하지 않습니다.
 관리자가 승인하면 DB가 normalized 최종 답변의 SHA-256을 검증하고, retrieval body를
 `Question: <question>\nAnswer: <final answer>` 형식으로 만든 뒤 별도의 SHA-256을 계산합니다. 같은 transaction에서
@@ -219,19 +224,28 @@ cosine 결과로 채웁니다. 검증된 service 작업은 `qa_backfill_approved
 expected hash를 전달해 embedding을 한 번만 채울 수 있습니다. 이 backfill RPC는 `qa-draft` Edge
 Function에서 호출하지 않습니다.
 
+게시된 답변을 다시 열면 같은 transaction에서 공개 답변과 공개 citation을 즉시 제거하고, 해당
+revision의 `published_answer` source를 inactive로 전환합니다. 이후 답변 없이 종료(reject)해도 같은
+철회 helper가 idempotent하게 실행되므로 이전 공개물이나 active retrieval source가 남지 않습니다.
+source/chunk/revision 이력 자체는 삭제하지 않습니다.
+
 승인 corpus/source/chunk의 일반 client insert/update는 허용하지 않습니다. private `qa-sources`
 bucket은 app-owned RESTRICTIVE policy로 anon/authenticated만 차단하며 다른 bucket policy는 수정하지
 않습니다.
 
 ### Schema와 Edge Function 배포
 
-배포 순서는 **schema → Edge Function → Function Secrets → 승인 corpus dry-run/apply**입니다.
+배포는 CI가 자동 수행하지 않습니다. 아래 작업은 프로젝트 소유자가 검증 결과를 확인한 뒤 직접
+수행하며, 순서는 **검증 → schema → Edge Function → Function Secrets → 승인 corpus 준비/import →
+published-answer backfill → 앱 배포**입니다.
 
-1. Supabase SQL Editor에서 `supabase/schema.sql`을 다시 실행합니다. 파일은 sermon 영문 nullable
+1. `npm run typecheck`, `npm run lint`, `npm run test:qa`, `npm run build:all`을 실행합니다.
+2. Supabase SQL Editor에서 `supabase/schema.sql`을 다시 실행합니다. 파일은 sermon 영문 nullable
    column, pgvector(`extensions` schema), Q&A RPC/RLS/grant, private `qa-sources` bucket을 idempotent하게
-   구성합니다.
-2. `supabase functions deploy qa-draft`로 Edge Function을 배포합니다.
-3. Supabase Function Secrets에 아래 이름만 설정합니다.
+   구성합니다. schema 재적용은 이 수정 이전에 남은 non-approved legacy publication도 승인 상태의
+   publication에는 영향 없이 idempotent하게 철회합니다.
+3. `supabase functions deploy qa-draft`로 Edge Function을 배포합니다.
+4. Supabase Function Secrets에 아래 이름만 설정합니다.
 
 ```text
 QA_AI_PROVIDER
@@ -249,6 +263,11 @@ OpenAI provider는 embedding과 draft를 모두 수행합니다. Anthropic adapt
 vector로 우회하거나 end-to-end 지원을 주장하지 않고, draft claim 전에 안전하게 거부합니다.
 별도 검증된 embedding provider 설계 전에는
 end-to-end 운영값으로 `openai`를 사용합니다.
+
+5. 아래 절차로 저장소 밖의 승인 자료를 준비하고 dry-run 확인 후 import합니다.
+6. 이미 게시되어 NULL embedding인 active chunk를 backfill dry-run/apply로 처리합니다.
+7. 마지막으로 사용자가 앱을 배포합니다. schema/function/secret/corpus 작업은 CI나 프런트엔드가
+   대신 실행하지 않습니다.
 
 이 이름들에 `VITE_`나 `NEXT_PUBLIC_` prefix를 붙이지 마세요. service role key와 model key는
 client source, Vercel client env, 로그, 응답에 넣지 않습니다. Edge Function의 service client는
@@ -277,6 +296,29 @@ on conflict (user_id) do nothing;
 `embeddingModel: "text-embedding-3-small"`과 `approved: true`를 명시해야 하고, 실제 각 entry에는
 질문, 승인 답변, 해당 고정 모델로 생성된 1536개 finite embedding 값이 필요합니다.
 
+원본 JSONL이 importer contract와 같지만 entry에 `question`/`answer`만 있고 embedding이 없다면 먼저
+아래 준비 명령을 사용합니다. `--in`과 `--out`은 모두 저장소 밖이어야 합니다. 기본 실행은 입력
+형식과 개수만 검증하는 dry-run으로, OpenAI를 호출하지 않고 출력 파일도 쓰지 않습니다. `--apply`에만
+`OPENAI_API_KEY`를 shell/secret manager에서 제공합니다. 본문은 정확히
+`Question: <trimmed question>\nAnswer: <trimmed answer>`로 정규화되며 최대 64개씩
+`text-embedding-3-small` 1536차원 embedding을 생성합니다.
+
+```bash
+npm run prepare:qa-embeddings -- \
+  --in /tmp/opencode/EDABible-qna-import/approved-source.jsonl \
+  --out /tmp/opencode/EDABible-qna-import/qa-history.jsonl
+
+# OPENAI_API_KEY는 저장소나 명령 기록에 직접 쓰지 않고 실행 환경에서만 주입
+npm run prepare:qa-embeddings -- \
+  --in /tmp/opencode/EDABible-qna-import/approved-source.jsonl \
+  --out /tmp/opencode/EDABible-qna-import/qa-history.jsonl \
+  --apply
+```
+
+준비 script는 질문·답변·정규화 body·vector·API key·provider response body를 로그에 남기지 않으며,
+출력은 임시 파일을 같은 directory에 쓴 뒤 atomic rename합니다. `--limit N`으로 승인된 entry 수를
+제한해 먼저 검증할 수 있습니다.
+
 ```bash
 npm run import:qa-history -- --file /tmp/opencode/EDABible-qna-import/qa-history.jsonl
 npm run import:qa-history -- --file /tmp/opencode/EDABible-qna-import/qa-history.jsonl --apply
@@ -289,12 +331,34 @@ contract만 고정하므로 역사 자료가 하나도 없어도 첫 승인 답�
 service-role import RPC로 새 source만 incrementally 추가합니다. 같은 source를 다시 실행하면 기존
 row를 반환하므로 idempotent하며, 명령은 secret 값을 출력하지 않습니다.
 
+### 게시 답변 embedding backfill
+
+승인 시 생성된 active `published_answer` chunk 중 embedding이 NULL인 row만 오래된 순서로 조회합니다.
+기본 limit은 50이고 `--limit N`(최대 500)으로 제한할 수 있습니다. 각 body의 SHA-256을 로컬에서
+`content_hash`와 먼저 비교하며, 일치하지 않으면 OpenAI나 RPC를 호출하지 않고 skip합니다. apply는
+고정 model/dimension으로 embedding한 뒤 service-role 전용
+`qa_backfill_approved_chunk_embedding` RPC를 호출합니다. 이미 처리됐거나 상태가 바뀐 row는
+`QA_BACKFILL_STALE`/`QA_BACKFILL_PRECONDITION_FAILED` skip으로 처리되어 재실행해도 안전합니다.
+
+```bash
+# dry-run 조회에는 SUPABASE_URL과 SUPABASE_SERVICE_ROLE_KEY만 실행 환경에서 주입
+npm run backfill:qa-embeddings
+
+# apply에만 OPENAI_API_KEY를 추가로 실행 환경에서 주입
+npm run backfill:qa-embeddings -- --apply
+```
+
+세 값은 shell의 일시 환경변수나 secret manager에서만 주입합니다. service role/OpenAI key에는
+`VITE_` 또는 `NEXT_PUBLIC_` prefix를 붙이지 않고, browser env·client source·CI workflow·로그에
+넣지 않습니다. backfill summary에는 개수와 model/dimension만 포함되고 body/vector/key는 포함되지
+않습니다.
+
 정적 보안 검사는 다음과 같이 실행합니다. 이 검사는 credential을 읽지 않으며 live Supabase
 통합 테스트를 통과했다고 주장하지 않습니다.
 
 ```bash
 npm run check:qa-security
-npm run test:qa-security
+npm run test:qa
 ```
 
 ## 디비에 있는 성경 내려 받기
