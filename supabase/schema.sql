@@ -1780,6 +1780,59 @@ begin
 end;
 $$;
 
+-- Internal helper only. The caller must lock the qa_questions row before invoking it.
+create or replace function public.qa_withdraw_publication(p_question_id uuid)
+returns boolean
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  withdrawn_revision_id uuid;
+begin
+  select published.revision_id into withdrawn_revision_id
+    from public.qa_published_answers as published
+   where published.question_id = p_question_id;
+  if withdrawn_revision_id is null then
+    return false;
+  end if;
+
+  delete from public.qa_published_citations as published_citation
+   where published_citation.question_id = p_question_id;
+  delete from public.qa_published_answers as published
+   where published.question_id = p_question_id;
+
+  perform pg_catalog.set_config('edabible.qa_corpus_mutation', 'on', true);
+  update public.qa_sources as source_row
+     set active = false
+   where source_row.source_kind = 'published_answer'
+     and source_row.answer_revision_id = withdrawn_revision_id
+     and source_row.active;
+  perform pg_catalog.set_config('edabible.qa_corpus_mutation', 'off', true);
+
+  return true;
+end;
+$$;
+
+-- 이 철회 로직 이전에 reopen/reject된 질문에 남은 legacy publication만 정리한다.
+do $$
+declare
+  legacy_question record;
+begin
+  for legacy_question in
+    select question_row.id
+      from public.qa_questions as question_row
+      join public.qa_published_answers as published
+        on published.question_id = question_row.id
+     where question_row.status <> 'approved'
+     order by question_row.id
+     for update of question_row
+  loop
+    perform public.qa_withdraw_publication(legacy_question.id);
+  end loop;
+end;
+$$;
+
 create or replace function public.qa_reopen_answer(
   p_question_id uuid,
   p_expected_version integer
@@ -1792,6 +1845,7 @@ as $$
 declare
   actor_id uuid := auth.uid();
   question_row public.qa_questions%rowtype;
+  publication_withdrawn boolean;
   next_version integer;
 begin
   if actor_id is null then
@@ -1820,6 +1874,8 @@ begin
     raise exception using errcode = 'P0001', message = 'QA_INVALID_TRANSITION';
   end if;
 
+  publication_withdrawn := public.qa_withdraw_publication(question_row.id);
+
   update public.qa_answers as answer
      set status = 'draft_ready',
          updated_by = actor_id,
@@ -1838,7 +1894,8 @@ begin
   return pg_catalog.jsonb_build_object(
     'questionId', question_row.id,
     'status', 'draft_ready',
-    'version', next_version
+    'version', next_version,
+    'publicationWithdrawn', publication_withdrawn
   );
 end;
 $$;
@@ -1858,6 +1915,7 @@ declare
   question_row public.qa_questions%rowtype;
   next_version integer;
   clean_reason text;
+  publication_withdrawn boolean;
 begin
   if actor_id is null then
     raise exception using errcode = '42501', message = 'QA_AUTH_REQUIRED';
@@ -1889,6 +1947,8 @@ begin
     raise exception using errcode = 'P0001', message = 'QA_INVALID_TRANSITION';
   end if;
 
+  publication_withdrawn := public.qa_withdraw_publication(question_row.id);
+
   next_version := question_row.version + 1;
   update public.qa_questions as q
      set status = 'rejected',
@@ -1901,7 +1961,8 @@ begin
   return pg_catalog.jsonb_build_object(
     'questionId', question_row.id,
     'status', 'rejected',
-    'version', next_version
+    'version', next_version,
+    'publicationWithdrawn', publication_withdrawn
   );
 end;
 $$;
@@ -2122,6 +2183,7 @@ declare
   chunk_content_hash text;
   source_content_hash text;
   source_kind text;
+  source_active boolean;
   corpus_version_key text;
   corpus_embedding_model text;
   corpus_embedding_dimension integer;
@@ -2141,18 +2203,20 @@ begin
 
   select chunk_row.body,
          chunk_row.content_hash,
-         chunk_row.embedding,
-         source_row.content_hash,
-         source_row.source_kind,
-         corpus_row.version_key,
+          chunk_row.embedding,
+          source_row.content_hash,
+          source_row.source_kind,
+          source_row.active,
+          corpus_row.version_key,
          corpus_row.embedding_model,
          corpus_row.embedding_dimension
     into chunk_body,
          chunk_content_hash,
-         existing_embedding,
-         source_content_hash,
-         source_kind,
-         corpus_version_key,
+          existing_embedding,
+          source_content_hash,
+          source_kind,
+          source_active,
+          corpus_version_key,
          corpus_embedding_model,
          corpus_embedding_dimension
     from public.qa_chunks as chunk_row
@@ -2161,7 +2225,7 @@ begin
       on corpus_row.id = chunk_row.corpus_version_id
      and corpus_row.id = source_row.corpus_version_id
    where chunk_row.id = p_chunk_id
-   for update of chunk_row;
+   for update of chunk_row, source_row;
   if not found then
     raise exception using errcode = 'P0002', message = 'QA_CHUNK_NOT_FOUND';
   end if;
@@ -2170,7 +2234,8 @@ begin
     extensions.digest(pg_catalog.convert_to(chunk_body, 'UTF8'), 'sha256'),
     'hex'
   );
-  if source_kind <> 'published_answer'
+  if source_active is not true
+     or source_kind <> 'published_answer'
      or corpus_version_key <> 'v1'
      or corpus_embedding_model <> 'text-embedding-3-small'
      or corpus_embedding_dimension <> 1536
@@ -2332,6 +2397,7 @@ revoke all on function public.qa_complete_draft(uuid, integer, text, jsonb) from
 revoke all on function public.qa_update_working_answer(uuid, integer, text) from public, anon, authenticated;
 revoke all on function public.qa_fail_draft(uuid, integer, text) from public, anon, authenticated;
 revoke all on function public.qa_approve_answer(uuid, integer) from public, anon, authenticated;
+revoke all on function public.qa_withdraw_publication(uuid) from public, anon, authenticated, service_role;
 revoke all on function public.qa_reopen_answer(uuid, integer) from public, anon, authenticated;
 revoke all on function public.qa_reject_question(uuid, integer, text) from public, anon, authenticated;
 revoke all on function public.qa_is_admin(uuid) from public, anon, authenticated;

@@ -33,6 +33,8 @@ export async function runQaSecurityChecks() {
   const qaClient = await text('src/qa.ts')
   const qaAdminPanel = await text('src/components/QaAdminPanel.tsx')
   const historyImporter = await text('scripts/import_qa_history.mjs')
+  const historyPreparation = await text('scripts/prepare_qa_embeddings.mjs')
+  const approvedBackfill = await text('scripts/backfill_qa_embeddings.mjs')
   const historyExample = await text('data/qa-history.example.jsonl')
 
   for (const table of [
@@ -58,6 +60,7 @@ export async function runQaSecurityChecks() {
     'qa_update_working_answer',
     'qa_fail_draft',
     'qa_approve_answer',
+    'qa_withdraw_publication',
     'qa_reopen_answer',
     'qa_reject_question',
     'qa_is_admin',
@@ -325,6 +328,81 @@ export async function runQaSecurityChecks() {
     /qa_approve_answer[\s\S]*promoted_body := 'Question: '[\s\S]*E'\\nAnswer: '[\s\S]*promoted_content_hash[\s\S]*set_config\('edabible\.qa_corpus_mutation'[\s\S]*set active = false[\s\S]*prior_revision\.answer_id = answer_row\.id[\s\S]*insert into public\.qa_sources[\s\S]*'published_answer'[\s\S]*insert into public\.qa_chunks[\s\S]*promoted_body[\s\S]*null/i,
     'Approved answers are not atomically promoted into the corpus',
   )
+  const withdrawBlock = schema.match(
+    /create or replace function public\.qa_withdraw_publication\([\s\S]*?\n\$\$;/i,
+  )?.[0]
+  if (!withdrawBlock) issues.push('qa_withdraw_publication is missing')
+  else {
+    const citationDelete = withdrawBlock.indexOf('delete from public.qa_published_citations')
+    const answerDelete = withdrawBlock.indexOf('delete from public.qa_published_answers')
+    const sourceUpdate = withdrawBlock.indexOf('update public.qa_sources')
+    if (
+      !/qa_published_answers[\s\S]*revision_id[\s\S]*return false/i.test(withdrawBlock) ||
+      citationDelete < 0 ||
+      answerDelete < citationDelete ||
+      sourceUpdate < answerDelete ||
+      !/set_config\('edabible\.qa_corpus_mutation', 'on', true\)[\s\S]*update public\.qa_sources[\s\S]*set_config\('edabible\.qa_corpus_mutation', 'off', true\)/i.test(
+        withdrawBlock,
+      ) ||
+      !/update public\.qa_sources[\s\S]*set active = false[\s\S]*source_kind = 'published_answer'[\s\S]*answer_revision_id = withdrawn_revision_id/i.test(
+        withdrawBlock,
+      ) ||
+      /delete from public\.qa_(?:sources|chunks|revisions)/i.test(withdrawBlock)
+    ) {
+      issues.push('Publication withdrawal does not preserve and deactivate the approved corpus safely')
+    }
+  }
+  const withdrawalEnd = withdrawBlock
+    ? schema.indexOf(withdrawBlock) + withdrawBlock.length
+    : -1
+  const reopenStart = schema.indexOf('create or replace function public.qa_reopen_answer', withdrawalEnd)
+  const legacyCleanupBlock =
+    withdrawalEnd >= 0 && reopenStart > withdrawalEnd
+      ? schema.slice(withdrawalEnd, reopenStart)
+      : ''
+  if (
+    !/do \$\$[\s\S]*join public\.qa_published_answers as published[\s\S]*published\.question_id = question_row\.id[\s\S]*question_row\.status <> 'approved'[\s\S]*order by question_row\.id[\s\S]*for update of question_row[\s\S]*qa_withdraw_publication\(legacy_question\.id\)[\s\S]*\$\$;/i.test(
+      legacyCleanupBlock,
+    ) ||
+    /delete from public\.qa_|update public\.qa_sources/i.test(legacyCleanupBlock)
+  ) {
+    issues.push('Idempotent legacy non-approved publication cleanup is missing or unsafe')
+  }
+  for (const transition of ['qa_reopen_answer', 'qa_reject_question']) {
+    const block = schema.match(
+      new RegExp(`create or replace function public\\.${transition}\\([\\s\\S]*?\\n\\$\\$;`, 'i'),
+    )?.[0]
+    const withdrawalPosition = block?.indexOf('qa_withdraw_publication(question_row.id)') ?? -1
+    const validationPosition = block?.indexOf('QA_INVALID_TRANSITION') ?? -1
+    const statusUpdatePosition = block?.indexOf(
+      transition === 'qa_reopen_answer' ? 'update public.qa_answers' : 'next_version :=',
+    ) ?? -1
+    if (
+      !block ||
+      !/for update/i.test(block) ||
+      validationPosition < 0 ||
+      withdrawalPosition < validationPosition ||
+      statusUpdatePosition < withdrawalPosition
+    ) {
+      issues.push(`${transition} does not withdraw publication after locking the question`)
+    }
+    if (!block || !/'publicationWithdrawn', publication_withdrawn/i.test(block)) {
+      issues.push(`${transition} does not return publicationWithdrawn`)
+    }
+  }
+  requireMatch(
+    issues,
+    schema,
+    /revoke all on function public\.qa_withdraw_publication\(uuid\) from public, anon, authenticated, service_role/i,
+    'Publication withdrawal helper is not revoked from every non-owner role',
+  )
+  if (
+    /grant (?:execute|all) on function public\.qa_withdraw_publication\(uuid\) to (?:public|anon|authenticated|service_role)/i.test(
+      schema,
+    )
+  ) {
+    issues.push('Publication withdrawal helper has an external execute grant')
+  }
   requireMatch(
     issues,
     schema,
@@ -351,12 +429,20 @@ export async function runQaSecurityChecks() {
   if (!gateBlock || !/source_row\.active/i.test(gateBlock)) {
     issues.push('Evidence gate can use inactive sources')
   }
-  requireMatch(
-    issues,
-    schema,
-    /qa_backfill_approved_chunk_embedding[\s\S]*for update of chunk_row[\s\S]*source_kind <> 'published_answer'[\s\S]*calculated_content_hash[\s\S]*existing_embedding is not null[\s\S]*set_config\('edabible\.qa_corpus_mutation'[\s\S]*set embedding = p_embedding/i,
-    'Published-answer embedding backfill is not fully hardened',
-  )
+  const backfillBlock = schema.match(
+    /create or replace function public\.qa_backfill_approved_chunk_embedding\([\s\S]*?\n\$\$;/i,
+  )?.[0]
+  if (
+    !backfillBlock ||
+    !/source_row\.active[\s\S]*into[\s\S]*source_active/i.test(backfillBlock) ||
+    !/for update of chunk_row, source_row/i.test(backfillBlock) ||
+    !/source_active is not true[\s\S]*source_kind <> 'published_answer'/i.test(backfillBlock) ||
+    !/calculated_content_hash[\s\S]*existing_embedding is not null[\s\S]*set_config\('edabible\.qa_corpus_mutation'[\s\S]*set embedding = p_embedding/i.test(
+      backfillBlock,
+    )
+  ) {
+    issues.push('Published-answer embedding backfill is not fully hardened')
+  }
   const importSourceBlock = schema.match(
     /create or replace function public\.qa_import_approved_source\([\s\S]*?\n\$\$;/i,
   )?.[0]
@@ -405,6 +491,36 @@ export async function runQaSecurityChecks() {
   ) {
     issues.push('History importer does not enforce model provenance and deterministic source-hash paths')
   }
+  for (const [name, value] of [
+    ['History preparation', historyPreparation],
+    ['Approved-answer backfill', approvedBackfill],
+  ]) {
+    if (/(?:VITE_|NEXT_PUBLIC_)(?:OPENAI|SUPABASE_SERVICE_ROLE|QA_)/i.test(value)) {
+      issues.push(`${name} exposes a server credential through a public environment variable`)
+    }
+    const loggingStatements = value.match(/console\.(?:log|error|warn)\([^\n]*/g) ?? []
+    if (
+      loggingStatements.some((statement) =>
+        /\b(?:apiKey|serviceRoleKey|question|answer|body|embedding|vector|payload|response)\b/.test(
+          statement,
+        ),
+      )
+    ) {
+      issues.push(`${name} can log content, credentials, vectors, or provider responses`)
+    }
+  }
+  requireMatch(
+    issues,
+    historyPreparation,
+    /mode: apply \? 'apply' : 'dry-run'[\s\S]*sourceCount[\s\S]*entryCount[\s\S]*model: QA_EMBEDDING_MODEL[\s\S]*dimension: QA_EMBEDDING_DIMENSION[\s\S]*outPath[\s\S]*skipped/i,
+    'History preparation does not emit the approved metadata-only summary',
+  )
+  requireMatch(
+    issues,
+    approvedBackfill,
+    /\.is\('embedding', null\)[\s\S]*\.eq\('source\.source_kind', 'published_answer'\)[\s\S]*\.eq\('source\.active', true\)[\s\S]*\.order\('created_at', \{ ascending: true \}\)/i,
+    'Approved-answer backfill selection is not NULL-only, active, published-answer, and oldest-first',
+  )
   const providerCheckPosition = edge.indexOf('if (!provider.supportsEmbedding)')
   const claimPosition = edge.indexOf("userClient.rpc('qa_claim_draft'")
   if (providerCheckPosition < 0 || claimPosition < providerCheckPosition) {
@@ -460,7 +576,7 @@ export async function runQaSecurityChecks() {
       if (path === 'scripts/check_qa_security.mjs') continue
       const value = await readFile(file, 'utf8')
       if (/\bas\s+any\b|@ts-ignore|@ts-expect-error/.test(value)) issues.push(`${path} contains type suppression`)
-      if (/(?:VITE_|NEXT_PUBLIC_)QA_(?:AI|MIN|TOP|DRAFT)/.test(value)) {
+      if (/(?:VITE_|NEXT_PUBLIC_)(?:QA_(?:AI|MIN|TOP|DRAFT)|OPENAI_API_KEY|SUPABASE_SERVICE_ROLE_KEY)/.test(value)) {
         issues.push(`${path} exposes a server-only QA secret name`)
       }
     }

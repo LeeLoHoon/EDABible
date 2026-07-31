@@ -74,6 +74,7 @@ export interface QaTransitionResult {
   revisionId?: string
   idempotent?: boolean
   insufficientEvidence?: boolean
+  publicationWithdrawn?: boolean
 }
 
 export interface QaDraftInvocationResult extends QaTransitionResult {
@@ -273,6 +274,9 @@ function parseTransition(value: unknown): QaTransitionResult {
       : {}),
     ...('insufficientEvidence' in value && typeof value.insufficientEvidence === 'boolean'
       ? { insufficientEvidence: value.insufficientEvidence }
+      : {}),
+    ...('publicationWithdrawn' in value && typeof value.publicationWithdrawn === 'boolean'
+      ? { publicationWithdrawn: value.publicationWithdrawn }
       : {}),
   }
 }

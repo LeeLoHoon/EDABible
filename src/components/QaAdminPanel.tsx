@@ -357,9 +357,11 @@ export default function QaAdminPanel() {
     setError(null)
     setNotice(null)
     try {
-      await reopenQaAnswer(questionId, expectedVersion)
+      const result = await reopenQaAnswer(questionId, expectedVersion)
       if (selectedIdRef.current !== questionId) return
-      setNotice(t('qaAdminReopenedNotice'))
+      setNotice(
+        t(result.publicationWithdrawn ? 'qaAdminReopenedWithdrawnNotice' : 'qaAdminReopenedNotice'),
+      )
       await loadQuestions(questionId)
     } catch (actionError) {
       await handleActionError(actionError, questionId)
@@ -387,13 +389,15 @@ export default function QaAdminPanel() {
     setError(null)
     setNotice(null)
     try {
-      await rejectQaQuestion(
+      const result = await rejectQaQuestion(
         questionId,
         expectedVersion,
         reason,
       )
       if (selectedIdRef.current !== questionId) return
-      setNotice(t('qaAdminRejectedNotice'))
+      setNotice(
+        t(result.publicationWithdrawn ? 'qaAdminRejectedWithdrawnNotice' : 'qaAdminRejectedNotice'),
+      )
       await loadQuestions(questionId)
     } catch (actionError) {
       await handleActionError(actionError, questionId)
@@ -517,6 +521,9 @@ export default function QaAdminPanel() {
                       <p className="text-sm font-black">🔒 {t('qaAdminPrivateDraft')}</p>
                       <p className="mt-0.5 text-xs font-bold leading-5 text-white/85">{t('qaAdminPrivateDraftHint')}</p>
                     </div>
+                    <p className="rounded-xl border border-rose-line bg-white px-3 py-2 text-xs font-bold leading-5 text-rose-key">
+                      {t('qaAdminDraftSourceHint')}
+                    </p>
                     <label className="block space-y-1.5">
                       <span className="block text-sm font-black text-rose-ink">{t('qaAdminWorkingBody')}</span>
                       <textarea

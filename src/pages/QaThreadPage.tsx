@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import { useAuth } from '../authState'
+import BackButton from '../components/BackButton'
 import LangToggle from '../components/LangToggle'
 import { getLang } from '../i18n/lang'
 import { t } from '../i18n/strings'
@@ -74,19 +75,19 @@ export default function QaThreadPage() {
     }
   }
 
-  const pending = thread && !thread.answer && thread.question.status !== 'rejected'
-  const closed = thread && !thread.answer && thread.question.status === 'rejected'
+  const status = thread?.question.status
+  const pending =
+    status === 'submitted' ||
+    status === 'drafting' ||
+    status === 'draft_ready' ||
+    status === 'failed'
+  const closed = status === 'rejected'
 
   return (
     <div className="min-h-full bg-rose-bg text-rose-ink">
       <header className="sticky top-0 z-20 border-b border-rose-line bg-rose-bg/95 px-4 py-2.5 backdrop-blur">
         <div className="mx-auto flex max-w-3xl items-center justify-between gap-3">
-          <Link
-            to="/qa"
-            className="flex min-h-11 shrink-0 items-center text-sm font-bold text-rose-key transition hover:text-rose-accent focus:outline-none focus:ring-2 focus:ring-rose-accent"
-          >
-            {t('qaBackToList')}
-          </Link>
+          <BackButton to="/qa" label={t('navBackList')} />
           <h1 className="min-w-0 flex-1 truncate text-center font-serif text-lg font-extrabold">{t('qaAppTitle')}</h1>
           <div className="flex shrink-0 items-center gap-1">
             <LangToggle />
@@ -125,9 +126,7 @@ export default function QaThreadPage() {
         ) : notFound || !thread ? (
           <section className="rounded-2xl border border-dashed border-rose-line bg-rose-card/60 px-4 py-16 text-center">
             <p className="font-serif text-lg font-bold text-rose-key">{t('qaThreadNotFound')}</p>
-            <Link to="/qa" className="mt-3 inline-flex min-h-11 items-center font-bold text-rose-accent underline underline-offset-4">
-              {t('qaBackToList')}
-            </Link>
+            <BackButton to="/qa" label={t('navBackList')} className="mt-3" />
           </section>
         ) : (
           <article className="space-y-4">
