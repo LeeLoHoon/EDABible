@@ -1,0 +1,48 @@
+name: Q&A Checks
+
+on:
+  push:
+    paths:
+      - 'supabase/schema.sql'
+      - 'supabase/functions/qa-draft/**'
+      - 'src/qa.ts'
+      - 'src/components/QaAdminPanel.tsx'
+      - 'src/pages/QaThreadPage.tsx'
+      - 'src/i18n/strings.ts'
+      - 'scripts/*qa*.mjs'
+      - 'data/qa-history.example.jsonl'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'README.md'
+      - '.github/workflows/qa-checks.yml'
+  pull_request:
+    paths:
+      - 'supabase/schema.sql'
+      - 'supabase/functions/qa-draft/**'
+      - 'src/qa.ts'
+      - 'src/components/QaAdminPanel.tsx'
+      - 'src/pages/QaThreadPage.tsx'
+      - 'src/i18n/strings.ts'
+      - 'scripts/*qa*.mjs'
+      - 'data/qa-history.example.jsonl'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'README.md'
+      - '.github/workflows/qa-checks.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  qa-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run test:qa
