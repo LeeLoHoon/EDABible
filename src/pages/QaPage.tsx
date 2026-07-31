@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../authState'
+import BackButton from '../components/BackButton'
 import LangToggle from '../components/LangToggle'
 import QaAdminPanel from '../components/QaAdminPanel'
 import { getLang } from '../i18n/lang'
@@ -220,12 +221,7 @@ export default function QaPage() {
     <div className="min-h-full bg-rose-bg text-rose-ink">
       <header className="sticky top-0 z-20 border-b border-rose-line bg-rose-bg/95 px-4 py-2.5 backdrop-blur">
         <div className="mx-auto flex max-w-4xl items-center justify-between gap-3">
-          <Link
-            to="/"
-            className="flex min-h-11 shrink-0 items-center text-sm font-bold text-rose-key transition hover:text-rose-accent focus:outline-none focus:ring-2 focus:ring-rose-accent"
-          >
-            {t('qaBack')}
-          </Link>
+          <BackButton to="/" label={t('navBackHome')} />
           <h1 onClick={handleAdminTap} className="min-w-0 flex-1 truncate text-center font-serif text-lg font-extrabold">
             {t('qaAppTitle')}
           </h1>

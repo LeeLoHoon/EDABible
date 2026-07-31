@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../authState'
+import BackButton from '../components/BackButton'
 import LangToggle from '../components/LangToggle'
 import SermonAdminForm from '../components/SermonAdminForm'
 import {
@@ -231,12 +232,10 @@ export default function SermonPage() {
         <div className="mx-auto flex max-w-3xl flex-wrap items-center justify-between gap-x-3 gap-y-1 sm:flex-nowrap sm:gap-y-0">
           <div className="flex w-auto shrink-0 items-center sm:w-24">
             {__APP_TARGET__ === 'all' ? (
-              <Link to="/" className="flex flex-col leading-tight" aria-label={t('sermonGoHome')}>
-                <span className="text-[11px] font-black tracking-[0.3em] text-rose-key/70">
-                  ← EDA
-                </span>
-                <span className="font-mono text-[9px] text-rose-key/45">v{__BUILD__}</span>
-              </Link>
+              <span className="flex flex-col items-start gap-0.5 leading-tight">
+                <BackButton to="/" label={t('navBackHome')} />
+                <span className="pl-1 font-mono text-[9px] text-rose-key/45">v{__BUILD__}</span>
+              </span>
             ) : (
               <span className="flex flex-col leading-tight">
                 <span className="text-[11px] font-black tracking-[0.3em] text-rose-key/70">EDA</span>

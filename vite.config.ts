@@ -33,7 +33,7 @@ const appMeta = {
     name: 'EDA 바이블',
     shortName: 'EDA 바이블',
     htmlTitle: 'EDA 바이블',
-    description: '말씀 묵상 노트·주간 말씀 묵상·에다 SPL 바인더·사용자 Q&A',
+    description: '말씀 묵상 노트·주간 말씀 묵상·에다 SPL 바인더·질의응답',
   },
   sermon: {
     name: '주간 말씀 묵상',

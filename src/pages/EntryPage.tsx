@@ -5,6 +5,7 @@ import { useBlocker, useNavigate, useParams } from 'react-router-dom'
 const NOTE_HOME_PATH = __APP_TARGET__ === 'all' ? '/note' : '/'
 import { enableBibleCopy } from '../bibleCopy'
 import { useEntry } from '../hooks/useEntry'
+import BackButton from '../components/BackButton'
 import FieldEditor from '../components/FieldEditor'
 import GuideButton from '../components/GuideButton'
 import EntryShareCard, { type ShareSections } from '../components/EntryShareCard'
@@ -136,10 +137,12 @@ export default function EntryPage() {
   if (!entry) {
     return (
       <div className="p-8 text-center text-rose-key">
-        {t('entryNotFound')}
-        <button onClick={() => navigate(NOTE_HOME_PATH)} className="ml-2 text-rose-accent underline">
-          {t('entryHome')}
-        </button>
+        <p>{t('entryNotFound')}</p>
+        <BackButton
+          onClick={() => navigate(NOTE_HOME_PATH)}
+          label={t('navBackList')}
+          className="mt-3"
+        />
       </div>
     )
   }
@@ -148,14 +151,11 @@ export default function EntryPage() {
     <div className="mx-auto flex min-h-full max-w-3xl flex-col">
       {/* 헤더 */}
       <header className="sticky top-0 z-10 flex items-center justify-between border-b border-rose-line bg-rose-bg/90 px-4 py-3 backdrop-blur">
-        <button
+        <BackButton
           onClick={() => navigate(NOTE_HOME_PATH)}
           disabled={navigationBlocked}
-          aria-disabled={navigationBlocked}
-          className="shrink-0 text-sm text-rose-key hover:text-rose-accent disabled:cursor-not-allowed disabled:text-rose-key/40 disabled:hover:text-rose-key/40"
-        >
-          {t('entryBack')}
-        </button>
+          label={t('navBackList')}
+        />
         <h1
           onClick={handleDateTap}
           className="min-w-0 flex-1 truncate px-2 text-center font-serif text-lg font-bold text-rose-ink"
@@ -239,8 +239,9 @@ export default function EntryPage() {
         aria-disabled={editingBlocked}
         className={`flex-1 px-4 py-5${editingBlocked ? ' pointer-events-none opacity-50' : ''}`}
       >
-        {/* 탭을 옮겨도 본문을 다시 받아오지 않도록 마운트는 유지하고 보이기만 감춘다 */}
-        <div className={tab === 'meditation' ? 'mb-4' : 'hidden'}>
+        {/* 탭을 옮겨도 본문을 다시 받아오지 않도록 마운트는 유지하고 보이기만 감춘다.
+            필사 탭에서도 본문을 고를 수 있어야 묵상 탭을 거치지 않고 바로 쓸 수 있다. */}
+        <div className={tab === 'meditation' || tab === 'transcribe' ? 'mb-4' : 'hidden'}>
           <BiblePicker
             value={entry.bibleRef}
             onChange={(bibleRef) => update({ bibleRef })}

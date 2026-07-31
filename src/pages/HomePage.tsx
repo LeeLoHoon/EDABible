@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
+import BackButton from '../components/BackButton'
 import GuideButton from '../components/GuideButton'
 import { listEntries, putEntry, deleteEntry, clearAllEntries } from '../db'
 import { createEntry, emptyTemptationVictory, isFieldEmpty, type Entry } from '../types'
@@ -70,12 +71,7 @@ export default function HomePage() {
     <div className="relative mx-auto max-w-2xl">
       {__APP_TARGET__ === 'all' && (
         <div className="absolute left-4 top-4 z-10">
-          <Link
-            to="/"
-            className="rounded-lg border border-rose-line bg-rose-card/80 px-3 py-2 text-sm font-bold text-rose-key shadow-sm"
-          >
-            ← {t('sermonGoHome')}
-          </Link>
+          <BackButton to="/" label={t('navBackHome')} />
         </div>
       )}
       <div className="absolute right-4 top-4 z-10 flex items-center gap-2">
@@ -101,7 +97,7 @@ export default function HomePage() {
           <br />
           {t('homeTitleLine2')}
         </h1>
-        <p className="mt-4 font-serif text-base tracking-wide text-rose-key">EDABible</p>
+        <p className="mt-4 font-serif text-base tracking-wide text-rose-key">EDA-Bible</p>
 
         {getLang() === 'en' ? (
           <blockquote className="mt-10 max-w-xs font-serif text-[15px] leading-7 text-rose-ink/80">
@@ -192,7 +188,7 @@ export default function HomePage() {
         )}
 
         <footer className="mt-10 text-center text-[11px] leading-relaxed text-rose-key/60">
-          <p>© {new Date().getFullYear()} EDABible</p>
+          <p>© {new Date().getFullYear()} EDA-Bible</p>
           <p className="mt-0.5 font-mono">v{__BUILD__}</p>
         </footer>
       </div>

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../authState'
+import BackButton from '../components/BackButton'
 import FieldEditor from '../components/FieldEditor'
 import LangToggle from '../components/LangToggle'
 import ModeToggle from '../components/ModeToggle'
@@ -488,14 +489,12 @@ export default function SermonNotePage() {
   if (notFound || !sermon || !note || displayedOwnerId !== userId) {
     return (
       <div className="p-8 text-center text-rose-key">
-        {t('sermonNotFound')}
-        <button
-          type="button"
+        <p>{t('sermonNotFound')}</p>
+        <BackButton
           onClick={() => void leaveForList()}
-          className="ml-2 text-rose-accent underline"
-        >
-          {t('sermonBack')}
-        </button>
+          label={t('navBackList')}
+          className="mt-3"
+        />
       </div>
     )
   }
@@ -524,13 +523,7 @@ export default function SermonNotePage() {
   return (
     <div className="mx-auto flex min-h-full max-w-3xl flex-col bg-rose-bg text-rose-ink">
       <header className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-rose-line bg-rose-bg/90 px-4 py-3 backdrop-blur">
-        <button
-          type="button"
-          onClick={() => void leaveForList()}
-          className="shrink-0 text-sm font-bold text-rose-key hover:text-rose-accent"
-        >
-          {t('sermonBack')}
-        </button>
+        <BackButton onClick={() => void leaveForList()} label={t('navBackList')} />
         <div className="min-w-0 flex-1 text-center">
           <h1 className="min-w-0 truncate font-serif text-base font-extrabold text-rose-ink">
             {sermonTitle}

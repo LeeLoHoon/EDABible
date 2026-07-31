@@ -17,6 +17,7 @@ import {
   migrateLocalBinderWorks,
   resolveLegacyResume,
 } from '../binderMigration'
+import BackButton from '../components/BackButton'
 import BinderVideoInterstitial from '../components/BinderVideoInterstitial'
 import BinderVideoSheet from '../components/BinderVideoSheet'
 import BinderGuideSheet from '../components/BinderGuideSheet'
@@ -1717,13 +1718,7 @@ export default function BinderPage() {
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3">
           <div className="flex w-24 shrink-0 items-center">
             {__APP_TARGET__ === 'all' ? (
-              <button
-                type="button"
-                onClick={() => window.history.back()}
-                className="text-sm font-bold text-rose-key hover:text-rose-accent"
-              >
-                {t('binderBack')}
-              </button>
+              <BackButton to="/" label={t('navBackHome')} />
             ) : (
               <span className="flex flex-col leading-tight">
                 <span className="text-[11px] font-black tracking-[0.3em] text-rose-key/70">EDA</span>
