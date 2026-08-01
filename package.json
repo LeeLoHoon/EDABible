@@ -1,7 +1,7 @@
 {
   "name": "edabible",
   "private": true,
-  "version": "1.7.0",
+  "version": "1.8.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -22,6 +22,8 @@
     "test:binder-map": "node --test scripts/binder_legacy_map.test.mjs",
     "test:binder-videos": "node --test scripts/binder_videos.test.mjs",
     "test:binder-titles": "node --test scripts/binder_checkpoint_titles.test.mjs",
+    "test:binder-structure": "node --test scripts/binder_structure.test.mjs",
+    "scan:binder-structure": "node scripts/scan_binder_structure.mjs",
     "test:bible-version": "node --test scripts/bible_version.test.mjs",
     "test:sermon-localization": "node --test scripts/sermon_localization.test.mjs",
     "check:binder-titles": "node scripts/check_binder_checkpoint_titles.mjs",

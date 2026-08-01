@@ -10,6 +10,8 @@ interface BinderGuideSheetProps {
   checkpoints: readonly BinderCheckpoint[]
   currentPage: number
   pageCount: number
+  /** 화면에 보이는 쪽 번호(숨긴 쪽 제외) — 없는 쪽이면 null */
+  displayPage: (page: number) => number | null
   onJumpPage: (page: number) => void
   onClose: () => void
 }
@@ -26,9 +28,12 @@ export default function BinderGuideSheet({
   checkpoints,
   currentPage,
   pageCount,
+  displayPage,
   onJumpPage,
   onClose,
 }: BinderGuideSheetProps) {
+  /** 안내에 쓰는 쪽 번호도 화면과 같은(숨긴 쪽을 뺀) 번호다 */
+  const pageLabel = (page: number) => t('binderPage')(displayPage(page) ?? page)
   const dialogRef = useRef<HTMLElement>(null)
   const closeButtonRef = useRef<HTMLButtonElement>(null)
   const previousFocusRef = useRef<HTMLElement | null>(null)
@@ -84,22 +89,27 @@ export default function BinderGuideSheet({
       order: 2,
       what: t('binderGuideChooseCheckpoint'),
       where: currentCheckpoint
-        ? `${currentCheckpoint.label} · ${t('binderPage')(currentCheckpoint.page)}`
-        : t('binderPage')(currentPage),
+        ? `${currentCheckpoint.label} · ${pageLabel(currentCheckpoint.page)}`
+        : pageLabel(currentPage),
     },
     ...(nearbyVideo
       ? [
           {
             order: 3,
             what: t('binderGuideWatchVideo'),
-            where: `${nearbyVideo.title} · ${t('binderPage')(nearbyVideo.page)}`,
+            where: `${nearbyVideo.title} · ${pageLabel(nearbyVideo.page)}`,
           },
         ]
       : []),
     {
       order: nearbyVideo ? 4 : 3,
       what: t('binderGuideReadWrite'),
-      where: t('binderPage')(currentPage),
+      where: pageLabel(currentPage),
+    },
+    {
+      order: nearbyVideo ? 5 : 4,
+      what: t('binderGuideShare'),
+      where: t('binderShare'),
     },
   ]
 
@@ -206,6 +216,13 @@ export default function BinderGuideSheet({
             </div>
           </section>
 
+          <section aria-labelledby="binder-guide-share">
+            <h3 id="binder-guide-share" className="font-serif text-base font-extrabold text-rose-ink">
+              {t('binderGuideShareTitle')}
+            </h3>
+            <p className="mt-1 text-[13px] leading-5 text-rose-key">{t('binderGuideShareHint')}</p>
+          </section>
+
           <section aria-labelledby="binder-guide-examples">
             <h3 id="binder-guide-examples" className="font-serif text-base font-extrabold text-rose-ink">
               {t('binderGuideExamples')}
@@ -217,12 +234,12 @@ export default function BinderGuideSheet({
                   type="button"
                   key={example.key}
                   onClick={() => jump(example.page)}
-                  title={`${example.label} · ${t('binderPage')(example.page)}`}
+                  title={`${example.label} · ${pageLabel(example.page)}`}
                   className="flex min-h-11 min-w-0 items-center justify-between gap-3 rounded-xl border border-rose-line bg-white px-3 py-2 text-left transition hover:border-rose-accent focus:outline-none focus:ring-2 focus:ring-rose-accent"
                 >
                   <span className="min-w-0 truncate text-sm font-bold text-rose-ink">{example.label}</span>
                   <span className="shrink-0 rounded-full bg-rose-chip px-2 py-1 text-xs font-black tabular-nums text-rose-accent-deep">
-                    {t('binderPage')(example.page)}
+                    {pageLabel(example.page)}
                   </span>
                 </button>
               ))}

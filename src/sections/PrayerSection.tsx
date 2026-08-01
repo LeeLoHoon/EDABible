@@ -1,4 +1,11 @@
-import { emptyField, isFieldEmpty, type Entry, type Field, type FieldMode } from '../types'
+import {
+  emptyField,
+  emptyPrayerTopics,
+  isFieldEmpty,
+  type Entry,
+  type Field,
+  type FieldMode,
+} from '../types'
 import ModeToggle from '../components/ModeToggle'
 import { t } from '../i18n/strings'
 
@@ -140,7 +147,7 @@ export default function PrayerSection({ entry, update, FieldEditor }: Props) {
   const addSet = () =>
     update((e) => ({
       ...e,
-      prayerTopics2: [{ ...emptyField(), mode }],
+      prayerTopics2: emptyPrayerTopics(mode),
       spousePrayer2: { ...emptyField(), mode },
     }))
   const removeSet = () => {

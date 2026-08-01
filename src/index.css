@@ -41,6 +41,12 @@
   --font-serif: 'Pretendard Variable', Pretendard, 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
 }
 
+/* 바인더 쪽 위에 타이핑하는 칸 — 통합(all) 배포에는 theme-binder가 붙지 않아 명조로
+   나오므로, 인쇄된 본문과 같은 고딕을 직접 지정해 한 지면처럼 보이게 한다. */
+.binder-text-box {
+  font-family: 'Pretendard Variable', Pretendard, 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
+}
+
 html,
 body,
 #root {

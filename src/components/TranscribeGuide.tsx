@@ -116,9 +116,12 @@ export default function TranscribeGuide({ chunks, startChapter, storageKey }: Pr
       className="sticky top-[4.25rem] z-[8] mb-2 rounded-xl border border-rose-line bg-rose-card px-3.5 py-2.5 shadow-sm"
     >
       <div className="flex items-center justify-between gap-2">
+        {/* 어느 편(장)인지 먼저 보이고 그 안에서 몇 번째 구절인지 뒤에 온다 */}
         <span className="text-xs font-bold text-rose-key">
-          {t('tguideProgress')(clamped + 1, steps.length)}
-          {chapterLabel && <span className="ml-1.5 text-rose-accent">{chapterLabel}</span>}
+          {t('tguideLabel')}
+          {chapterLabel && <span className="mx-1 text-rose-accent">· {chapterLabel}</span>}
+          {' · '}
+          {t('tguideCount')(clamped + 1, steps.length)}
         </span>
         <button
           type="button"

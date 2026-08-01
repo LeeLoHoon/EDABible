@@ -56,7 +56,9 @@ function makeDraft(sermon: Sermon | null): FormDraft {
       points: [''],
       pointsEn: [''],
       mediaUrl: '',
-      published: false,
+      // 새 설교는 게시가 기본 — 비공개로 저장하면 등록한 관리자에게만 보여서
+      // "다른 기기에서 안 보인다"는 오해가 생긴다 (sermons RLS: published or 관리자)
+      published: true,
     }
   }
 
@@ -548,6 +550,11 @@ export default function SermonAdminForm({ initial, onClose, onSaved }: Props) {
                 )
               })}
             </div>
+            {!draft.published && (
+              <p className="mt-2 rounded-lg border border-rose-accent/40 bg-rose-bg px-3 py-2 text-[13px] font-bold leading-5 text-rose-accent">
+                {t('sermonUnpublishedWarning')}
+              </p>
+            )}
           </fieldset>
 
           {error && (

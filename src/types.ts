@@ -83,19 +83,8 @@ export interface QuestionSet {
 /** 선택 가능한 5가지 질문 세트들 (첫 번째가 기본값) */
 const QUESTION_SETS_KO: QuestionSet[] = [
   {
-    id: 'meditation',
-    label: '묵상 5질문',
-    questions: [
-      { text: '나는 오늘 어떤 말을 했는가?', keyword: '말' },
-      { text: '나는 오늘 어떤 시간을 보냈는가?', keyword: '시간' },
-      { text: '나는 오늘 어떤 만남을 가졌는가?', keyword: '만남' },
-      { text: '나는 오늘 어떤 일을 바로 실천했는가?', keyword: '일' },
-      { text: '나는 오늘 어떤 자기 관리를 했는가?', keyword: '자기 관리' },
-    ],
-  },
-  {
     id: 'review',
-    label: '하루 돌아보기',
+    label: '하루 돌아보기 A',
     questions: [
       { text: '오늘 내가 발견한 것은 무엇입니까?', keyword: '발견한', hint: '깨달은 것' },
       { text: '오늘 내가 다른 사람에게 나누어 준 것은 무엇입니까?', keyword: '나누어 준' },
@@ -108,23 +97,23 @@ const QUESTION_SETS_KO: QuestionSet[] = [
       { text: '오늘 내가 용서하거나 놓아주어야 하는 것은 무엇입니까?', keyword: '용서하거나 놓아주어야 하는' },
     ],
   },
+  {
+    id: 'meditation',
+    label: '하루 돌아보기 B',
+    questions: [
+      { text: '나는 오늘 어떤 말을 했는가?', keyword: '말' },
+      { text: '나는 오늘 어떤 시간을 보냈는가?', keyword: '시간' },
+      { text: '나는 오늘 어떤 만남을 가졌는가?', keyword: '만남' },
+      { text: '나는 오늘 어떤 일을 바로 실천했는가?', keyword: '일' },
+      { text: '나는 오늘 어떤 자기 관리를 했는가?', keyword: '자기 관리' },
+    ],
+  },
 ]
 
 const QUESTION_SETS_EN: QuestionSet[] = [
   {
-    id: 'meditation',
-    label: '5 Questions',
-    questions: [
-      { text: 'What words did I speak today?', keyword: 'words' },
-      { text: 'How did I spend my time today?', keyword: 'time' },
-      { text: 'What meetings did I have today?', keyword: 'meetings' },
-      { text: 'What did I put into practice right away today?', keyword: 'practice' },
-      { text: 'How did I care for myself today?', keyword: 'care for myself' },
-    ],
-  },
-  {
     id: 'review',
-    label: 'Daily Review',
+    label: 'Daily Review A',
     questions: [
       { text: 'What did I discover today?', keyword: 'discover', hint: 'things I realized' },
       { text: 'What did I share with others today?', keyword: 'share' },
@@ -137,13 +126,24 @@ const QUESTION_SETS_EN: QuestionSet[] = [
       { text: 'What do I need to forgive or let go of today?', keyword: 'forgive or let go of' },
     ],
   },
+  {
+    id: 'meditation',
+    label: 'Daily Review B',
+    questions: [
+      { text: 'What words did I speak today?', keyword: 'words' },
+      { text: 'How did I spend my time today?', keyword: 'time' },
+      { text: 'What meetings did I have today?', keyword: 'meetings' },
+      { text: 'What did I put into practice right away today?', keyword: 'practice' },
+      { text: 'How did I care for myself today?', keyword: 'care for myself' },
+    ],
+  },
 ]
 
 export function getQuestionSets(): QuestionSet[] {
   return getLang() === 'en' ? QUESTION_SETS_EN : QUESTION_SETS_KO
 }
 
-export const DEFAULT_QUESTION_SET_ID: QuestionSetId = 'meditation'
+export const DEFAULT_QUESTION_SET_ID: QuestionSetId = 'review'
 
 /** id로 질문 세트 조회 — 없거나 모르는 id면 기본 세트 */
 export function getQuestionSet(id: QuestionSetId | undefined): QuestionSet {
@@ -153,6 +153,13 @@ export function getQuestionSet(id: QuestionSetId | undefined): QuestionSet {
 
 export function emptyField(): Field {
   return { mode: 'text', text: '', strokes: [] }
+}
+
+/** 새 묵상·새 기도 세트가 처음부터 갖는 기도제목 칸 수 (추가·삭제는 그대로 가능) */
+export const DEFAULT_PRAYER_TOPIC_COUNT = 3
+
+export function emptyPrayerTopics(mode: FieldMode = 'text'): Field[] {
+  return Array.from({ length: DEFAULT_PRAYER_TOPIC_COUNT }, () => ({ ...emptyField(), mode }))
 }
 
 export function emptyTemptationVictory(): TemptationVictory {
@@ -189,7 +196,10 @@ export function createEntry(now: Date): Entry {
     questionSet: DEFAULT_QUESTION_SET_ID,
     answers: getQuestionSet(DEFAULT_QUESTION_SET_ID).questions.map(() => emptyField()),
     spousePrayer: emptyField(),
-    prayerTopics: [emptyField()],
+    prayerTopics: emptyPrayerTopics(),
+    // 기도 세트 2개가 기본 — 두 번째 세트도 처음부터 열려 있고 삭제할 수 있다
+    prayerTopics2: emptyPrayerTopics(),
+    spousePrayer2: emptyField(),
     temptationVictory: emptyTemptationVictory(),
     highlightRanges: [],
     createdAt: ts,

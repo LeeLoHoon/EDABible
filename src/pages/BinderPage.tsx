@@ -4,9 +4,10 @@ import { Link } from 'react-router-dom'
 import * as pdfjsLib from 'pdfjs-dist'
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.mjs?url'
 import { useAuth } from '../authState'
+import { ensureBinderFont } from '../binderFont'
 import {
+  binderPdfUrl,
   binderSetList,
-  binderUrl,
   checkpointsForSet,
   findBinderSet,
   isKnownBinderSetId,
@@ -18,7 +19,7 @@ import {
   resolveLegacyResume,
 } from '../binderMigration'
 import BackButton from '../components/BackButton'
-import BinderVideoInterstitial from '../components/BinderVideoInterstitial'
+import BinderPageVideo from '../components/BinderPageVideo'
 import BinderVideoSheet from '../components/BinderVideoSheet'
 import BinderGuideSheet from '../components/BinderGuideSheet'
 import ModeToggle from '../components/ModeToggle'
@@ -41,12 +42,8 @@ import { getLang } from '../i18n/lang'
 import LangToggle from '../components/LangToggle'
 import { registerSaveFlush } from '../saveFlush'
 import { LatestValueDrain } from '../persistenceQueue'
-import {
-  lessonVideoBeforePage,
-  videoStagesFor,
-  YOUTUBE_ID_RE,
-  type BinderVideoLesson,
-} from '../../scripts/binder_videos'
+import { lessonVideoBeforePage, videoStagesFor } from '../../scripts/binder_videos'
+import { textPresetsFor, type BinderTextPreset } from '../../scripts/binder_text_presets'
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl
 
@@ -54,9 +51,6 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl
 
 type PdfDocument = Awaited<ReturnType<typeof pdfjsLib.getDocument>['promise']>
 type InkTool = 'pen' | 'eraser'
-type PreviewItem =
-  | { kind: 'page'; page: number }
-  | { kind: 'video'; page: number; lesson: BinderVideoLesson }
 
 interface PendingBinderSave {
   work: BinderWork
@@ -160,6 +154,7 @@ function paintShareTextBox(
   canvasHeight: number,
   exportScale: number,
 ) {
+  // 화면의 .binder-text-box와 같은 고딕으로 그려야 공유 이미지가 쪽과 이어져 보인다
   const fontSize = 16 * exportScale
   const lineHeight = fontSize * 1.625
   const paddingX = 10 * exportScale
@@ -194,6 +189,7 @@ function paintShareTextBox(
 /** 한 쪽을 PDF + 필기 획 + 텍스트 상자까지 합성한 공유용 캔버스로 렌더 */
 async function renderSharePage(
   doc: PdfDocument,
+  setId: string,
   pageNumber: number,
   work: BinderWork | null,
   displayWidth: number,
@@ -212,6 +208,18 @@ async function renderSharePage(
   ctx.fillStyle = '#fff'
   ctx.fillRect(0, 0, canvas.width, canvas.height)
   await page.render({ canvasContext: ctx, viewport }).promise
+
+  // 화면에서 인쇄된 괘선을 가리는 칸은 공유 이미지에서도 같은 자리를 가린다
+  for (const preset of textPresetsFor(setId, pageNumber)) {
+    if (!preset.opaque) continue
+    ctx.fillStyle = '#fff'
+    ctx.fillRect(
+      preset.x * canvas.width,
+      preset.y * canvas.height,
+      preset.width * canvas.width,
+      preset.height * canvas.height,
+    )
+  }
 
   const key = String(pageNumber)
   // 필기 좌표는 화면 표시 폭 기준 px — 내보내기 폭에 맞춰 배율 적용
@@ -243,9 +251,13 @@ async function renderSharePage(
   return canvas
 }
 
+/** 쪽에 미리 놓인 칸의 id — 사용자가 실제로 쓰기 전까지는 저장하지 않는다 */
+const presetBoxId = (presetId: string) => `preset:${presetId}`
+
 function PageOverlay({
   field,
   textBoxes,
+  presets,
   mode,
   tool,
   color,
@@ -255,6 +267,7 @@ function PageOverlay({
 }: {
   field: Field
   textBoxes: BinderTextBox[]
+  presets: readonly BinderTextPreset[]
   mode: FieldMode
   tool: InkTool
   color: string
@@ -287,11 +300,32 @@ function PageOverlay({
   const lastTapRef = useRef<{ time: number; x: number; y: number } | null>(null)
   const lastCountedTapRef = useRef(0)
   const editable = mode === 'text'
+  // 인쇄된 괘선을 가리는 자리 — 쓰기 시작해 저장된 뒤에도 계속 가려야 한다
+  const opaqueBoxIds = new Set(
+    presets.filter((preset) => preset.opaque).map((preset) => presetBoxId(preset.id)),
+  )
+  // 쪽에 미리 놓인 빈 칸 — 아직 손대지 않은 것만 얹는다(쓰기 시작하면 저장된 칸이 대신한다)
+  const presetBoxes: (BinderTextBox & { preset: true })[] = presets
+    .filter((preset) => !textBoxes.some((box) => box.id === presetBoxId(preset.id)))
+    .map((preset) => ({
+      id: presetBoxId(preset.id),
+      x: preset.x,
+      y: preset.y,
+      width: preset.width,
+      height: preset.height,
+      text: '',
+      preset: true,
+    }))
+  const presetBoxesRef = useRef(presetBoxes)
+  useEffect(() => {
+    presetBoxesRef.current = presetBoxes
+  })
+  const allTextBoxes = [...textBoxes, ...presetBoxes]
   const visibleActiveTextBoxId =
-    editable && textBoxes.some((box) => box.id === activeTextBoxId) ? activeTextBoxId : null
+    editable && allTextBoxes.some((box) => box.id === activeTextBoxId) ? activeTextBoxId : null
   const visibleTextBoxes = draftTextBox
-    ? textBoxes.map((box) => (box.id === draftTextBox.id ? draftTextBox : box))
-    : textBoxes
+    ? allTextBoxes.map((box) => (box.id === draftTextBox.id ? { ...box, ...draftTextBox } : box))
+    : allTextBoxes
 
   useEffect(() => {
     fieldRef.current = field
@@ -566,8 +600,25 @@ function PageOverlay({
     }
   }, [])
 
+  // 미리 놓인 칸은 여기서 처음으로 저장 대상이 된다 — 빈 칸은 저장하지 않는다
   const updateTextBox = (id: string, patch: Partial<BinderTextBox>) => {
-    onTextBoxesChange(textBoxesRef.current.map((box) => (box.id === id ? { ...box, ...patch } : box)))
+    const current = textBoxesRef.current
+    if (current.some((box) => box.id === id)) {
+      onTextBoxesChange(current.map((box) => (box.id === id ? { ...box, ...patch } : box)))
+      return
+    }
+    const preset = presetBoxesRef.current.find((box) => box.id === id)
+    if (!preset) return
+    // 화면 표시용 플래그는 빼고 저장한다
+    const stored: BinderTextBox = {
+      id: preset.id,
+      x: preset.x,
+      y: preset.y,
+      width: preset.width,
+      height: preset.height,
+      text: preset.text,
+    }
+    onTextBoxesChange([...current, { ...stored, ...patch }])
   }
 
   const filledTextBoxes = () => textBoxesRef.current.filter((box) => box.text.trim())
@@ -727,6 +778,9 @@ function PageOverlay({
       <div className="pointer-events-none absolute inset-0">
         {visibleTextBoxes.map((box) => {
           const active = visibleActiveTextBoxId === box.id
+          const isPreset = 'preset' in box && box.preset === true
+          // 괘선을 가리는 칸은 타이핑할 때만 흰 바탕이 된다 — 손글씨 모드에서는 줄이 그대로 보인다
+          const opaque = editable && opaqueBoxIds.has(box.id)
           return (
             <div
               key={box.id}
@@ -745,12 +799,18 @@ function PageOverlay({
                 onChange={(event) => updateTextBox(box.id, { text: event.target.value })}
                 onFocus={() => setActiveTextBoxId(box.id)}
                 placeholder={editable ? t('binderInputPlaceholder') : ''}
-                className={`h-full w-full resize-none rounded-lg border px-2.5 py-2 text-[16px] leading-relaxed text-rose-ink outline-none transition-colors placeholder:text-rose-key/60 ${
+                className={`binder-text-box h-full w-full resize-none rounded-lg border px-2.5 py-2 text-[16px] leading-relaxed text-rose-ink outline-none transition-colors placeholder:text-rose-key/60 ${
                   box.height ? '' : 'min-h-12'
                 } ${
-                  active
-                    ? 'border-rose-accent bg-white/70 shadow-sm backdrop-blur-[1px]'
-                    : 'border-transparent bg-transparent'
+                  active && opaque
+                    ? 'border-rose-accent bg-white shadow-sm'
+                    : active
+                      ? 'border-rose-accent bg-white/70 shadow-sm backdrop-blur-[1px]'
+                      : opaque
+                        ? 'border-transparent bg-white'
+                        : isPreset && editable
+                          ? 'border-dashed border-rose-line/70 bg-white/25'
+                          : 'border-transparent bg-transparent'
                 }`}
               />
               {active && (
@@ -770,13 +830,16 @@ function PageOverlay({
                     >
                       ⠿
                     </span>
-                    <button
-                      type="button"
-                      onClick={() => deleteTextBox(box.id)}
-                      className="rounded-full px-2.5 py-1 text-xs font-bold text-rose-accent transition hover:bg-rose-chip"
-                    >
-                      {t('binderDelete')}
-                    </button>
+                    {/* 쪽에 미리 놓인 칸은 지워도 다시 나타나므로 삭제 버튼을 두지 않는다 */}
+                    {!isPreset && (
+                      <button
+                        type="button"
+                        onClick={() => deleteTextBox(box.id)}
+                        className="rounded-full px-2.5 py-1 text-xs font-bold text-rose-accent transition hover:bg-rose-chip"
+                      >
+                        {t('binderDelete')}
+                      </button>
+                    )}
                   </div>
                   <span
                     role="button"
@@ -793,7 +856,7 @@ function PageOverlay({
             </div>
           )
         })}
-        {editable && textBoxes.length === 0 && (
+        {editable && allTextBoxes.length === 0 && (
           <div className="pointer-events-none absolute left-1/2 top-5 -translate-x-1/2 whitespace-nowrap rounded-full bg-rose-ink/70 px-4 py-1.5 text-[13px] font-bold text-white shadow-sm backdrop-blur-[2px]">
             {t('binderTapToInput')}
           </div>
@@ -813,10 +876,13 @@ function PageOverlay({
 function PdfThumbnail({
   pdfDocument,
   pageNumber,
+  label,
   active,
 }: {
   pdfDocument: PdfDocument | null
   pageNumber: number
+  /** 배지에 보여줄 쪽 번호 — 숨긴 쪽을 뺀 화면 번호다 */
+  label: number
   active: boolean
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -877,46 +943,7 @@ function PdfThumbnail({
           active ? 'bg-rose-accent-deep text-white' : 'bg-white/90 text-rose-key'
         }`}
       >
-        {pageNumber}
-      </span>
-    </div>
-  )
-}
-
-function VideoPreviewCard({
-  lesson,
-  active,
-}: {
-  lesson: BinderVideoLesson
-  active: boolean
-}) {
-  return (
-    <div
-      className={`relative mx-auto flex shrink-0 items-center justify-center overflow-hidden bg-rose-chip transition ${
-        active
-          ? 'h-[76px] w-[54px] rounded-lg shadow-md ring-2 ring-rose-accent sm:h-[100px] sm:w-[72px]'
-          : 'h-16 w-11 cursor-pointer rounded-md border border-rose-line opacity-75 shadow-sm sm:h-[84px] sm:w-[58px]'
-      }`}
-    >
-      <img
-        src={`https://i.ytimg.com/vi/${lesson.videoId}/default.jpg`}
-        alt=""
-        loading="lazy"
-        draggable={false}
-        className="pointer-events-none h-full w-full select-none object-cover"
-      />
-      <span
-        aria-hidden
-        className="pointer-events-none absolute inset-x-0 top-0 grid place-items-center bg-gradient-to-b from-black/50 to-transparent py-0.5 text-[10px] leading-none text-white"
-      >
-        🎬
-      </span>
-      <span
-        className={`pointer-events-none absolute bottom-1 right-1 rounded-full px-1.5 py-0.5 text-[9px] font-black shadow-sm ${
-          active ? 'bg-rose-accent-deep text-white' : 'bg-white/90 text-rose-key'
-        }`}
-      >
-        {lesson.no}
+        {label}
       </span>
     </div>
   )
@@ -927,6 +954,7 @@ function PdfPage({
   pageNumber,
   field,
   textBoxes,
+  presets,
   mode,
   tool,
   color,
@@ -938,6 +966,7 @@ function PdfPage({
   pageNumber: number
   field: Field
   textBoxes: BinderTextBox[]
+  presets: readonly BinderTextPreset[]
   mode: FieldMode
   tool: InkTool
   color: string
@@ -994,6 +1023,7 @@ function PdfPage({
       <PageOverlay
         field={field}
         textBoxes={textBoxes}
+        presets={presets}
         mode={mode}
         tool={tool}
         color={color}
@@ -1032,7 +1062,6 @@ export default function BinderPage() {
   const [inkSize, setInkSize] = useState(4)
   // 입력 방식은 페이지가 아니라 세션의 도구 상태 — 쪽을 넘겨도 유지된다
   const [inputMode, setInputMode] = useState<FieldMode>('text')
-  const [interstitialPage, setInterstitialPage] = useState<number | null>(null)
   const [viewDir, setViewDir] = useState<'forward' | 'backward'>('forward')
   const [videosOpen, setVideosOpen] = useState(false)
   const [guideOpen, setGuideOpen] = useState(false)
@@ -1042,7 +1071,7 @@ export default function BinderPage() {
   const [shareExtraPages, setShareExtraPages] = useState<number[]>([])
   const [shareExtraInput, setShareExtraInput] = useState('')
   const [pageNumber, setPageNumber] = useState(1)
-  const [pageCount, setPageCount] = useState(binderSetList[0]?.pages ?? 1)
+  const [pageCount, setPageCount] = useState(binderSetList[0]?.pdfPages ?? 1)
   const [hiddenPages, setHiddenPages] = useState<number[]>([])
   const [hiddenPagesSetId, setHiddenPagesSetId] = useState('')
   const [hiddenPagesLoadFailedSetId, setHiddenPagesLoadFailedSetId] = useState<string | null>(null)
@@ -1124,21 +1153,33 @@ export default function BinderPage() {
     workRef.current = work
   }, [work, workOwnerId])
 
+  // 쪽 위 입력칸이 인쇄된 본문과 같은 글꼴로 보이도록 바인더 화면에서 받아온다
+  useEffect(() => {
+    ensureBinderFont()
+  }, [])
+
   const selected = findBinderSet(selectedId) ?? binderSetList[0]
-  const interstitialVideo =
-    interstitialPage === null
-      ? undefined
-      : lessonVideoBeforePage(selected.id, interstitialPage)
+  const selectedPdfId = selected.pdfId
+  const selectedPdfPages = selected.pdfPages
   const adminMode = adminModeUserId !== null && adminModeUserId === userId
-  const hiddenPagesReady = hiddenPagesSetId === selected.id
-  const hiddenPagesWritable = hiddenPagesReady && hiddenPagesLoadFailedSetId !== selected.id
-  const allPages = Array.from({ length: pageCount }, (_, index) => index + 1)
+  const hiddenPagesReady = hiddenPagesSetId === selected.pdfId
+  const hiddenPagesWritable = hiddenPagesReady && hiddenPagesLoadFailedSetId !== selected.pdfId
+  // 이 파트가 보여주는 PDF 쪽 범위 — 한 PDF를 파트로 나눠도 나머지 로직은 그대로 쓴다
+  const lastPage = Math.min(pageCount, selected.pageEnd)
+  const firstPage = Math.min(selected.pageStart, lastPage)
+  const allPages = Array.from({ length: lastPage - firstPage + 1 }, (_, index) => firstPage + index)
   const currentHiddenPages = hiddenPagesReady ? hiddenPages : []
   const hiddenPageSet = new Set(currentHiddenPages.filter((page) => page <= pageCount))
   const visiblePages = allPages.filter((page) => !hiddenPageSet.has(page))
   const browsablePages = hiddenPagesReady ? (adminMode ? allPages : visiblePages) : []
   const browsableIndex = browsablePages.indexOf(pageNumber)
+  // 관리자가 숨긴 쪽을 뺀 뒤 다시 센 쪽 번호 — 화면·공유에 보이는 모든 쪽 수가 이 값이다
   const visibleOrdinal = visiblePages.indexOf(pageNumber) + 1
+  const displayPage = (page: number) => {
+    const ordinal = visiblePages.indexOf(page) + 1
+    return ordinal > 0 ? ordinal : null
+  }
+  const pageFromDisplay = (ordinal: number) => visiblePages[ordinal - 1]
   const allPagesHidden = visiblePages.length === 0
   const currentPageHidden = hiddenPageSet.has(pageNumber)
   const previousPage = browsableIndex > 0 ? browsablePages[browsableIndex - 1] : undefined
@@ -1146,81 +1187,71 @@ export default function BinderPage() {
     browsableIndex >= 0 && browsableIndex + 1 < browsablePages.length
       ? browsablePages[browsableIndex + 1]
       : undefined
-  const currentPageVideo = lessonVideoBeforePage(selected.id, pageNumber)
-  const canGoPrev =
-    interstitialPage !== null || previousPage !== undefined || currentPageVideo !== undefined
-  const canGoNext = interstitialPage !== null || nextPage !== undefined
+  // 이 쪽에 붙는 요약 영상 — 쪽 위에 카드로 얹어 영상을 보면서 바로 적을 수 있다
+  const currentPageVideo = lessonVideoBeforePage(selected.pdfId, pageNumber)
+  const canGoPrev = previousPage !== undefined
+  const canGoNext = nextPage !== undefined
   const pageKey = String(pageNumber)
   const pageInput = work?.pageInputs[pageKey] ?? emptyField()
   const pageTextBoxes = work?.pageTextBoxes[pageKey] ?? []
+  // 쪽에 미리 놓이는 입력칸 — 성경묵상 묵상·배우자 기도 칸, 디모데·책공부 괘선 노트
+  const pagePresets = textPresetsFor(selected.pdfId, pageNumber)
   // 체크포인트는 "구간"의 시작점 — 다음 체크포인트 직전까지가 그 구간이다
   const checkpoints: BinderCheckpoint[] = checkpointsForSet(selected)
   const checkpointSections = checkpoints.map((checkpoint, index, list) => ({
     ...checkpoint,
-    endPage: index + 1 < list.length ? list[index + 1].page - 1 : pageCount,
+    endPage: index + 1 < list.length ? list[index + 1].page - 1 : lastPage,
   }))
   const activeCheckpointId =
     [...checkpointSections].reverse().find((section) => pageNumber >= section.page)?.id ?? ''
   const activeCheckpoint = checkpointSections.find((section) => section.id === activeCheckpointId)
 
   useEffect(() => {
-    selectedSetIdRef.current = selected.id
-  }, [selected.id])
+    selectedSetIdRef.current = selected.pdfId
+  }, [selected.pdfId])
 
   useEffect(() => {
     activeCheckpointRef.current?.scrollIntoView({ block: 'nearest' })
   }, [activeCheckpointId])
 
+  // 숨긴 쪽은 PDF 단위로 관리한다 — 같은 PDF를 나눈 파트끼리 설정이 갈라지지 않는다
   useEffect(() => {
     const requestId = ++hiddenLoadRef.current
-    const setId = selected.id
+    const pdfId = selected.pdfId
     let alive = true
 
-    getHiddenPages(setId)
+    getHiddenPages(pdfId)
       .then((pages) => {
-        if (!alive || requestId !== hiddenLoadRef.current || setId !== selected.id) return
+        if (!alive || requestId !== hiddenLoadRef.current || pdfId !== selected.pdfId) return
         setHiddenPages(pages)
-        setHiddenPagesSetId(setId)
+        setHiddenPagesSetId(pdfId)
         setHiddenPagesLoadFailedSetId(null)
       })
       .catch(() => {
         if (!alive || requestId !== hiddenLoadRef.current) return
         setHiddenPages([])
-        setHiddenPagesSetId(setId)
-        setHiddenPagesLoadFailedSetId(setId)
+        setHiddenPagesSetId(pdfId)
+        setHiddenPagesLoadFailedSetId(pdfId)
       })
 
     return () => {
       alive = false
     }
-  }, [selected.id])
+  }, [selected.pdfId])
 
   useEffect(() => {
-    if (adminMode || hiddenPagesSetId !== selected.id || !hiddenPages.includes(pageNumber)) return
+    if (adminMode || hiddenPagesSetId !== selected.pdfId || !hiddenPages.includes(pageNumber)) return
     const hidden = new Set(hiddenPages)
-    const available = Array.from({ length: pageCount }, (_, index) => index + 1).filter(
-      (page) => !hidden.has(page),
-    )
+    const available = allPages.filter((page) => !hidden.has(page))
     const target = snapToVisiblePage(available, pageNumber)
     if (target === null) return
-    const timer = window.setTimeout(() => {
-      setInterstitialPage(null)
-      setPageNumber(target)
-    }, 0)
+    const timer = window.setTimeout(() => setPageNumber(target), 0)
     return () => window.clearTimeout(timer)
-  }, [adminMode, hiddenPages, hiddenPagesSetId, pageCount, pageNumber, selected.id])
+    // allPages는 매 렌더 새 배열이라 의존성에서 뺀다 — 값은 아래 의존성으로 결정된다
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [adminMode, hiddenPages, hiddenPagesSetId, firstPage, lastPage, pageNumber, selected.pdfId])
 
   const previewPages = nearbyPages(browsablePages, pageNumber)
-  // 미리보기 스트립 항목 — 실제 쪽(page)과 그 앞에 붙는 영상(video)을 함께 나열한다.
-  // 영상은 lessonVideoBeforePage로 판별하고 카드 렌더 직전 videoId를 다시 검증한다.
-  const previewItems: PreviewItem[] = []
-  for (const page of previewPages) {
-    const video = lessonVideoBeforePage(selected.id, page)
-    if (video && YOUTUBE_ID_RE.test(video.lesson.videoId)) {
-      previewItems.push({ kind: 'video', page: video.lesson.page, lesson: video.lesson })
-    }
-    previewItems.push({ kind: 'page', page })
-  }
   const bookmarks = [...(work?.bookmarks ?? [])].sort((a, b) => a.page - b.page || a.createdAt - b.createdAt)
   const currentPageBookmarked = bookmarks.some((bookmark) => bookmark.page === pageNumber)
   const inputPageSet = work
@@ -1234,10 +1265,10 @@ export default function BinderPage() {
       ])
     : new Set<number>()
   const bookmarkPageSet = new Set(bookmarks.map((bookmark) => bookmark.page))
-  // 공유 후보: 필기한 쪽 + 책갈피 쪽 + 현재 쪽 + 직접 추가한 쪽
+  // 공유 후보: 필기한 쪽 + 책갈피 쪽 + 현재 쪽 + 직접 추가한 쪽 (이 파트 안에서만)
   const shareCandidates = hiddenPagesReady
     ? [...new Set([pageNumber, ...inputPageSet, ...bookmarkPageSet, ...shareExtraPages])]
-        .filter((page) => page >= 1 && page <= pageCount && !hiddenPageSet.has(page))
+        .filter((page) => page >= firstPage && page <= lastPage && !hiddenPageSet.has(page))
         .sort((a, b) => a - b)
     : []
 
@@ -1283,17 +1314,17 @@ export default function BinderPage() {
     const resetTimer = window.setTimeout(() => {
       if (alive) {
         setWork(null)
-        setInterstitialPage(null)
-        setPageNumber(1)
+        setPageNumber(selected.pageStart)
       }
     }, 0)
-    getBinderWork(selected.id, userId)
+    getBinderWork(selected.workId, userId)
       .then((loaded) => {
         if (!alive) return
         window.clearTimeout(resetTimer)
         const converted = convertLegacyPageText(loaded)
         const next = converted.work
-        // 이 권에서 마지막으로 보던 쪽으로 이어보기 (이미 직접 넘겼으면 유지)
+        // 이 권에서 마지막으로 보던 쪽으로 이어보기 (이미 직접 넘겼으면 유지).
+        // 한 PDF를 파트로 나눠 쓰면 마지막 쪽이 다른 파트일 수 있어 파트 범위로 맞춘다.
         const legacyResume =
           legacyResumeRef.current?.setId === selected.id
             ? legacyResumeRef.current.page
@@ -1301,9 +1332,8 @@ export default function BinderPage() {
         if (legacyResume !== undefined) legacyResumeRef.current = null
         const target =
           legacyResume ??
-          (next.lastPageNumber && next.lastPageNumber > 0 ? next.lastPageNumber : 1)
-        const restored = Math.max(1, Math.min(selected.pages, target))
-        setInterstitialPage(null)
+          (next.lastPageNumber && next.lastPageNumber > 0 ? next.lastPageNumber : selected.pageStart)
+        const restored = clamp(target, selected.pageStart, selected.pageEnd)
         if (!navigatedSinceSelectRef.current) setPageNumber(restored)
 
         if (bootRef.current) {
@@ -1329,41 +1359,46 @@ export default function BinderPage() {
       alive = false
       window.clearTimeout(resetTimer)
     }
-  }, [bootReadyUserId, persistWork, selected.id, selected.pages, setWork, userId, workOwnerId])
+  }, [
+    bootReadyUserId,
+    persistWork,
+    selected.id,
+    selected.pageEnd,
+    selected.pageStart,
+    selected.workId,
+    setWork,
+    userId,
+    workOwnerId,
+  ])
 
-  // 마지막 위치(권·쪽 + 체크포인트 구간별 쪽) 저장 — 계정별 이어보기용
+  // 마지막으로 보던 권·쪽 저장 — 계정별 이어보기용.
+  // 체크포인트는 늘 구간 첫 쪽으로 가므로 구간별 위치(checkpointPages)는 더 쓰지 않는다.
+  // 예전 기록은 그대로 두고 읽지도 쓰지도 않는다.
   useEffect(() => {
     if (!userId || bootRef.current) return
     const timer = window.setTimeout(() => {
       const current = workRef.current
-      if (!current || workOwnerRef.current !== workOwnerId || current.bookId !== selected.id) return
-      const savedCheckpoints = current.checkpointPages ?? {}
-      const checkpointChanged =
-        activeCheckpointId !== '' && savedCheckpoints[activeCheckpointId] !== pageNumber
-      if (current.lastPageNumber === pageNumber && !checkpointChanged) return
-      const next: BinderWork = {
-        ...current,
-        lastPageNumber: pageNumber,
-        checkpointPages: checkpointChanged
-          ? { ...savedCheckpoints, [activeCheckpointId]: pageNumber }
-          : savedCheckpoints,
-      }
+      if (!current || workOwnerRef.current !== workOwnerId || current.bookId !== selected.workId)
+        return
+      if (current.lastPageNumber === pageNumber) return
+      const next: BinderWork = { ...current, lastPageNumber: pageNumber }
       workRef.current = next
       setWork(next)
       persistWork(next, userId)
     }, 800)
     return () => window.clearTimeout(timer)
-  }, [activeCheckpointId, pageNumber, persistWork, selected.id, setWork, userId, workOwnerId])
+  }, [pageNumber, persistWork, selected.workId, setWork, userId, workOwnerId])
 
+  // PDF는 파일 단위로 연다 — 같은 PDF를 나눈 파트끼리 전환할 때는 다시 받지 않는다
   useEffect(() => {
     let alive = true
     const resetTimer = window.setTimeout(() => {
       if (!alive) return
       setDocument(null)
-      setPageCount(selected.pages)
+      setPageCount(selectedPdfPages)
       setLoadingPdf(true)
     }, 0)
-    const task = pdfjsLib.getDocument({ url: binderUrl(selected) })
+    const task = pdfjsLib.getDocument({ url: binderPdfUrl(selectedPdfId) })
     task.promise
       .then(async (next) => {
         if (!alive) return
@@ -1390,7 +1425,7 @@ export default function BinderPage() {
       window.clearTimeout(resetTimer)
       task.destroy()
     }
-  }, [selected])
+  }, [selectedPdfId, selectedPdfPages])
 
   const updateWork = (next: BinderWork) => {
     setWork(next)
@@ -1422,8 +1457,8 @@ export default function BinderPage() {
   }
 
   const addBookmark = () => {
-    if (!work || interstitialPage !== null) return
-    const fallback = t('binderPage')(pageNumber)
+    if (!work) return
+    const fallback = t('binderPage')(displayPage(pageNumber) ?? visibleOrdinal)
     const label = window.prompt(t('binderBookmarkName'), fallback)?.trim()
     if (!label) return
     const bookmark: BinderBookmark = {
@@ -1448,83 +1483,35 @@ export default function BinderPage() {
     })
   }
 
-  // viewDir는 인터스티셜 진입·이탈 순간에만 업데이트한다. pdf→pdf 이동에서
-  // className을 바꾸면 브라우저가 애니메이션을 재실행해 튀므로 그대로 유지한다.
   const goPrev = () => {
-    if (interstitialPage !== null) {
-      navigatedSinceSelectRef.current = true
-      setViewDir('backward')
-      setInterstitialPage(null)
-      if (pageNumber === interstitialPage && previousPage !== undefined) {
-        setPageNumber(previousPage)
-      }
-      return
-    }
-
-    if (currentPageVideo) {
-      navigatedSinceSelectRef.current = true
-      setViewDir('backward')
-      setInterstitialPage(pageNumber)
-      return
-    }
     if (previousPage === undefined) return
     navigatedSinceSelectRef.current = true
+    setViewDir('backward')
     setPageNumber(previousPage)
   }
   const goNext = () => {
-    if (interstitialPage !== null) {
-      navigatedSinceSelectRef.current = true
-      setViewDir('forward')
-      setInterstitialPage(null)
-      if (pageNumber < interstitialPage) setPageNumber(interstitialPage)
-      return
-    }
-
     if (nextPage === undefined) return
-    if (lessonVideoBeforePage(selected.id, nextPage)) {
-      navigatedSinceSelectRef.current = true
-      setViewDir('forward')
-      setInterstitialPage(nextPage)
-      return
-    }
     navigatedSinceSelectRef.current = true
+    setViewDir('forward')
     setPageNumber(nextPage)
   }
   const goToPage = (next: number) => {
-    const target = snapToVisiblePage(browsablePages, clamp(next, 1, pageCount))
+    const target = snapToVisiblePage(browsablePages, clamp(next, firstPage, lastPage))
     if (target === null) return
-    if (interstitialPage !== null) {
-      setViewDir(target >= pageNumber ? 'forward' : 'backward')
-    }
-    setInterstitialPage(null)
+    setViewDir(target >= pageNumber ? 'forward' : 'backward')
     navigatedSinceSelectRef.current = true
     setPageNumber(target)
   }
-  // 미리보기 스트립에서 영상 카드를 탭하면 전진 진입과 똑같은 상태를 만들어
-  // "다음" 버튼으로 나갈 때 goNext 규칙(pageNumber < interstitialPage → 인터스티셜의 lesson.page로 이동)이 그대로 작동한다.
-  const jumpToVideoInterstitial = (lessonPage: number) => {
-    const index = browsablePages.indexOf(lessonPage)
-    if (index < 0) return
-    const beforePage = index > 0 ? browsablePages[index - 1] : browsablePages[index]
-    navigatedSinceSelectRef.current = true
-    setViewDir('forward')
-    setInterstitialPage(lessonPage)
-    if (beforePage !== pageNumber) setPageNumber(beforePage)
-  }
-  // 그 구간에서 마지막으로 보던 쪽으로 이어보기 — 기록이 없거나 구간을 벗어났으면 첫 쪽
+  /** 체크포인트를 누르면 늘 그 구간의 첫 쪽으로 간다 — 어디를 눌러도 결과가 같다 */
   const goToCheckpoint = (checkpointId: string) => {
-    setInterstitialPage(null)
     const section = checkpointSections.find((item) => item.id === checkpointId)
     if (!section) return
-    const saved = work?.checkpointPages?.[checkpointId]
-    const resumable = saved !== undefined && saved >= section.page && saved <= section.endPage
-    const requested = resumable ? saved : section.page
     if (adminMode) {
-      goToPage(requested)
+      goToPage(section.page)
       return
     }
-    const nextVisible = visiblePages.find((page) => page >= requested)
-    goToPage(nextVisible ?? requested)
+    const nextVisible = visiblePages.find((page) => page >= section.page)
+    goToPage(nextVisible ?? section.page)
   }
 
   const handleAdminTap = () => {
@@ -1557,7 +1544,6 @@ export default function BinderPage() {
 
   const exitAdminMode = () => {
     setAdminModeUserId(null)
-    setInterstitialPage(null)
     // 관리자만 볼 수 있는 숨김 쪽에 머물러 있다가 종료했을 때 일반 뷰에 이상한 쪽이 남지 않도록 스냅
     const target = snapToVisiblePage(visiblePages, pageNumber)
     if (target !== null) setPageNumber(target)
@@ -1572,11 +1558,11 @@ export default function BinderPage() {
 
   const saveHiddenPages = async (nextPages: number[]) => {
     if (!userId || hiddenSaving || !hiddenPagesWritable) return
-    const setId = selected.id
+    const setId = selected.pdfId
     const previousPages = currentHiddenPages
     const normalized = [...new Set(nextPages)].sort((a, b) => a - b)
     setHiddenPages(normalized)
-    setHiddenPagesSetId(selected.id)
+    setHiddenPagesSetId(setId)
     setHiddenSaving(true)
     try {
       await putHiddenPages(setId, normalized, userId)
@@ -1605,7 +1591,6 @@ export default function BinderPage() {
 
   const startPreviewDrag = (event: React.PointerEvent<HTMLDivElement>) => {
     if (loadingPdf || !document || browsablePages.length === 0) return
-    setInterstitialPage(null)
     event.currentTarget.setPointerCapture(event.pointerId)
     event.preventDefault()
     previewMovedRef.current = false
@@ -1641,12 +1626,6 @@ export default function BinderPage() {
     // 손을 뗀 좌표에서 직접 찾는다. (state `document`가 전역을 가리므로 window.document)
     if (event.type !== 'pointercancel' && !previewMovedRef.current) {
       const target = window.document.elementFromPoint(event.clientX, event.clientY)
-      const videoHit = target?.closest('[data-preview-video]')
-      if (videoHit) {
-        const lessonPage = Number(videoHit.getAttribute('data-preview-video'))
-        if (!Number.isNaN(lessonPage)) jumpToVideoInterstitial(lessonPage)
-        return
-      }
       const hit = target?.closest('[data-preview-page]')
       const page = hit ? Number(hit.getAttribute('data-preview-page')) : NaN
       if (!Number.isNaN(page)) goToPage(page)
@@ -1665,13 +1644,14 @@ export default function BinderPage() {
     setShareSelected((prev) => (prev.includes(page) ? prev.filter((p) => p !== page) : [...prev, page]))
   }
 
+  // 입력값은 화면에 보이는 쪽 번호다 — 숨긴 쪽을 뺀 순번으로 해석한다
   const addShareExtraPage = () => {
-    const page = Number(shareExtraInput)
-    if (!Number.isInteger(page) || page < 1 || page > pageCount) return
-    const visiblePage = snapToVisiblePage(visiblePages, page)
-    if (visiblePage === null) return
-    setShareExtraPages((prev) => (prev.includes(visiblePage) ? prev : [...prev, visiblePage]))
-    setShareSelected((prev) => (prev.includes(visiblePage) ? prev : [...prev, visiblePage]))
+    const ordinal = Number(shareExtraInput)
+    if (!Number.isInteger(ordinal) || ordinal < 1 || ordinal > visiblePages.length) return
+    const page = pageFromDisplay(ordinal)
+    if (page === undefined) return
+    setShareExtraPages((prev) => (prev.includes(page) ? prev : [...prev, page]))
+    setShareSelected((prev) => (prev.includes(page) ? prev : [...prev, page]))
     setShareExtraInput('')
   }
 
@@ -1685,10 +1665,15 @@ export default function BinderPage() {
         window.document.querySelector('article canvas')?.getBoundingClientRect().width ?? 720
       const pages = [...selectedVisiblePages].sort((a, b) => a - b)
       const files: File[] = []
+      // 파일 이름·공유 문구의 쪽 번호도 화면과 같은(숨긴 쪽을 뺀) 번호를 쓴다
       for (const page of pages) {
-        const canvas = await renderSharePage(document, page, work, displayWidth)
+        const canvas = await renderSharePage(document, selected.pdfId, page, work, displayWidth)
+        const ordinal = displayPage(page) ?? page
         files.push(
-          await canvasToJpegFile(canvas, `eda-${selected.id}-p${String(page).padStart(3, '0')}.jpg`),
+          await canvasToJpegFile(
+            canvas,
+            `eda-${selected.id}-p${String(ordinal).padStart(3, '0')}.jpg`,
+          ),
         )
       }
       const result = await shareOrDownloadFiles(
@@ -1696,7 +1681,7 @@ export default function BinderPage() {
         t('binderShareTitle')(t('binderSetTitle')(selected.kind)),
         t('binderShareText')(
           t('binderSetTitle')(selected.kind),
-          pages.map((page) => t('binderPage')(page)).join(', '),
+          pages.map((page) => t('binderPage')(displayPage(page) ?? page)).join(', '),
         ),
       )
       if (result !== 'cancelled') setShareOpen(false)
@@ -1841,29 +1826,37 @@ export default function BinderPage() {
               <button
                 type="button"
                 onClick={addBookmark}
-                disabled={browsablePages.length === 0 || interstitialPage !== null}
+                disabled={browsablePages.length === 0}
                 className="rounded-full bg-rose-chip px-2.5 py-1 text-xs font-bold text-rose-accent transition hover:bg-rose-accent-deep hover:text-white"
               >
                 {t('binderAddBookmark')}
               </button>
             </div>
-            <div className="grid max-h-[38vh] grid-cols-2 gap-1 overflow-y-auto sm:grid-cols-3 xl:grid-cols-4">
+            {/* 제목이 긴 세트(디모데·책공부)에서도 한 글자만 보이지 않도록 좁은 폭은 한 줄에
+                하나씩 놓고, 잘라내는 대신 여러 줄로 감싼다 */}
+            <div className="grid max-h-[38vh] grid-cols-1 gap-1 overflow-y-auto sm:grid-cols-2 xl:grid-cols-1">
               {checkpointSections.map((checkpoint) => {
                 const active = activeCheckpointId === checkpoint.id
+                const ordinal = displayPage(checkpoint.page)
                 return (
                   <button
                     type="button"
                     key={checkpoint.id}
                     ref={active ? activeCheckpointRef : null}
                     onClick={() => goToCheckpoint(checkpoint.id)}
-                    title={`${checkpoint.label} · ${t('binderPage')(checkpoint.page)}`}
-                    className={`min-h-11 min-w-0 truncate rounded-lg px-2.5 py-2 text-left text-sm transition focus:outline-none focus:ring-2 focus:ring-rose-accent ${
+                    title={ordinal ? `${checkpoint.label} · ${t('binderPage')(ordinal)}` : checkpoint.label}
+                    className={`flex min-h-11 min-w-0 items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm leading-snug transition focus:outline-none focus:ring-2 focus:ring-rose-accent ${
                       active
                         ? 'bg-rose-chip font-extrabold text-rose-accent'
                         : 'font-bold text-rose-key hover:bg-rose-chip/50 hover:text-rose-ink'
                     }`}
                   >
-                    {checkpoint.label}
+                    <span className="min-w-0 flex-1 break-keep">{checkpoint.label}</span>
+                    {ordinal !== null && (
+                      <span className="shrink-0 text-[11px] font-bold tabular-nums text-rose-key/60">
+                        {ordinal}
+                      </span>
+                    )}
                   </button>
                 )
               })}
@@ -1909,7 +1902,9 @@ export default function BinderPage() {
                               {t('binderHiddenBadge')}
                             </span>
                           )}
-                          <span className="shrink-0 text-xs tabular-nums text-rose-key/60">{t('binderPage')(bookmark.page)}</span>
+                          <span className="shrink-0 text-xs tabular-nums text-rose-key/60">
+                            {t('binderPage')(displayPage(bookmark.page) ?? bookmark.page)}
+                          </span>
                         </button>
                         <button
                           type="button"
@@ -1995,7 +1990,7 @@ export default function BinderPage() {
             <select
               value={activeCheckpointId}
               onChange={(event) => goToCheckpoint(event.target.value)}
-              title={activeCheckpoint ? `${activeCheckpoint.label} · ${t('binderPage')(activeCheckpoint.page)}` : t('binderShortcut')}
+              title={activeCheckpoint ? `${activeCheckpoint.label} · ${t('binderPage')(displayPage(activeCheckpoint.page) ?? activeCheckpoint.page)}` : t('binderShortcut')}
               className="min-h-11 min-w-0 max-w-[min(18rem,70vw)] flex-1 truncate rounded-full border border-rose-line bg-rose-bg px-3 py-1.5 text-[13px] font-bold text-rose-key outline-none focus:border-rose-accent focus:ring-2 focus:ring-rose-accent sm:flex-none"
               aria-label={t('binderCheckpointAria')}
             >
@@ -2004,7 +1999,7 @@ export default function BinderPage() {
               </option>
               {checkpointSections.map((checkpoint) => (
                 <option key={checkpoint.id} value={checkpoint.id}>
-                  {checkpoint.label} · {t('binderPage')(checkpoint.page)}
+                  {checkpoint.label} · {t('binderPage')(displayPage(checkpoint.page) ?? checkpoint.page)}
                 </option>
               ))}
             </select>
@@ -2017,7 +2012,7 @@ export default function BinderPage() {
             >
               <span aria-hidden>?</span> {t('binderGuideEntry')}
             </button>
-            {videoStagesFor(selected.id) && (
+            {videoStagesFor(selected.pdfId) && (
               <button
                 type="button"
                 onClick={() => setVideosOpen(true)}
@@ -2162,28 +2157,30 @@ export default function BinderPage() {
             ) : browsablePages.length === 0 ? (
               <span className="text-sm font-bold text-rose-key">{t('binderAllPagesHidden')}</span>
             ) : (
-              previewItems.map((item) => {
-                if (item.kind === 'video') {
-                  const active = interstitialPage === item.page
-                  return (
-                    <div
-                      key={`v-${item.page}`}
-                      data-preview-video={item.page}
-                      className="relative"
-                    >
-                      <VideoPreviewCard lesson={item.lesson} active={active} />
-                    </div>
-                  )
-                }
-                const active = interstitialPage === null && item.page === pageNumber
-                const hiddenThumb = adminMode && hiddenPageSet.has(item.page)
+              previewPages.map((page) => {
+                const active = page === pageNumber
+                const hiddenThumb = adminMode && hiddenPageSet.has(page)
+                const hasVideo = !!lessonVideoBeforePage(selected.pdfId, page)
                 return (
                   <div
-                    key={`p-${item.page}`}
-                    data-preview-page={item.page}
+                    key={`p-${page}`}
+                    data-preview-page={page}
                     className={`relative ${hiddenThumb ? 'opacity-40' : ''}`}
                   >
-                    <PdfThumbnail pdfDocument={document} pageNumber={item.page} active={active} />
+                    <PdfThumbnail
+                      pdfDocument={document}
+                      pageNumber={page}
+                      label={displayPage(page) ?? page}
+                      active={active}
+                    />
+                    {hasVideo && !hiddenThumb && (
+                      <span
+                        aria-hidden
+                        className="absolute left-1 top-1 rounded-full bg-rose-ink/70 px-1 text-[9px] leading-4 text-white shadow-sm"
+                      >
+                        🎬
+                      </span>
+                    )}
                     {hiddenThumb && (
                       <span className="absolute left-1 top-1 flex items-center gap-0.5 rounded-full bg-rose-accent-deep px-1.5 py-0.5 text-[9px] font-black text-white shadow-sm">
                         <span aria-hidden>🚫</span>
@@ -2227,47 +2224,48 @@ export default function BinderPage() {
                 {t('binderAllPagesHidden')}
               </div>
             ) : (
-              /* 뷰어 wrapper — key가 바뀔 때(pdf↔영상 전환) 새 요소가 마운트되며
-                 방향 인지형 애니메이션이 한 번 재생된다. 드래그 훑기 중에는 잦은
-                 pageNumber 변화로 애니메이션이 반복 재생돼 튀지 않도록 클래스를 뺀다.
-                 aspect-ratio는 PDF 첫 쪽 viewport로 잡아 두 상태(PDF/영상)의 wrapper
-                 세로 길이를 동일하게 만든다 — 좌우 화살표(top-1/2)가 튀지 않는 열쇠. */
-              <div
-                key={interstitialPage !== null ? `video-${interstitialPage}` : 'pdf'}
-                className={previewDragging ? '' : `binder-view-enter-${viewDir}`}
-                style={{ aspectRatio: `${pdfAspect.width} / ${pdfAspect.height}` }}
-              >
-                {interstitialPage !== null && interstitialVideo ? (
-                  <BinderVideoInterstitial
-                    key={`${interstitialPage}:${videosOpen ? 'modal-open' : 'modal-closed'}`}
-                    stage={interstitialVideo.stage}
-                    lesson={interstitialVideo.lesson}
-                    onContinue={goNext}
+              <>
+                {/* 이 쪽에 붙는 요약 영상 — 쪽 위에 얹어 영상을 보면서 같은 화면에 적는다 */}
+                {currentPageVideo && (
+                  <BinderPageVideo
+                    key={`${currentPageVideo.lesson.videoId}:${videosOpen ? 'modal-open' : 'modal-closed'}`}
+                    stage={currentPageVideo.stage}
+                    lesson={currentPageVideo.lesson}
                   />
-                ) : document ? (
-                  <PdfPage
-                    pdfDocument={document}
-                    pageNumber={pageNumber}
-                    field={pageInput}
-                    textBoxes={pageTextBoxes}
-                    mode={inputMode}
-                    tool={inkTool}
-                    color={inkColor}
-                    size={inkSize}
-                    onChange={updatePageInput}
-                    onTextBoxesChange={updatePageTextBoxes}
-                  />
-                ) : (
-                  <div className="grid h-full place-items-center rounded-2xl bg-rose-card text-rose-key">
-                    {t('binderPdfError')}
-                  </div>
                 )}
-              </div>
+                {/* 뷰어 wrapper — 드래그 훑기 중에는 잦은 pageNumber 변화로 애니메이션이
+                    반복 재생돼 튀지 않도록 클래스를 뺀다. aspect-ratio는 PDF 첫 쪽 viewport로
+                    잡아 좌우 화살표(top-1/2) 위치가 쪽마다 튀지 않게 한다. */}
+                <div
+                  className={previewDragging ? '' : `binder-view-enter-${viewDir}`}
+                  style={{ aspectRatio: `${pdfAspect.width} / ${pdfAspect.height}` }}
+                >
+                  {document ? (
+                    <PdfPage
+                      pdfDocument={document}
+                      pageNumber={pageNumber}
+                      field={pageInput}
+                      textBoxes={pageTextBoxes}
+                      presets={pagePresets}
+                      mode={inputMode}
+                      tool={inkTool}
+                      color={inkColor}
+                      size={inkSize}
+                      onChange={updatePageInput}
+                      onTextBoxesChange={updatePageTextBoxes}
+                    />
+                  ) : (
+                    <div className="grid h-full place-items-center rounded-2xl bg-rose-card text-rose-key">
+                      {t('binderPdfError')}
+                    </div>
+                  )}
+                </div>
+              </>
             )}
 
             {/* 페이지 위에 떠 있는 좌우 넘김 — 아티클 안쪽에 고정해 좁은 폭에서도 뷰포트를 벗어나지 않는다.
                 필기 중에는 숨긴다: 획이 버튼 위에서 시작하면 쪽이 넘어가 버린다 (하단 바로 이동 가능). */}
-            {(inputMode !== 'ink' || interstitialPage !== null) && browsablePages.length > 0 && (
+            {inputMode !== 'ink' && browsablePages.length > 0 && (
               <>
                 <button
                   type="button"
@@ -2301,14 +2299,18 @@ export default function BinderPage() {
             >
               ←
             </button>
+            {/* 슬라이더도 화면에 보이는 쪽 순번으로 움직인다 — 숨긴 쪽에서 멈추지 않는다 */}
             <input
               type="range"
               min={1}
-              max={pageCount}
+              max={Math.max(1, visiblePages.length)}
               step={1}
-              value={pageNumber}
-              onChange={(event) => goToPage(Number(event.target.value))}
-              disabled={browsablePages.length === 0}
+              value={Math.max(1, visibleOrdinal)}
+              onChange={(event) => {
+                const page = pageFromDisplay(Number(event.target.value))
+                if (page !== undefined) goToPage(page)
+              }}
+              disabled={visiblePages.length === 0}
               className="pager-range min-w-0 flex-1"
               aria-label={t('binderPageMove')}
             />
@@ -2323,15 +2325,11 @@ export default function BinderPage() {
             </button>
             <span className="flex shrink-0 items-center gap-1.5 text-[13px] font-bold tabular-nums text-rose-key">
               <span>
+                {/* 숨긴 쪽은 화면 번호가 없어 관리자에게만 원본 쪽을 보여준다 */}
                 {currentPageHidden && adminMode
-                  ? `${t('binderPage')(pageNumber)} · ${t('binderHiddenBadge')}`
-                  : t('binderPagePosition')(pageNumber, visibleOrdinal, visiblePages.length)}
+                  ? `${t('binderHiddenPage')} · ${pageNumber}`
+                  : t('binderPagePosition')(visibleOrdinal, visiblePages.length)}
               </span>
-              {interstitialPage !== null && (
-                <span className="rounded-full bg-rose-chip px-2 py-0.5 text-[11px] font-extrabold text-rose-accent-deep">
-                  🎬 {t('binderVideoInterstitialBadge')}
-                </span>
-              )}
             </span>
           </div>
         </section>
@@ -2340,7 +2338,7 @@ export default function BinderPage() {
 
       {videosOpen && (
         <BinderVideoSheet
-          setId={selected.id}
+          setId={selected.pdfId}
           currentPage={pageNumber}
           onClose={() => setVideosOpen(false)}
         />
@@ -2348,17 +2346,18 @@ export default function BinderPage() {
 
       {guideOpen && (
         <BinderGuideSheet
-          setId={selected.id}
+          setId={selected.pdfId}
           setTitle={t('binderSetTitle')(selected.kind)}
           checkpoints={checkpoints}
           currentPage={pageNumber}
-          pageCount={pageCount}
+          pageCount={lastPage}
+          displayPage={displayPage}
           onJumpPage={goToPage}
           onClose={() => setGuideOpen(false)}
         />
       )}
 
-      {/* 페이지 JPG 공유 모달 */}
+      {/* 바인더 공유 모달 */}
       {shareOpen && (
         <div
           className="fixed inset-0 z-40 grid place-items-center bg-rose-ink/45 p-4 backdrop-blur-[2px]"
@@ -2400,14 +2399,19 @@ export default function BinderPage() {
                         : 'border-transparent bg-white/50 opacity-80 hover:opacity-100'
                     }`}
                   >
-                    <PdfThumbnail pdfDocument={document} pageNumber={page} active={selectedPage} />
+                    <PdfThumbnail
+                      pdfDocument={document}
+                      pageNumber={page}
+                      label={displayPage(page) ?? page}
+                      active={selectedPage}
+                    />
                     <span
                       className={`text-xs font-bold tabular-nums ${
                         selectedPage ? 'text-rose-accent' : 'text-rose-key'
                       }`}
                     >
                       {selectedPage ? '✓ ' : ''}
-                      {t('binderPage')(page)} {inputPageSet.has(page) ? '✍️' : ''}
+                      {t('binderPage')(displayPage(page) ?? page)} {inputPageSet.has(page) ? '✍️' : ''}
                       {bookmarkPageSet.has(page) ? '🔖' : ''}
                     </span>
                   </button>
@@ -2419,7 +2423,7 @@ export default function BinderPage() {
               <input
                 type="number"
                 min={1}
-                max={pageCount}
+                max={visiblePages.length}
                 value={shareExtraInput}
                 onChange={(event) => setShareExtraInput(event.target.value)}
                 onKeyDown={(event) => {
@@ -2447,7 +2451,7 @@ export default function BinderPage() {
               disabled={shareBusy || shareSelected.length === 0}
               className="mt-3 w-full rounded-full bg-rose-accent-deep px-4 py-3 text-[15px] font-extrabold text-white shadow-sm shadow-rose-accent/25 transition active:scale-[0.99] disabled:opacity-50"
             >
-              {shareBusy ? t('binderMakingImages') : t('binderJpgShare')}
+              {shareBusy ? t('binderMakingImages') : t('binderShareModalTitle')}
             </button>
           </div>
         </div>
