@@ -30,6 +30,9 @@ const TABS: { key: Tab; label: string; icon: string }[] = [
   { key: 'temptationVictory', label: t('entryTabs')[3], icon: '🛡️' },
 ]
 
+/** 묵상 노트 본문의 기본 책 — 시편(index.json order 19). 드롭다운으로 다른 권도 고를 수 있다. */
+const NOTE_DEFAULT_BOOK_ORDER = 19
+
 const DEV_COPY_TAP_COUNT = 5
 const DEV_COPY_TAP_WINDOW_MS = 2_000
 
@@ -246,6 +249,7 @@ export default function EntryPage() {
             value={entry.bibleRef}
             onChange={(bibleRef) => update({ bibleRef })}
             onPassage={setPassage}
+            defaultBookOrder={NOTE_DEFAULT_BOOK_ORDER}
           />
         </div>
         {tab === 'meditation' && (
