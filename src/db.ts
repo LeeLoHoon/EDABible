@@ -668,6 +668,61 @@ export async function listSermons(): Promise<Sermon[]> {
   return cached.sort((a, b) => b.preachedOn.localeCompare(a.preachedOn) || a.service.localeCompare(b.service))
 }
 
+/** 아카이브 목록 한 줄 — 묵상 본문(data)은 빼고 설교 정보와 기록 지표만 담는다 */
+export interface SermonNoteSummary {
+  sermonId: string
+  preachedOn: string
+  service: SermonService
+  title: string
+  titleEn?: string
+  passages: SermonPassage[]
+  updatedAt: number
+  revision: number
+  highlightCount: number
+  answeredPoints: number
+  writtenFields: number
+}
+
+interface SermonNoteSummaryRow {
+  sermon_id: string
+  preached_on: string
+  service: string
+  title: string | null
+  title_en: string | null
+  passages: unknown
+  note_updated_at: string
+  revision: number
+  highlight_count: number
+  answered_points: number
+  written_fields: number
+}
+
+/**
+ * 내가 쓴 묵상 전체를 최신 주일 순으로 읽는다 — 아카이브 화면의 원천.
+ * 목록에 data jsonb를 통째로 내리면 무거워서, 지표는 서버(list_my_sermon_notes)가 계산해 준다.
+ */
+export async function listMySermonNotes(): Promise<SermonNoteSummary[]> {
+  if (!supabase) return []
+
+  const { data, error } = await supabase.rpc('list_my_sermon_notes')
+  if (error) throw error
+  if (!Array.isArray(data)) return []
+
+  return (data as SermonNoteSummaryRow[]).map((row) => ({
+    sermonId: row.sermon_id,
+    preachedOn: row.preached_on,
+    service: row.service === 'afternoon' ? 'afternoon' : 'morning',
+    title: row.title ?? '',
+    ...(row.title_en ? { titleEn: row.title_en } : {}),
+    passages: normalizePassages(row.passages),
+    updatedAt: Date.parse(row.note_updated_at) || 0,
+    revision: row.revision ?? 0,
+    highlightCount: row.highlight_count ?? 0,
+    answeredPoints: row.answered_points ?? 0,
+    writtenFields: row.written_fields ?? 0,
+  }))
+}
+
 export function createSermonNote(sermonId: string, pointCount: number): SermonNote {
   return {
     sermonId,
@@ -1143,6 +1198,19 @@ export async function upsertSermon(sermon: Sermon): Promise<void> {
     { onConflict: 'preached_on,service', defaultToNull: false },
   )
   if (error) throw error
+}
+
+/**
+ * 이 설교에 달린 교인 묵상 수. 설교를 지우면 묵상도 함께 사라지므로(FK cascade)
+ * 관리자가 삭제를 결정하기 전에 영향 범위를 보여주기 위한 값이다.
+ * sermon_notes는 RLS로 본인 것만 보이니 전체 개수는 관리자 전용 RPC로만 셀 수 있다.
+ */
+export async function countSermonNotes(sermonId: string): Promise<number> {
+  if (!supabase) throw new Error('Supabase is not configured')
+
+  const { data, error } = await supabase.rpc('count_sermon_notes', { p_sermon_id: sermonId })
+  if (error) throw error
+  return typeof data === 'number' ? data : 0
 }
 
 export async function deleteSermon(id: string): Promise<void> {

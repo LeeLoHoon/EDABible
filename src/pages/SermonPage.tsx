@@ -14,6 +14,8 @@ import {
   type SermonService,
 } from '../db'
 import {
+  SERMON_ARCHIVE_PATH,
+  compareSermonService,
   localizedSermonPassageLabel,
   localizedSermonPreacher,
   localizedSermonTitle,
@@ -117,7 +119,7 @@ export default function SermonPage() {
     groups.set(sermon.preachedOn, list)
   }
   for (const list of groups.values()) {
-    list.sort((a, b) => a.service.localeCompare(b.service))
+    list.sort((a, b) => compareSermonService(a.service, b.service))
   }
 
   const uniqueDates = [...groups.keys()].sort().reverse()
@@ -271,6 +273,14 @@ export default function SermonPage() {
                 className="flex min-h-11 items-center rounded-full px-2 text-xs font-bold text-rose-key transition hover:text-rose-accent focus:outline-none focus:ring-2 focus:ring-rose-accent sm:px-3 sm:text-sm"
               >
                 {t('sermonQaLink')}
+              </Link>
+            )}
+            {user && (
+              <Link
+                to={SERMON_ARCHIVE_PATH}
+                className="flex min-h-11 items-center rounded-full px-2 text-xs font-bold text-rose-key transition hover:text-rose-accent focus:outline-none focus:ring-2 focus:ring-rose-accent sm:px-3 sm:text-sm"
+              >
+                {t('sermonArchiveLink')}
               </Link>
             )}
             <LangToggle />

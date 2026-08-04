@@ -2,6 +2,7 @@ import { HashRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { AuthProvider } from './auth'
 import SermonPage from './pages/SermonPage'
 import SermonNotePage from './pages/SermonNotePage'
+import SermonArchivePage from './pages/SermonArchivePage'
 import MovedNotice from './components/MovedNotice'
 import QaPage from './pages/QaPage'
 import QaThreadPage from './pages/QaThreadPage'
@@ -15,6 +16,7 @@ export default function SermonApp() {
       <HashRouter>
         <Routes>
           <Route path="/" element={<SermonPage />} />
+          <Route path="/archive" element={<SermonArchivePage />} />
           <Route path="/sermon/:id" element={<SermonNotePage />} />
           <Route path="/qa" element={<QaPage />} />
           <Route path="/qa/:id" element={<QaThreadPage />} />

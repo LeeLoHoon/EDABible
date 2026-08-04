@@ -5,7 +5,7 @@
 
 import { chapterLabel, chapterTextAt, loadBook, loadIndex, type BookDoc } from './bible'
 import type { PassageChunk } from './components/BiblePicker'
-import type { Sermon, SermonPassage } from './db'
+import type { Sermon, SermonPassage, SermonService } from './db'
 import { EN_BOOK_NAMES, KO_BOOK_NAMES, bookOrderByName } from './i18n/bibleBookNames'
 import { getLang, type Lang } from './i18n/lang'
 import { parseVerseLabel, sliceVerses } from './verseRange'
@@ -13,16 +13,30 @@ import { parseVerseLabel, sliceVerses } from './verseRange'
 /** 설교 목록 경로 — 단독 배포는 앱 루트, 통합(all) 배포는 /sermon 아래에 산다 */
 export const SERMON_LIST_PATH = __APP_TARGET__ === 'all' ? '/sermon' : '/'
 
+/** 묵상 아카이브 경로 — 목록 경로와 같은 규칙 */
+export const SERMON_ARCHIVE_PATH = __APP_TARGET__ === 'all' ? '/sermon/archive' : '/archive'
+
+const SERVICE_ORDER: Record<SermonService, number> = { morning: 0, afternoon: 1 }
+
+/** 같은 주일 안에서는 예배가 열린 순서(오전 → 오후)로 본다.
+    문자열 정렬에 맡기면 'afternoon' < 'morning'이라 거꾸로 나온다. */
+export function compareSermonService(a: SermonService, b: SermonService): number {
+  return SERVICE_ORDER[a] - SERVICE_ORDER[b]
+}
+
 function translatedBookName(book: string, lang: Lang): string {
   const order = bookOrderByName(book)
   if (order === null) return book
   return (lang === 'en' ? EN_BOOK_NAMES : KO_BOOK_NAMES)[order - 1] ?? book
 }
 
-function localizedField(korean: string, english: string | undefined, lang: Lang): string {
+/** 번역이 비어 있으면 원문(한국어)을 그대로 쓴다 — 설교 텍스트 전반의 공통 규칙 */
+export function localizedText(korean: string, english: string | undefined, lang: Lang): string {
   if (lang === 'en' && english?.trim()) return english
   return korean
 }
+
+const localizedField = localizedText
 
 /** 번역이 비어 있으면 원문(한국어)을 그대로 사용하며 번역문을 만들어내지 않는다. */
 export function localizedSermonTitle(sermon: Sermon, lang: Lang): string {

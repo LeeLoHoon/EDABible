@@ -276,12 +276,21 @@ to authenticated
 using (auth.uid() = user_id);
 
 -- 미게시 설교는 관리자에게만 보인다. anon은 auth.uid()가 null이라 published 조건만 남는다.
+-- 게시 취소된 설교라도 내 묵상이 달려 있으면 계속 읽을 수 있어야 한다 —
+-- 관리자가 설교를 내렸다고 교인의 지난 묵상까지 잠기면 보관이 아니다.
 drop policy if exists "read published sermons" on public.sermons;
 create policy "read published sermons"
 on public.sermons for select
 to anon, authenticated
 using (
-  published or auth.uid() in (select user_id from public.sermon_admins)
+  published
+  or auth.uid() in (select user_id from public.sermon_admins)
+  or exists (
+    select 1
+      from public.sermon_notes as note
+     where note.sermon_id = sermons.id
+       and note.user_id = auth.uid()
+  )
 );
 
 drop policy if exists "admins insert sermons" on public.sermons;
@@ -311,12 +320,17 @@ using (
   auth.uid() in (select user_id from public.sermon_admins)
 );
 
--- 묵상은 본인만 읽고 쓴다. 목사님 열람 기능을 붙일 때 확장할 지점은 아래 select 정책뿐이다.
+-- 묵상은 본인이 읽고 쓴다. 여기에 더해 sermon_admins에 등록된 관리자(목사님·전도사님)가
+-- 교인의 묵상을 열람할 수 있다 — 삭제 전 영향 확인과 심방·양육을 위해 열어 둔 통로다.
+-- 쓰기는 여전히 본인만 가능하다(put_sermon_note가 actor_id로 강제).
 drop policy if exists "users read own sermon notes" on public.sermon_notes;
 create policy "users read own sermon notes"
 on public.sermon_notes for select
 to authenticated
-using (auth.uid() = user_id);
+using (
+  auth.uid() = user_id
+  or auth.uid() in (select user_id from public.sermon_admins)
+);
 
 -- Full-json writes는 아래 expected-revision RPC로만 허용해 stale client overwrite를 막는다.
 drop policy if exists "users insert own sermon notes" on public.sermon_notes;
@@ -404,6 +418,105 @@ $$;
 
 revoke all on function public.put_sermon_note(uuid, uuid, integer, jsonb) from public, anon, authenticated;
 grant execute on function public.put_sermon_note(uuid, uuid, integer, jsonb) to authenticated;
+
+-- 묵상 한 칸(Field: {mode, text, strokes})이 실제로 채워졌는지 — types.ts의 isFieldEmpty와 같은 규칙
+create or replace function public.sermon_field_written(p_field jsonb)
+returns boolean
+language sql
+immutable
+set search_path = ''
+as $$
+  select pg_catalog.btrim(coalesce(p_field ->> 'text', '')) <> ''
+      or pg_catalog.jsonb_array_length(coalesce(p_field -> 'strokes', '[]'::jsonb)) > 0
+$$;
+
+-- 묵상 아카이브 목록. data jsonb 전체를 내리면 무거워서 화면에 필요한 지표만 서버에서 계산한다.
+-- security invoker라 RLS가 그대로 적용된다 — 본인 묵상만 나온다.
+create or replace function public.list_my_sermon_notes()
+returns table (
+  sermon_id uuid,
+  preached_on date,
+  service text,
+  title text,
+  title_en text,
+  passages jsonb,
+  note_updated_at timestamptz,
+  revision integer,
+  highlight_count integer,
+  answered_points integer,
+  written_fields integer
+)
+language sql
+stable
+security invoker
+set search_path = ''
+as $$
+  select
+    note.sermon_id,
+    sermon.preached_on,
+    sermon.service,
+    sermon.title,
+    sermon.title_en,
+    sermon.passages,
+    note.updated_at,
+    note.revision,
+    (
+      pg_catalog.jsonb_array_length(coalesce(note.data -> 'highlightRanges', '[]'::jsonb))
+      + coalesce(
+          (
+            select pg_catalog.sum(pg_catalog.jsonb_array_length(version.value))
+              from pg_catalog.jsonb_each(coalesce(note.data -> 'highlightVersions', '{}'::jsonb)) as version
+          ),
+          0
+        )
+    )::integer as highlight_count,
+    (
+      select pg_catalog.count(*)
+        from pg_catalog.jsonb_array_elements(coalesce(note.data -> 'pointAnswers', '[]'::jsonb)) as answer
+       where public.sermon_field_written(answer.value)
+    )::integer as answered_points,
+    (
+      (case when public.sermon_field_written(note.data -> 'impression') then 1 else 0 end)
+      + (case when public.sermon_field_written(note.data -> 'application') then 1 else 0 end)
+      + (case when public.sermon_field_written(note.data -> 'freeNote') then 1 else 0 end)
+    )::integer as written_fields
+  from public.sermon_notes as note
+  join public.sermons as sermon on sermon.id = note.sermon_id
+ where note.user_id = auth.uid()
+ order by sermon.preached_on desc, sermon.service asc
+$$;
+
+revoke all on function public.list_my_sermon_notes() from public, anon;
+grant execute on function public.list_my_sermon_notes() to authenticated;
+
+-- 설교 삭제 전 영향 확인용 — 그 설교에 달린 묵상이 몇 개인지 관리자에게 보여준다.
+-- sermon_notes는 RLS로 본인 것만 보이므로, 전체 개수는 이 함수(definer)로만 셀 수 있다.
+create or replace function public.count_sermon_notes(p_sermon_id uuid)
+returns integer
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  total integer;
+begin
+  if auth.uid() is null
+     or auth.uid() not in (select admin.user_id from public.sermon_admins as admin) then
+    raise exception using errcode = '42501', message = 'SERMON_ADMIN_REQUIRED';
+  end if;
+
+  select pg_catalog.count(*)
+    into total
+    from public.sermon_notes as note
+   where note.sermon_id = p_sermon_id;
+
+  return total;
+end;
+$$;
+
+revoke all on function public.count_sermon_notes(uuid) from public, anon;
+grant execute on function public.count_sermon_notes(uuid) to authenticated;
 
 -- ---------------------------------------------------------------------------
 -- 사용자 Q&A: 승인 자료 검색은 service role만, 초안·승인은 등록된 관리자만 수행한다.

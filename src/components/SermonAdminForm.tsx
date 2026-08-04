@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { parseRefs } from '../bible'
 import BiblePicker from './BiblePicker'
 import {
+  countSermonNotes,
   deleteSermon,
   upsertSermon,
   type Sermon,
@@ -249,9 +250,27 @@ export default function SermonAdminForm({ initial, onClose, onSaved }: Props) {
 
   const handleDelete = async () => {
     if (!initial) return
-    if (!window.confirm(t('sermonDeleteConfirm')(initial.title))) return
     setSaving(true)
     setError(null)
+
+    // 삭제하면 이 설교에 달린 교인 묵상이 함께 사라진다. 몇 개가 걸려 있는지 먼저 보여준다.
+    let confirmMessage: string
+    try {
+      const noteCount = await countSermonNotes(initial.id)
+      confirmMessage =
+        noteCount > 0
+          ? t('sermonDeleteConfirmWithNotes')(initial.title, noteCount)
+          : t('sermonDeleteConfirm')(initial.title)
+    } catch {
+      // 개수를 못 세었다고 삭제를 막지는 않되, 모른 채 지우는 것임을 분명히 알린다
+      confirmMessage = t('sermonDeleteConfirmUnknownNotes')(initial.title)
+    }
+
+    if (!window.confirm(confirmMessage)) {
+      setSaving(false)
+      return
+    }
+
     try {
       await deleteSermon(initial.id)
       onSaved()

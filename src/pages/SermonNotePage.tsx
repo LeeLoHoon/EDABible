@@ -33,7 +33,7 @@ import { applyRanges, HIGHLIGHT_COLORS, removeRange } from '../highlights'
 import { BIBLE_VERSIONS, getBibleVersion, setBibleVersion, type BibleVersion } from '../bibleVersion'
 import { getLang } from '../i18n/lang'
 import type { Field, FieldMode, HighlightColor, VerseHighlight } from '../types'
-import { formatEntryDateDot } from '../i18n/format'
+import { formatClockTime, formatEntryDateDot } from '../i18n/format'
 import { t } from '../i18n/strings'
 import { registerSaveFlush } from '../saveFlush'
 import { drainPendingRef, ResolvedTaskChain, runSingleFlight } from '../persistenceQueue'
@@ -81,18 +81,24 @@ function isOwnerChangedError(error: unknown): boolean {
   )
 }
 
-function statusLabel(status: SaveStatus, errorMessage: string): string {
+/* 저장 상태는 늘 한 줄 떠 있어야 한다 — 자동 저장이라 버튼을 누른 기억이 없으면
+   '저장됐나?' 하는 불안이 남는다. 한 번이라도 저장했으면 그 시각을 계속 보여준다. */
+function statusLabel(status: SaveStatus, errorMessage: string, lastSavedAt: number | null): string {
   if (status === 'saving') return t('sermonSaving')
-  if (status === 'saved') return t('sermonSaved')
   if (status === 'error') return errorMessage || t('sermonSaveErrorInline')
-  return ''
+  if (lastSavedAt !== null) return t('sermonSavedAt')(formatClockTime(lastSavedAt))
+  if (status === 'saved') return t('sermonSaved')
+  return t('sermonSaveNotYet')
 }
 
 export default function SermonNotePage() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { user, signOut } = useAuth()
+  const { user, signOut, signInWithGoogle } = useAuth()
   const userId = user?.id
+  // 묵상 작성은 로그인 계정에만 쌓는다 — 기기에만 남으면 폰을 바꿀 때 통째로 사라진다.
+  // 열람(본문·요약)은 로그인 없이도 열어 두어 처음 온 사람이 내용을 볼 수 있게 한다.
+  const canWrite = !!userId
 
   const [sermon, setSermon] = useState<Sermon | null>(null)
   const [note, setNote] = useState<SermonNote | null>(null)
@@ -102,6 +108,7 @@ export default function SermonNotePage() {
   const [mode, setMode] = useState<FieldMode>('text')
   const [penColor, setPenColor] = useState<HighlightColor | null>(null)
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
+  const [lastSavedAt, setLastSavedAt] = useState<number | null>(null)
   const [saveErrorMessage, setSaveErrorMessage] = useState('')
   const [saveConflict, setSaveConflict] = useState(false)
   const [displayedOwnerId, setDisplayedOwnerId] = useState<string | undefined>(userId)
@@ -150,6 +157,8 @@ export default function SermonNotePage() {
       saveConflictRef.current = false
       setSaveConflict(false)
       setSaveErrorMessage('')
+      // 뒤이어 저장할 게 남아 있어도 서버에 한 번 닿은 것은 사실이라 시각은 갱신한다
+      setLastSavedAt(Date.now())
       if (!hasNewerPending) setSaveStatus('saved')
     } catch (error) {
       if (!pendingNoteRef.current) pendingNoteRef.current = pending
@@ -534,12 +543,6 @@ export default function SermonNotePage() {
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
-          <span
-            aria-live="polite"
-            className="hidden min-w-14 text-right text-[11px] font-bold text-rose-key/70 sm:inline"
-          >
-            {statusLabel(saveStatus, saveErrorMessage)}
-          </span>
           <LangToggle />
           {user && (
             <button
@@ -593,7 +596,7 @@ export default function SermonNotePage() {
             <span className="min-w-0 truncate font-serif text-sm font-bold tracking-wide text-rose-accent">
               {passageLabel}
             </span>
-            {passages && passageChunks.length > 0 && (
+            {canWrite && passages && passageChunks.length > 0 && (
               <div className="flex items-center gap-1.5">
                 {penColor &&
                   HIGHLIGHT_COLORS.map((color, index) => (
@@ -650,9 +653,9 @@ export default function SermonNotePage() {
                   chunks={passageChunks}
                   startChapter={passageStart}
                   highlightRanges={activeHighlights}
-                  onApplyRanges={applyHighlights}
-                  onRemoveRange={removeHighlight}
-                  penColor={penColor}
+                  onApplyRanges={canWrite ? applyHighlights : undefined}
+                  onRemoveRange={canWrite ? removeHighlight : undefined}
+                  penColor={canWrite ? penColor : null}
                 />
               ) : (
                 <p className="py-2 text-sm text-rose-key/70">{t('sermonPassageMissing')}</p>
@@ -688,96 +691,139 @@ export default function SermonNotePage() {
           </section>
         )}
 
-        <div className="flex items-center justify-between">
-          <span className="text-[13px] font-black tracking-[0.14em] text-rose-ink">
-            {t('sermonMyNote')}
-          </span>
-          <ModeToggle mode={mode} onChange={setModeAll} />
-        </div>
-
-        {sermonPoints.length > 0 && (
-          <section className="space-y-3">
-            <h3 className="flex items-center gap-2 font-serif text-base font-extrabold text-rose-ink">
-              <span aria-hidden className="h-3.5 w-[3px] rounded-full bg-rose-accent" />
-              {t('sermonPointsTitle')}
+        {!canWrite && (
+          <section className="rounded-2xl border border-dashed border-rose-accent/50 bg-rose-card px-4 py-6 text-center shadow-sm">
+            <h3 className="font-serif text-base font-extrabold text-rose-ink">
+              {t('sermonSignInTitle')}
             </h3>
-            {sermonPoints.map((point, index) => (
-              <div key={index} className="space-y-1.5">
-                <div className="rounded-xl bg-rose-chip/60 px-3 py-2 text-sm leading-relaxed text-rose-ink">
-                  <span className="mr-1.5 font-black text-rose-accent">
-                    {t('sermonPointLabel')(index + 1)}
-                  </span>
-                  <span className="font-medium">{point}</span>
-                </div>
-                <FieldEditor
-                  field={note.pointAnswers[index] ?? { mode, text: '', strokes: [] }}
-                  onChange={(field) => updatePointAnswer(index, field)}
-                  placeholder={t('sermonPointPlaceholder')}
-                  rows={4}
-                />
-              </div>
-            ))}
+            <p className="mx-auto mt-1.5 max-w-md text-sm leading-relaxed text-rose-key">
+              {t('sermonSignInBody')}
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                void signInWithGoogle().catch((error) => {
+                  console.warn('Google sign-in failed.', error)
+                })
+              }}
+              className="mt-4 min-h-11 rounded-full bg-rose-accent-deep px-5 py-2.5 text-sm font-bold text-white shadow-sm shadow-rose-accent/25 transition active:scale-[0.98]"
+            >
+              {t('sermonSignInAction')}
+            </button>
+            <p className="mt-3 text-xs leading-relaxed text-rose-key/70">
+              {t('sermonSignInLocalHint')}
+            </p>
           </section>
         )}
 
-        <section className="space-y-2">
-          <h3 className="flex items-center gap-2 font-serif text-base font-extrabold text-rose-ink">
-            <span aria-hidden className="h-3.5 w-[3px] rounded-full bg-rose-accent" />
-            {t('sermonImpression')}
-          </h3>
-          <FieldEditor
-            field={note.impression}
-            onChange={updateImpression}
-            placeholder={t('sermonImpressionPlaceholder')}
-            rows={4}
-          />
-        </section>
+        {canWrite && (
+          <>
+            <div className="flex items-center justify-between">
+              <span className="text-[13px] font-black tracking-[0.14em] text-rose-ink">
+                {t('sermonMyNote')}
+              </span>
+              <ModeToggle mode={mode} onChange={setModeAll} />
+            </div>
 
-        <section className="space-y-2">
-          <h3 className="flex items-center gap-2 font-serif text-base font-extrabold text-rose-ink">
-            <span aria-hidden className="h-3.5 w-[3px] rounded-full bg-rose-accent" />
-            {t('sermonApplication')}
-          </h3>
-          <FieldEditor
-            field={note.application}
-            onChange={updateApplication}
-            placeholder={t('sermonApplicationPlaceholder')}
-            rows={4}
-          />
-        </section>
+            {sermonPoints.length > 0 && (
+              <section className="space-y-3">
+                <h3 className="flex items-center gap-2 font-serif text-base font-extrabold text-rose-ink">
+                  <span aria-hidden className="h-3.5 w-[3px] rounded-full bg-rose-accent" />
+                  {t('sermonPointsTitle')}
+                </h3>
+                {sermonPoints.map((point, index) => (
+                  <div key={index} className="space-y-1.5">
+                    <div className="rounded-xl bg-rose-chip/60 px-3 py-2 text-sm leading-relaxed text-rose-ink">
+                      <span className="mr-1.5 font-black text-rose-accent">
+                        {t('sermonPointLabel')(index + 1)}
+                      </span>
+                      <span className="font-medium">{point}</span>
+                    </div>
+                    <FieldEditor
+                      field={note.pointAnswers[index] ?? { mode, text: '', strokes: [] }}
+                      onChange={(field) => updatePointAnswer(index, field)}
+                      placeholder={t('sermonPointPlaceholder')}
+                      rows={4}
+                    />
+                  </div>
+                ))}
+              </section>
+            )}
 
-        <section className="space-y-2">
-          <h3 className="flex items-center gap-2 font-serif text-base font-extrabold text-rose-ink">
-            <span aria-hidden className="h-3.5 w-[3px] rounded-full bg-rose-accent" />
-            {t('sermonFreeNote')}
-          </h3>
-          <FieldEditor
-            field={note.freeNote}
-            onChange={updateFreeNote}
-            placeholder={t('sermonFreeNotePlaceholder')}
-            rows={5}
-          />
-        </section>
+            <section className="space-y-2">
+              <h3 className="flex items-center gap-2 font-serif text-base font-extrabold text-rose-ink">
+                <span aria-hidden className="h-3.5 w-[3px] rounded-full bg-rose-accent" />
+                {t('sermonImpression')}
+              </h3>
+              <FieldEditor
+                field={note.impression}
+                onChange={updateImpression}
+                placeholder={t('sermonImpressionPlaceholder')}
+                rows={4}
+              />
+            </section>
 
-        <section>
-          <VoiceRecorder entryId={sermon.id} />
-        </section>
+            <section className="space-y-2">
+              <h3 className="flex items-center gap-2 font-serif text-base font-extrabold text-rose-ink">
+                <span aria-hidden className="h-3.5 w-[3px] rounded-full bg-rose-accent" />
+                {t('sermonApplication')}
+              </h3>
+              <FieldEditor
+                field={note.application}
+                onChange={updateApplication}
+                placeholder={t('sermonApplicationPlaceholder')}
+                rows={4}
+              />
+            </section>
+
+            <section className="space-y-2">
+              <h3 className="flex items-center gap-2 font-serif text-base font-extrabold text-rose-ink">
+                <span aria-hidden className="h-3.5 w-[3px] rounded-full bg-rose-accent" />
+                {t('sermonFreeNote')}
+              </h3>
+              <FieldEditor
+                field={note.freeNote}
+                onChange={updateFreeNote}
+                placeholder={t('sermonFreeNotePlaceholder')}
+                rows={5}
+              />
+            </section>
+
+            <section>
+              <VoiceRecorder entryId={sermon.id} />
+            </section>
+          </>
+        )}
       </main>
 
-      <div className="safe-pad flex items-center justify-between gap-3 border-t border-rose-line bg-rose-card px-4 py-2.5 sm:hidden">
-        <span aria-live="polite" className="text-[12px] font-bold text-rose-key/80">
-            {statusLabel(saveStatus, saveErrorMessage)}
-        </span>
-        {user && (
-          <button
-            type="button"
-            onClick={() => void handleSignOut()}
-            className="text-[12px] font-bold text-rose-key/80 transition hover:text-rose-accent"
+      {/* 자동 저장이라 손이 갈 곳이 없으면 불안하다. 상태와 저장 버튼을 늘 바닥에 붙여 둔다. */}
+      {canWrite && (
+        <div className="safe-pad sticky bottom-0 z-10 flex items-center justify-between gap-2 border-t border-rose-line bg-rose-card/95 px-4 py-2.5 backdrop-blur">
+          <span
+            aria-live="polite"
+            className="min-w-0 flex-1 truncate text-[12px] font-bold text-rose-key/80"
           >
-            {t('sermonLogout')}
-          </button>
-        )}
-      </div>
+            {statusLabel(saveStatus, saveErrorMessage, lastSavedAt)}
+          </span>
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              onClick={() => void handleSignOut()}
+              className="text-[12px] font-bold text-rose-key/80 transition hover:text-rose-accent sm:hidden"
+            >
+              {t('sermonLogout')}
+            </button>
+            <button
+              type="button"
+              onClick={() => void flush().catch(() => undefined)}
+              disabled={saveStatus === 'saving'}
+              className="min-h-9 rounded-full bg-rose-accent-deep px-4 py-1.5 text-[13px] font-bold text-white shadow-sm shadow-rose-accent/25 transition active:scale-[0.98] disabled:opacity-50"
+            >
+              {saveStatus === 'saving' ? t('sermonSavingButton') : t('sermonSaveNow')}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -17,3 +17,11 @@ export function formatEntryDateDot(dateKey: string): string {
   ]
   return `${year}.${month}.${day} (${weekday})`
 }
+
+/** 저장 시각처럼 '방금 언제'만 알면 되는 자리 — '오후 3:14' / '3:14 PM' */
+export function formatClockTime(timestamp: number): string {
+  return new Date(timestamp).toLocaleTimeString(getLang() === 'en' ? 'en-US' : 'ko-KR', {
+    hour: 'numeric',
+    minute: '2-digit',
+  })
+}
