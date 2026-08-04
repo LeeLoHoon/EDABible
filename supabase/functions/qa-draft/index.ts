@@ -256,12 +256,23 @@ Deno.serve(async (request) => {
     console.warn('qa-draft function configuration is incomplete.', error instanceof Error)
     return json({ error: 'QA_FUNCTION_CONFIG_ERROR' }, 500)
   }
-  const userClient = createClient(supabaseUrl, anonKey, {
-    global: { headers: { authorization: `Bearer ${bearer}` } },
+  // getUser()는 global.headers.authorization과 충돌해 GoTrue가 Bearer를 못 찾는다("valid Bearer token"
+  // 401). 검증은 헤더를 덮어쓰지 않은 전용 client로 하고, 토큰은 인자로만 넘긴다.
+  const authClient = createClient(supabaseUrl, anonKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   })
-  const { data: authData, error: authError } = await userClient.auth.getUser(bearer)
-  if (authError || !authData.user) return json({ error: 'AUTH_REQUIRED' }, 401)
+  const { data: authData, error: authError } = await authClient.auth.getUser(bearer)
+  if (authError || !authData.user) {
+    console.warn('qa-draft could not verify the caller.', authError?.status ?? 'no-user')
+    return json({ error: 'AUTH_REQUIRED' }, 401)
+  }
+
+  // RPC는 사용자 권한(RLS)으로 실행해야 하므로 Authorization을 실은 client를 따로 쓴다.
+  // global.headers는 기본 헤더를 덮어쓰므로 PostgREST가 요구하는 apikey도 함께 싣는다.
+  const userClient = createClient(supabaseUrl, anonKey, {
+    global: { headers: { apikey: anonKey, authorization: `Bearer ${bearer}` } },
+    auth: { persistSession: false, autoRefreshToken: false },
+  })
 
   // service role client는 검증된 사용자 확인 뒤에만 만들고, 아래 세 RPC 외에는 사용하지 않는다.
   const serviceClient = createClient(supabaseUrl, serviceRoleKey, {

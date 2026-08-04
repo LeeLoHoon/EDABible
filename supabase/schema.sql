@@ -1036,6 +1036,7 @@ language plpgsql
 security definer
 set search_path = ''
 as $$
+#variable_conflict use_variable
 declare
   actor_id uuid := auth.uid();
   existing_question public.qa_questions%rowtype;
@@ -1128,6 +1129,7 @@ language plpgsql
 security definer
 set search_path = ''
 as $$
+#variable_conflict use_variable
 declare
   actor_id uuid := auth.uid();
   question_row public.qa_questions%rowtype;
@@ -1225,6 +1227,7 @@ language plpgsql
 security definer
 set search_path = ''
 as $$
+#variable_conflict use_variable
 declare
   actor_id uuid := auth.uid();
   question_row public.qa_questions%rowtype;
@@ -1376,6 +1379,7 @@ language plpgsql
 security definer
 set search_path = ''
 as $$
+#variable_conflict use_variable
 declare
   actor_id uuid := auth.uid();
   question_row public.qa_questions%rowtype;
@@ -1519,6 +1523,7 @@ language plpgsql
 security definer
 set search_path = ''
 as $$
+#variable_conflict use_variable
 declare
   actor_id uuid := auth.uid();
   question_row public.qa_questions%rowtype;
@@ -1596,6 +1601,7 @@ language plpgsql
 security definer
 set search_path = ''
 as $$
+#variable_conflict use_variable
 declare
   actor_id uuid := auth.uid();
   question_row public.qa_questions%rowtype;
@@ -1677,6 +1683,7 @@ language plpgsql
 security definer
 set search_path = ''
 as $$
+#variable_conflict use_variable
 declare
   actor_id uuid := auth.uid();
   question_row public.qa_questions%rowtype;
@@ -1900,6 +1907,7 @@ language plpgsql
 security definer
 set search_path = ''
 as $$
+#variable_conflict use_variable
 declare
   withdrawn_revision_id uuid;
 begin
@@ -1955,6 +1963,7 @@ language plpgsql
 security definer
 set search_path = ''
 as $$
+#variable_conflict use_variable
 declare
   actor_id uuid := auth.uid();
   question_row public.qa_questions%rowtype;
@@ -2023,6 +2032,7 @@ language plpgsql
 security definer
 set search_path = ''
 as $$
+#variable_conflict use_variable
 declare
   actor_id uuid := auth.uid();
   question_row public.qa_questions%rowtype;
@@ -2110,6 +2120,7 @@ stable
 security definer
 set search_path = ''
 as $$
+#variable_conflict use_variable
 declare
   question_row public.qa_questions%rowtype;
   query_terms pg_catalog.tsquery;
@@ -2175,6 +2186,7 @@ stable
 security definer
 set search_path = ''
 as $$
+#variable_conflict use_variable
 declare
   question_text text;
   query_terms pg_catalog.tsquery;
@@ -2291,6 +2303,7 @@ language plpgsql
 security definer
 set search_path = ''
 as $$
+#variable_conflict use_variable
 declare
   chunk_body text;
   chunk_content_hash text;
@@ -2395,6 +2408,7 @@ language plpgsql
 security definer
 set search_path = ''
 as $$
+#variable_conflict use_variable
 declare
   corpus_id uuid;
   source_id uuid;

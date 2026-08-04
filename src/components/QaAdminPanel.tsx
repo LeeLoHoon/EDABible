@@ -58,6 +58,9 @@ function adminErrorMessage(error: unknown): string {
   if (error instanceof QaDraftLeaseActiveError || message.includes('QA_DRAFT_LEASE_ACTIVE')) {
     return t('qaAdminLeaseActive')
   }
+  // 401/403은 원인이 전혀 다르므로 일반 오류로 뭉뚱그리지 않는다.
+  if (message.includes('AUTH_REQUIRED')) return t('qaAdminAuthRequired')
+  if (message.includes('ADMIN_REQUIRED')) return t('qaAdminNotAdmin')
   if (message.includes('QA_DRAFT_ATTEMPT_LIMIT')) return t('qaAdminAttemptLimit')
   if (message.includes('QA_REJECTION_REASON_REQUIRED')) return t('qaAdminRejectReasonRequired')
   if (message.includes('QA_DRAFT_PROVIDER_UNSUPPORTED')) return t('qaAdminProviderUnsupported')
@@ -84,6 +87,7 @@ export default function QaAdminPanel() {
   const [loading, setLoading] = useState(true)
   const [detailLoading, setDetailLoading] = useState(false)
   const [loadedQuestionId, setLoadedQuestionId] = useState<string | null>(null)
+  const [detailReloadKey, setDetailReloadKey] = useState(0)
   const [busy, setBusy] = useState<AdminBusy>(null)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
@@ -113,14 +117,17 @@ export default function QaAdminPanel() {
     setDetailLoading(loadingDetail)
   }, [])
 
+  // 상세 로딩이 취소·실패하면 loadedQuestionId가 비어 액션이 전부 잠긴다. 같은 질문을 다시 골라
+  // 복구할 수 있어야 하므로, selectedId가 그대로여도 reloadKey로 effect를 다시 돌린다.
   const selectQuestion = useCallback((questionId: string) => {
-    if (selectedIdRef.current === questionId) return
+    if (selectedIdRef.current === questionId && loadedQuestionId === questionId) return
     selectedIdRef.current = questionId
     clearDetail(true)
     setError(null)
     setNotice(null)
     setSelectedId(questionId)
-  }, [clearDetail])
+    setDetailReloadKey((key) => key + 1)
+  }, [clearDetail, loadedQuestionId])
 
   const loadQuestions = useCallback(async (preferredId?: string | null) => {
     const requestId = ++questionsRequestRef.current
@@ -209,7 +216,7 @@ export default function QaAdminPanel() {
       window.clearTimeout(timer)
       detailRequestRef.current += 1
     }
-  }, [loadDetail, selectedQuestion])
+  }, [loadDetail, selectedQuestion, detailReloadKey])
 
   const handleActionError = async (actionError: unknown, questionId: string) => {
     if (selectedIdRef.current !== questionId) return
@@ -420,6 +427,17 @@ export default function QaAdminPanel() {
     !selectedQuestion ||
     loadedQuestionId !== selectedQuestion.id
 
+  // 로딩이 끝났는데도 상세가 붙지 않은 상태 — 액션이 전부 잠겨 있다는 뜻이다.
+  const detailStalled =
+    !!selectedQuestion && !detailLoading && loadedQuestionId !== selectedQuestion.id
+
+  const retryDetail = () => {
+    if (!selectedQuestion) return
+    clearDetail(true)
+    setError(null)
+    setDetailReloadKey((key) => key + 1)
+  }
+
   return (
     <section className="rounded-3xl border-2 border-rose-accent-deep/40 bg-rose-card p-3 shadow-sm sm:p-4" aria-labelledby="qa-admin-title">
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-rose-line pb-3">
@@ -492,6 +510,20 @@ export default function QaAdminPanel() {
                     {selectedQuestion.question}
                   </h3>
                 </div>
+
+                {/* 상세 로딩이 조용히 끊기면 모든 액션이 잠긴다. 이유를 드러내고 직접 복구하게 한다. */}
+                {detailStalled && (
+                  <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-rose-accent/40 bg-rose-bg px-3 py-3">
+                    <p className="text-sm font-bold text-rose-accent">{t('qaAdminDetailPending')}</p>
+                    <button
+                      type="button"
+                      onClick={retryDetail}
+                      className="min-h-11 rounded-full bg-rose-accent-deep px-4 py-2 text-sm font-extrabold text-white shadow-sm shadow-rose-accent/25 transition active:scale-[0.98]"
+                    >
+                      {t('qaAdminDetailRetry')}
+                    </button>
+                  </div>
+                )}
 
                 {answer?.insufficientEvidence && selectedQuestion.status === 'draft_ready' && (
                   <div className="rounded-xl border border-rose-accent/40 bg-rose-bg px-3 py-3">
