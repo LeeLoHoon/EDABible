@@ -18,7 +18,7 @@ import { dirname } from 'node:path'
 const CHAPTERS_PATH = 'data/bible-chapters.jsonl'
 const GAE_PATH = 'data/bible-chapters.gae.jsonl'
 const SAE_PATH = 'data/bible-chapters.sae.jsonl'
-const REBUILT_PATH = '/home/easy/bible/rebuild/out/ot-chapters.jsonl'
+const REBUILT_PATH = process.env.REBUILT_PATH ?? '/home/easy/bible/rebuild/out/ot-chapters.jsonl'
 /* 옛 스캔은 두 벌로 나뉘어 있다. ot만으로는 구약의 절반뿐이라 전권을 담은 etc까지 함께 읽는다. */
 const OLD_SCAN_DIRS = ['/home/easy/bible/work/txt/ot', '/home/easy/bible/work/txt/etc']
 const KO_DICT_PATH = '/usr/share/hunspell/ko.dic'
