@@ -133,8 +133,8 @@ export async function loadSermonPassages(
     }
     if (own.length === 0) continue
 
-    // 본문이 여러 개면 어느 구절인지 알 수 있게 참조 줄을 앞에 끼운다 (BiblePicker와 같은 순서)
-    if (passages.length > 1) chunks.push({ label: null, text: sermonPassageLabel(passage) })
+    // 본문이 여러 개여도 참조 줄을 따로 끼우지 않는다 — 구분선이 이미 권과 장을 적고
+    // 절 번호는 본문에 그대로 붙어 있어, 같은 말을 두 번 하는 줄이 될 뿐이다.
     chunks.push(...own)
   }
 
