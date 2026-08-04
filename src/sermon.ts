@@ -3,7 +3,7 @@
    그냥 읽기만 하므로 같은 조각 조립을 UI 없이 수행한다. 조각 시퀀스를 BiblePicker와
    똑같이 맞춰야 PassageText가 만드는 형광펜 키가 두 앱에서 같은 규칙으로 나온다. */
 
-import { chapterLabel, chapterTextAt, loadBook, loadIndex, type BookDoc } from './bible'
+import { chapterTextAt, loadBook, loadIndex, makeRef, type BookDoc } from './bible'
 import type { PassageChunk } from './components/BiblePicker'
 import type { Sermon, SermonPassage, SermonService } from './db'
 import { EN_BOOK_NAMES, KO_BOOK_NAMES, bookOrderByName } from './i18n/bibleBookNames'
@@ -95,6 +95,7 @@ export interface SermonPassageText {
 export async function loadSermonPassages(
   passages: readonly SermonPassage[],
 ): Promise<SermonPassageText> {
+  const lang = getLang()
   const ref = sermonPassagesLabel(passages)
   if (passages.length === 0) return { ref, chunks: [], startChapter: 1 }
 
@@ -116,6 +117,9 @@ export async function loadSermonPassages(
     const meta = metaFor(passage.book)
     const doc = meta ? docByFile.get(meta.file) : undefined
     const book = doc?.book ?? meta?.book ?? passage.book
+    // 장 구분선은 권 이름까지 적는다 — 여러 장·여러 권을 이어 읽을 때 '5장'만으로는
+    // 어느 권인지 알 수 없고, 스크롤을 내리면 머리말의 참조도 화면 밖으로 나간다.
+    const bookLabel = translatedBookName(book, lang)
     // 관리자가 절 범위를 적었으면 그 절만 묵상에 띄운다. 표기가 가리키는 장이
     // 이 본문 범위 밖이면(잘못 입력) 해당 장은 걸리지 않아 장 전체가 그대로 남는다.
     const wantedByChapter = parseVerseLabel(passage.verseLabel, passage.chapter)
@@ -125,7 +129,7 @@ export async function loadSermonPassages(
       const full = doc ? chapterTextAt(doc, current) : ''
       const wanted = wantedByChapter.get(current)
       const text = wanted ? sliceVerses(full, wanted) : full
-      if (text) own.push({ label: chapterLabel(book, current), text })
+      if (text) own.push({ label: makeRef(bookLabel, current), text })
     }
     if (own.length === 0) continue
 
