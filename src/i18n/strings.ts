@@ -394,6 +394,8 @@ const ko = {
   sermonSaveNow: '저장',
   sermonSaveNotYet: '입력하면 자동으로 저장됩니다',
   sermonSaveErrorInline: '저장 실패',
+  sermonSaveErrorWithReason: (reason: string) =>
+    reason ? `저장 실패 — ${reason}` : '저장 실패',
   sermonSaveOwnerChanged: '계정이 변경되어 원격 저장을 중단했습니다. 원래 계정에서 다시 시도해 주세요.',
   sermonSaveConflict: '다른 기기에서 이 묵상이 먼저 변경되었습니다. 원격 내용을 다시 불러오기 전에는 덮어쓰지 않습니다.',
   sermonReloadRemote: '최신 원격 내용 다시 불러오기',
@@ -676,6 +678,7 @@ const en: Catalog = {
   sermonSaveNow: 'Save',
   sermonSaveNotYet: 'Your writing saves automatically',
   sermonSaveErrorInline: 'Save failed',
+  sermonSaveErrorWithReason: (reason) => (reason ? `Save failed — ${reason}` : 'Save failed'),
   sermonSaveOwnerChanged: 'The account changed, so remote saving was stopped. Try again with the original account.',
   sermonSaveConflict: 'This meditation was changed on another device. It will not be overwritten until you reload the remote version.',
   sermonReloadRemote: 'Reload latest remote version',

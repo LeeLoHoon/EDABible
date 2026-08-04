@@ -81,6 +81,18 @@ function isOwnerChangedError(error: unknown): boolean {
   )
 }
 
+/* 저장이 왜 실패했는지는 화면에 드러나야 한다 — 폰에서는 콘솔을 볼 수 없어서
+   '저장 실패' 네 글자만으로는 사용자도 우리도 원인을 알 방법이 없다.
+   Supabase 오류는 Error가 아니라 {code, message}를 가진 객체로 온다. */
+function describeSaveFailure(error: unknown): string {
+  if (error instanceof Error) return error.message
+  if (typeof error !== 'object' || error === null) return String(error ?? '')
+  const detail = error as { code?: unknown; message?: unknown }
+  const code = typeof detail.code === 'string' ? detail.code : ''
+  const message = typeof detail.message === 'string' ? detail.message : ''
+  return [code, message].filter(Boolean).join(': ')
+}
+
 /* 저장 상태는 늘 한 줄 떠 있어야 한다 — 자동 저장이라 버튼을 누른 기억이 없으면
    '저장됐나?' 하는 불안이 남는다. 한 번이라도 저장했으면 그 시각을 계속 보여준다. */
 function statusLabel(status: SaveStatus, errorMessage: string, lastSavedAt: number | null): string {
@@ -170,7 +182,9 @@ export default function SermonNotePage() {
       saveConflictRef.current = conflict
       setSaveConflict(conflict)
       setSaveErrorMessage(
-        isOwnerChangedError(error) ? t('sermonSaveOwnerChanged') : t('sermonSaveErrorInline'),
+        isOwnerChangedError(error)
+          ? t('sermonSaveOwnerChanged')
+          : t('sermonSaveErrorWithReason')(describeSaveFailure(error)),
       )
       setSaveStatus('error')
       throw error
@@ -799,9 +813,14 @@ export default function SermonNotePage() {
       {/* 자동 저장이라 손이 갈 곳이 없으면 불안하다. 상태와 저장 버튼을 늘 바닥에 붙여 둔다. */}
       {canWrite && (
         <div className="safe-pad sticky bottom-0 z-10 flex items-center justify-between gap-2 border-t border-rose-line bg-rose-card/95 px-4 py-2.5 backdrop-blur">
+          {/* 실패 사유는 길 수 있어 잘라내지 않는다 — 잘린 오류는 없는 것과 같다 */}
           <span
             aria-live="polite"
-            className="min-w-0 flex-1 truncate text-[12px] font-bold text-rose-key/80"
+            className={`min-w-0 flex-1 text-[12px] font-bold ${
+              saveStatus === 'error'
+                ? 'whitespace-normal break-words text-rose-accent'
+                : 'truncate text-rose-key/80'
+            }`}
           >
             {statusLabel(saveStatus, saveErrorMessage, lastSavedAt)}
           </span>
