@@ -1,7 +1,7 @@
 {
   "name": "edabible",
   "private": true,
-  "version": "1.8.3",
+  "version": "1.8.4",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -27,6 +27,7 @@
     "test:bible-version": "node --test scripts/bible_version.test.mjs",
     "test:sermon-localization": "node --test scripts/sermon_localization.test.mjs",
     "test:sermon-verse-range": "node --test scripts/sermon_verse_range.test.mjs",
+    "test:sermon-archive": "node --test scripts/sermon_archive.test.mjs",
     "check:binder-titles": "node scripts/check_binder_checkpoint_titles.mjs",
     "prepare:qa-embeddings": "node scripts/prepare_qa_embeddings.mjs",
     "backfill:qa-embeddings": "node scripts/backfill_qa_embeddings.mjs",

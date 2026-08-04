@@ -108,8 +108,18 @@ async function main() {
 
   const byKey = new Map(remote.map((row) => [`${row.book_order}:${row.chapter}`, row]))
   const local = await readJsonl(CHAPTERS_PATH)
-  // structure: 구조만 얹은 장 / rebuilt: 원본 스캔에서 본문째 다시 만든 장
-  const targets = local.filter((row) => row.structure === 'restored' || row.source_quality === 'rebuilt')
+  // --since <파일>: 그 파일과 견줘 달라진 장만 올린다 (띄어쓰기 교정처럼 표식이 남지 않는 작업용)
+  const sincePath = argv.includes('--since') ? argv[argv.indexOf('--since') + 1] : null
+  let targets
+  if (sincePath) {
+    const baseline = new Map(
+      (await readJsonl(sincePath)).map((row) => [`${row.book_order}:${row.chapter}`, row.text]),
+    )
+    targets = local.filter((row) => baseline.get(`${row.book_order}:${row.chapter}`) !== row.text)
+  } else {
+    // structure: 구조만 얹은 장 / rebuilt: 원본 스캔에서 본문째 다시 만든 장
+    targets = local.filter((row) => row.structure === 'restored' || row.source_quality === 'rebuilt')
+  }
 
   const payload = []
   let finalized = 0
