@@ -8,6 +8,7 @@ import type { PassageChunk } from './components/BiblePicker'
 import type { Sermon, SermonPassage } from './db'
 import { EN_BOOK_NAMES, KO_BOOK_NAMES, bookOrderByName } from './i18n/bibleBookNames'
 import { getLang, type Lang } from './i18n/lang'
+import { parseVerseLabel, sliceVerses } from './verseRange'
 
 /** 설교 목록 경로 — 단독 배포는 앱 루트, 통합(all) 배포는 /sermon 아래에 산다 */
 export const SERMON_LIST_PATH = __APP_TARGET__ === 'all' ? '/sermon' : '/'
@@ -101,10 +102,15 @@ export async function loadSermonPassages(
     const meta = metaFor(passage.book)
     const doc = meta ? docByFile.get(meta.file) : undefined
     const book = doc?.book ?? meta?.book ?? passage.book
+    // 관리자가 절 범위를 적었으면 그 절만 묵상에 띄운다. 표기가 가리키는 장이
+    // 이 본문 범위 밖이면(잘못 입력) 해당 장은 걸리지 않아 장 전체가 그대로 남는다.
+    const wantedByChapter = parseVerseLabel(passage.verseLabel, passage.chapter)
 
     const own: PassageChunk[] = []
     for (let current = passage.chapter; current <= passage.endChapter; current += 1) {
-      const text = doc ? chapterTextAt(doc, current) : ''
+      const full = doc ? chapterTextAt(doc, current) : ''
+      const wanted = wantedByChapter.get(current)
+      const text = wanted ? sliceVerses(full, wanted) : full
       if (text) own.push({ label: chapterLabel(book, current), text })
     }
     if (own.length === 0) continue

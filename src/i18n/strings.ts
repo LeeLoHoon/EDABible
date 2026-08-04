@@ -378,6 +378,8 @@ const ko = {
   sermonFieldVerseLabel: '절 범위 표기 (선택)',
   sermonPassageRow: (n: number) => `본문 ${n}`,
   sermonVerseLabelPlaceholder: '예: 8:28-30',
+  sermonVerseLabelHint:
+    '적어 두면 묵상 화면에 그 절만 보입니다. 비워 두면 장 전체가 나옵니다. 메시지 성경은 절이 문단으로 묶여 있어 조금 더 넓게 보일 수 있습니다.',
   sermonFieldSummary: '요약',
   sermonSummaryPlaceholder: '설교의 핵심을 짧게 요약하세요.',
   sermonFieldPoints: '묵상 포인트',
@@ -617,6 +619,8 @@ const en: Catalog = {
   sermonFieldVerseLabel: 'Verse range label (optional)',
   sermonPassageRow: (n) => `Passage ${n}`,
   sermonVerseLabelPlaceholder: 'e.g. 8:28-30',
+  sermonVerseLabelHint:
+    'When set, the meditation view shows only those verses. Leave it empty to show the whole chapter. The Message groups verses into paragraphs, so a little more may show.',
   sermonFieldSummary: 'Summary',
   sermonSummaryPlaceholder: 'Briefly summarize the sermon.',
   sermonFieldPoints: 'Meditation Points',

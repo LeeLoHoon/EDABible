@@ -4,9 +4,12 @@ import type { PassageChunk } from './components/BiblePicker'
    PassageText(본문 렌더·하이라이트 키)와 TranscribeGuide(따라쓰기)가 같은
    블록 시퀀스를 봐야 하므로 한 곳에서 관리한다. */
 
-const VERSE_MARKER = /\((\d{1,3}(?:[-~]\d{1,3})?)\)\s*/g
-const HEADING_MARKER = /^\[\[(.+)\]\]$/
-const PAREN_HEADING = /^\((?!\d{1,3}(?:[-~]\d{1,3})?\))(.{2,80})\)$/
+/* 절 범위로 본문을 잘라내는 verseRange.ts가 같은 마커 규칙을 봐야 하므로 export한다 —
+   자른 결과가 다시 splitBlocks를 통과하는 만큼 두 곳의 규칙이 어긋나면 안 된다.
+   g 플래그가 붙어 있으니 사용처는 matchAll만 쓴다(exec는 lastIndex를 공유해 오염된다). */
+export const VERSE_MARKER = /\((\d{1,3}(?:[-~]\d{1,3})?)\)\s*/g
+export const HEADING_MARKER = /^\[\[(.+)\]\]$/
+export const PAREN_HEADING = /^\((?!\d{1,3}(?:[-~]\d{1,3})?\))(.{2,80})\)$/
 
 interface Segment {
   label: string | null

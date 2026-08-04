@@ -381,6 +381,9 @@ export default function SermonAdminForm({ initial, onClose, onSaved }: Props) {
                 <span className="block text-xs font-bold text-rose-key">
                   {t('sermonFieldVerseLabel')}
                 </span>
+                <p className="text-[11px] leading-relaxed text-rose-key/70">
+                  {t('sermonVerseLabelHint')}
+                </p>
                 {parsedPassages.map((passage, index) => {
                   const range =
                     passage.endChapter !== passage.chapter
