@@ -133,7 +133,8 @@ async function main() {
     }
     // 구조 복원은 한글을 하나도 바꾸지 않으므로, 원격 한글이 다르면 웹에서 손댄 장이라 건너뛴다.
     // 재구축(rebuilt) 장은 본문 자체를 새로 만든 것이라 이 비교가 성립하지 않는다.
-    if (row.source_quality !== 'rebuilt' && hangul(hit.text) !== hangul(row.text)) {
+    // --since로 대상을 직접 지정했으면 글자가 바뀌는 것이 의도다
+    if (!sincePath && row.source_quality !== 'rebuilt' && hangul(hit.text) !== hangul(row.text)) {
       diverged += 1
       continue
     }
