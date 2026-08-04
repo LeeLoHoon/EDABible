@@ -4,6 +4,7 @@ import { useAuth } from '../authState'
 import BackButton from '../components/BackButton'
 import LangToggle from '../components/LangToggle'
 import SermonAdminForm from '../components/SermonAdminForm'
+import { useQaAdmin } from '../hooks/useQaAdmin'
 import {
   db,
   isSermonAdmin,
@@ -43,6 +44,8 @@ export default function SermonPage() {
   const lang = getLang()
   const navigate = useNavigate()
   const { user, signInWithGoogle, signOut } = useAuth()
+  // Q&A는 공개 전 단계 — 관리자 계정에서만 헤더 링크가 나타난다.
+  const { isAdmin: qaAdmin } = useQaAdmin()
   // 토큰 갱신으로 user 참조가 바뀌어도 id 문자열이 같으면 재로드하지 않는다 (BinderPage와 동일 패턴)
   const userId = user?.id
   const [sermons, setSermons] = useState<Sermon[]>([])
@@ -262,12 +265,14 @@ export default function SermonPage() {
                 <span aria-hidden className="sm:hidden">✕</span>
               </button>
             )}
-            <Link
-              to="/qa"
-              className="flex min-h-11 items-center rounded-full px-2 text-xs font-bold text-rose-key transition hover:text-rose-accent focus:outline-none focus:ring-2 focus:ring-rose-accent sm:px-3 sm:text-sm"
-            >
-              {t('sermonQaLink')}
-            </Link>
+            {qaAdmin && (
+              <Link
+                to="/qa"
+                className="flex min-h-11 items-center rounded-full px-2 text-xs font-bold text-rose-key transition hover:text-rose-accent focus:outline-none focus:ring-2 focus:ring-rose-accent sm:px-3 sm:text-sm"
+              >
+                {t('sermonQaLink')}
+              </Link>
+            )}
             <LangToggle />
             <button
               type="button"

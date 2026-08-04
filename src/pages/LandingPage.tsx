@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import LangToggle from '../components/LangToggle'
+import { useQaAdmin } from '../hooks/useQaAdmin'
 import { getLang } from '../i18n/lang'
 import { t } from '../i18n/strings'
 
@@ -58,6 +59,8 @@ function QaEmblem() {
 
 export default function LandingPage() {
   const isEn = getLang() === 'en'
+  // Q&A는 공개 전 단계 — 관리자 계정에서만 카드가 나타난다.
+  const { isAdmin: qaAdmin } = useQaAdmin()
   const cards: CardDef[] = [
     {
       to: '/note',
@@ -77,12 +80,16 @@ export default function LandingPage() {
       description: t('landingBinderDesc'),
       emblem: <BinderEmblem />,
     },
-    {
-      to: '/qa',
-      title: t('landingQaTitle'),
-      description: t('landingQaDesc'),
-      emblem: <QaEmblem />,
-    },
+    ...(qaAdmin
+      ? [
+          {
+            to: '/qa',
+            title: t('landingQaTitle'),
+            description: t('landingQaDesc'),
+            emblem: <QaEmblem />,
+          },
+        ]
+      : []),
   ]
 
   return (

@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { Navigate, useParams } from 'react-router-dom'
 import { useAuth } from '../authState'
 import BackButton from '../components/BackButton'
 import LangToggle from '../components/LangToggle'
+import { useQaAdmin } from '../hooks/useQaAdmin'
 import { getLang } from '../i18n/lang'
 import { t } from '../i18n/strings'
 import { readMyPublishedQaThread, type QaThread } from '../qa'
@@ -19,6 +20,8 @@ function formatQaDate(value: string): string {
 export default function QaThreadPage() {
   const { id } = useParams()
   const { loading: authLoading, user, signInWithGoogle, signOut } = useAuth()
+  // Q&A는 공개 전 단계 — 목록과 같은 기준으로 관리자만 스레드를 연다.
+  const { checking: qaAdminChecking, isAdmin: qaAdmin } = useQaAdmin()
   const userId = user?.id
   const [thread, setThread] = useState<QaThread | undefined>()
   const [loading, setLoading] = useState(false)
@@ -83,6 +86,9 @@ export default function QaThreadPage() {
     status === 'failed'
   const closed = status === 'rejected'
 
+  // 링크를 감춰도 주소로는 들어올 수 있어, 관리자가 아니면 여기서 되돌린다.
+  if (user && !qaAdminChecking && !qaAdmin) return <Navigate to="/" replace />
+
   return (
     <div className="min-h-full bg-rose-bg text-rose-ink">
       <header className="sticky top-0 z-20 border-b border-rose-line bg-rose-bg/95 px-4 py-2.5 backdrop-blur">
@@ -121,6 +127,8 @@ export default function QaThreadPage() {
               {signingIn ? t('authGoogleOpening') : t('authGoogleContinue')}
             </button>
           </section>
+        ) : qaAdminChecking ? (
+          <p className="py-12 text-center font-serif text-lg font-bold text-rose-key">{t('authChecking')}</p>
         ) : loading ? (
           <p className="py-12 text-center font-serif text-lg font-bold text-rose-key">{t('qaLoading')}</p>
         ) : notFound || !thread ? (

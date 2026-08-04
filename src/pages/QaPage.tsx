@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, Navigate, useNavigate } from 'react-router-dom'
 import { useAuth } from '../authState'
 import BackButton from '../components/BackButton'
 import LangToggle from '../components/LangToggle'
 import QaAdminPanel from '../components/QaAdminPanel'
+import { useQaAdmin } from '../hooks/useQaAdmin'
 import { getLang } from '../i18n/lang'
 import { t } from '../i18n/strings'
 import {
-  isQaAdmin,
   listMyQaQuestions,
   QaIdempotencyConflictError,
   submitQaQuestion,
@@ -98,6 +98,8 @@ function submitErrorMessage(error: unknown): string {
 export default function QaPage() {
   const navigate = useNavigate()
   const { authError, loading: authLoading, user, signInWithGoogle, signOut } = useAuth()
+  // Q&A는 공개 전 단계 — 로그인한 뒤에도 관리자가 아니면 홈으로 되돌린다.
+  const { checking: qaAdminChecking, isAdmin: qaAdmin } = useQaAdmin()
   const userId = user?.id
   const [questions, setQuestions] = useState<QaQuestion[]>([])
   const [question, setQuestion] = useState('')
@@ -152,13 +154,10 @@ export default function QaPage() {
     if (taps.count < ADMIN_TAP_COUNT) return
     taps.count = 0
     taps.deadline = 0
-    if (!userId) return
+    if (!userId || !qaAdmin) return
 
-    void isQaAdmin().then((allowed) => {
-      if (!allowed) return
-      setAdminModeUserId(adminMode ? null : userId)
-      navigator.vibrate?.(40)
-    })
+    setAdminModeUserId(adminMode ? null : userId)
+    navigator.vibrate?.(40)
   }
 
   const signIn = async () => {
@@ -216,6 +215,9 @@ export default function QaPage() {
       setSubmitting(false)
     }
   }
+
+  // 링크를 감춰도 주소로는 들어올 수 있어, 관리자가 아니면 여기서 되돌린다.
+  if (user && !qaAdminChecking && !qaAdmin) return <Navigate to="/" replace />
 
   return (
     <div className="min-h-full bg-rose-bg text-rose-ink">
@@ -289,6 +291,8 @@ export default function QaPage() {
             </button>
             {authError && <p className="mt-3 text-sm font-bold text-rose-accent">{t('authCheckFailed')}</p>}
           </section>
+        ) : qaAdminChecking ? (
+          <p className="py-12 text-center font-serif text-lg font-bold text-rose-key">{t('authChecking')}</p>
         ) : loading ? (
           <p className="py-12 text-center font-serif text-lg font-bold text-rose-key">{t('qaLoading')}</p>
         ) : adminMode ? (
