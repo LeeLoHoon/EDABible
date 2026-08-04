@@ -813,9 +813,11 @@ export default function SermonNotePage() {
             >
               {t('sermonLogout')}
             </button>
+            {/* 저장은 곧 '이 묵상을 마쳤다'는 뜻이라 목록으로 돌려보낸다.
+                저장에 실패하면 leaveForList가 화면을 지켜 에러를 볼 수 있게 한다. */}
             <button
               type="button"
-              onClick={() => void flush().catch(() => undefined)}
+              onClick={() => void leaveForList()}
               disabled={saveStatus === 'saving'}
               className="min-h-9 rounded-full bg-rose-accent-deep px-4 py-1.5 text-[13px] font-bold text-white shadow-sm shadow-rose-accent/25 transition active:scale-[0.98] disabled:opacity-50"
             >

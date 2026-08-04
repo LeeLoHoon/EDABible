@@ -8,7 +8,7 @@ do $$
 declare
   pgcrypto_schema text;
 begin
-  select pg_catalog.n.nspname
+  select n.nspname
     into pgcrypto_schema
     from pg_catalog.pg_extension as e
     join pg_catalog.pg_namespace as n on n.oid = e.extnamespace
@@ -529,7 +529,7 @@ do $$
 declare
   vector_schema text;
 begin
-  select pg_catalog.n.nspname
+  select n.nspname
     into vector_schema
     from pg_catalog.pg_extension as e
     join pg_catalog.pg_namespace as n on n.oid = e.extnamespace

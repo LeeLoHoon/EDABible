@@ -12,7 +12,7 @@ const server = await createServer({
   define: { __APP_TARGET__: JSON.stringify('all'), __BUILD__: JSON.stringify('test') },
   optimizeDeps: { noDiscovery: true },
 })
-const { buildArchiveRows, countWrittenWeeks, groupByYearMonth } =
+const { buildArchiveRows, countWrittenWeeks, groupByYearMonth, mergeNoteSummaries } =
   await server.ssrLoadModule('/src/sermonArchive.ts')
 
 after(async () => {
@@ -111,9 +111,37 @@ test('그 해 묵상 주차는 같은 주일의 오전·오후를 한 번으로 
   assert.equal(countWrittenWeeks(notes, '202'), 0)
 })
 
+test('서버에 못 올라간 기기 기록도 보관함에서 사라지지 않는다', () => {
+  const remote = [note('a', '2026-08-02', 'morning', { updatedAt: 100 })]
+  const local = [
+    // 서버에 아직 없는 기록 — 저장 실패나 오프라인
+    note('b', '2026-07-26', 'morning', { updatedAt: 200, pendingSync: true }),
+    // 서버에도 있지만 기기 쪽이 더 최근
+    note('a', '2026-08-02', 'morning', { updatedAt: 300, pendingSync: true }),
+  ]
+  const merged = mergeNoteSummaries(remote, local)
+
+  assert.equal(merged.length, 2)
+  const a = merged.find((item) => item.sermonId === 'a')
+  assert.equal(a.updatedAt, 300, '더 최근에 손댄 기기 기록을 남긴다')
+  assert.equal(a.pendingSync, true)
+  assert.ok(merged.some((item) => item.sermonId === 'b'))
+})
+
+test('서버 쪽이 더 최근이면 서버 기록을 남긴다', () => {
+  const remote = [note('a', '2026-08-02', 'morning', { updatedAt: 500 })]
+  const local = [note('a', '2026-08-02', 'morning', { updatedAt: 100, pendingSync: true })]
+  const merged = mergeNoteSummaries(remote, local)
+
+  assert.equal(merged.length, 1)
+  assert.equal(merged[0].updatedAt, 500)
+  assert.equal(merged[0].pendingSync, undefined)
+})
+
 test('빈 입력에도 무너지지 않는다', () => {
   assert.deepEqual(buildArchiveRows([], [], false), [])
   assert.deepEqual(buildArchiveRows([], [], true), [])
   assert.equal(groupByYearMonth([]).size, 0)
   assert.equal(countWrittenWeeks([], '2026'), 0)
+  assert.deepEqual(mergeNoteSummaries([], []), [])
 })

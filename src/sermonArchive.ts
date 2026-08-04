@@ -63,6 +63,22 @@ export function buildArchiveRows(
   )
 }
 
+/**
+ * 서버 목록과 이 기기의 기록을 합친다. 같은 설교가 양쪽에 있으면 더 최근에 손댄 쪽을 남긴다 —
+ * 서버 저장이 실패해 로컬에만 남은 기록이 보관함에서 사라지지 않게 하기 위해서다.
+ */
+export function mergeNoteSummaries(
+  remote: readonly SermonNoteSummary[],
+  local: readonly SermonNoteSummary[],
+): SermonNoteSummary[] {
+  const byId = new Map(remote.map((note) => [note.sermonId, note]))
+  for (const note of local) {
+    const known = byId.get(note.sermonId)
+    if (!known || note.updatedAt > known.updatedAt) byId.set(note.sermonId, note)
+  }
+  return [...byId.values()]
+}
+
 /** 연 → 월 → 그 달의 줄들. 키는 'YYYY'와 'MM' 문자열이라 정렬만으로 시간순이 된다. */
 export function groupByYearMonth(
   rows: readonly ArchiveRow[],

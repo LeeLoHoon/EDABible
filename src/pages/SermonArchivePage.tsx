@@ -9,11 +9,19 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../authState'
 import BackButton from '../components/BackButton'
 import LangToggle from '../components/LangToggle'
-import { listMySermonNotes, listSermons, type Sermon, type SermonNoteSummary, type SermonService } from '../db'
+import {
+  listLocalSermonNoteSummaries,
+  listMySermonNotes,
+  listSermons,
+  type Sermon,
+  type SermonNoteSummary,
+  type SermonService,
+} from '../db'
 import {
   buildArchiveRows,
   countWrittenWeeks,
   groupByYearMonth,
+  mergeNoteSummaries,
   type ArchiveRow,
 } from '../sermonArchive'
 import { SERMON_LIST_PATH, localizedSermonPassageLabel, localizedText } from '../sermon'
@@ -35,6 +43,8 @@ export default function SermonArchivePage() {
   const [loading, setLoading] = useState(true)
   const [loadFailed, setLoadFailed] = useState(false)
   const [showAll, setShowAll] = useState(false)
+  const [selectedYear, setSelectedYear] = useState<string | null>(null)
+  const [selectedMonth, setSelectedMonth] = useState<string | null>(null)
   // 렌더 중 new Date()를 부르지 않아야 react-hooks/purity를 지킨다 (SermonPage와 같은 패턴)
   const [thisYear] = useState(() => String(new Date().getFullYear()))
   // 올해만 펼친 채로 시작한다 — 지난 연도는 접어 두어야 목록이 한눈에 들어온다
@@ -51,19 +61,30 @@ export default function SermonArchivePage() {
     let alive = true
     setLoading(true)
     setLoadFailed(false)
-    Promise.all([listMySermonNotes(), listSermons()])
-      .then(([noteList, sermonList]) => {
-        if (!alive) return
-        setNotes(noteList)
-        setSermons(sermonList)
-      })
-      .catch((error) => {
-        console.warn('Sermon archive load failed.', error)
-        if (alive) setLoadFailed(true)
-      })
-      .finally(() => {
-        if (alive) setLoading(false)
-      })
+    ;(async () => {
+      // 서버 목록이 실패해도 이 기기의 기록만으로 보관함을 연다 —
+      // 통신 문제로 "쓴 게 사라졌다"고 보이는 상황을 만들지 않기 위해서다.
+      const [remote, sermonList, local] = await Promise.all([
+        listMySermonNotes().then(
+          (list) => ({ ok: true, list }),
+          (error) => {
+            console.warn('Sermon archive remote list failed.', error)
+            return { ok: false, list: [] as SermonNoteSummary[] }
+          },
+        ),
+        listSermons().catch(() => [] as Sermon[]),
+        listLocalSermonNoteSummaries(userId).catch((error) => {
+          console.warn('Sermon archive local list failed.', error)
+          return [] as SermonNoteSummary[]
+        }),
+      ])
+      if (!alive) return
+      const merged = mergeNoteSummaries(remote.list, local)
+      setNotes(merged)
+      setSermons(sermonList)
+      setLoadFailed(!remote.ok && merged.length === 0)
+      setLoading(false)
+    })()
     return () => {
       alive = false
     }
@@ -78,6 +99,29 @@ export default function SermonArchivePage() {
     () => countWrittenWeeks(notes, thisYear),
     [notes, thisYear],
   )
+  const pendingCount = useMemo(() => notes.filter((note) => note.pendingSync).length, [notes])
+
+  // 연·월을 직접 골라 그 구간만 본다. null이면 '전체'라 연도별 접기/펴기로 돌아간다.
+  const years = useMemo(() => [...grouped.keys()].sort().reverse(), [grouped])
+  const months = useMemo(
+    () => (selectedYear ? [...(grouped.get(selectedYear)?.keys() ?? [])].sort().reverse() : []),
+    [grouped, selectedYear],
+  )
+  const visible = useMemo(() => {
+    if (!selectedYear) return grouped
+    const byMonth = grouped.get(selectedYear)
+    if (!byMonth) return new Map<string, Map<string, ArchiveRow[]>>()
+    if (!selectedMonth) return new Map([[selectedYear, byMonth]])
+    const rowsOfMonth = byMonth.get(selectedMonth)
+    return rowsOfMonth
+      ? new Map([[selectedYear, new Map([[selectedMonth, rowsOfMonth]])]])
+      : new Map<string, Map<string, ArchiveRow[]>>()
+  }, [grouped, selectedYear, selectedMonth])
+
+  const pickYear = (year: string | null) => {
+    setSelectedYear(year)
+    setSelectedMonth(null)
+  }
 
   const toggleYear = (year: string) => {
     setOpenYears((prev) => {
@@ -156,6 +200,55 @@ export default function SermonArchivePage() {
           </div>
         </div>
 
+        {years.length > 0 && (
+          <div className="space-y-1.5">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="mr-0.5 text-[11px] font-bold text-rose-key/60">
+                {t('sermonArchiveYearFilter')}
+              </span>
+              <FilterChip
+                active={selectedYear === null}
+                onClick={() => pickYear(null)}
+                label={t('sermonArchiveFilterEvery')}
+              />
+              {years.map((year) => (
+                <FilterChip
+                  key={year}
+                  active={selectedYear === year}
+                  onClick={() => pickYear(year)}
+                  label={t('sermonArchiveYear')(year)}
+                />
+              ))}
+            </div>
+            {selectedYear && months.length > 0 && (
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="mr-0.5 text-[11px] font-bold text-rose-key/60">
+                  {t('sermonArchiveMonthFilter')}
+                </span>
+                <FilterChip
+                  active={selectedMonth === null}
+                  onClick={() => setSelectedMonth(null)}
+                  label={t('sermonArchiveFilterEvery')}
+                />
+                {months.map((month) => (
+                  <FilterChip
+                    key={month}
+                    active={selectedMonth === month}
+                    onClick={() => setSelectedMonth(month)}
+                    label={t('sermonArchiveMonth')(month)}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {pendingCount > 0 && (
+          <p className="rounded-xl border border-rose-accent/40 bg-rose-card px-3 py-2 text-xs font-medium leading-relaxed text-rose-key">
+            {t('sermonArchivePendingNotice')(pendingCount)}
+          </p>
+        )}
+
         {loading ? (
           <p className="py-12 text-center text-rose-key/70">{t('sermonArchiveLoading')}</p>
         ) : loadFailed ? (
@@ -165,14 +258,17 @@ export default function SermonArchivePage() {
             <p className="font-serif text-lg font-bold text-rose-key">{t('sermonArchiveEmpty')}</p>
             <p className="mt-1 text-sm text-rose-key/70">{t('sermonArchiveEmptyHint')}</p>
           </div>
+        ) : visible.size === 0 ? (
+          <p className="py-12 text-center text-rose-key/70">{t('sermonArchiveNoneInRange')}</p>
         ) : (
           <div className="space-y-5">
-            {[...grouped.keys()]
+            {[...visible.keys()]
               .sort()
               .reverse()
               .map((year) => {
-                const open = openYears.has(year)
-                const byMonth = grouped.get(year) ?? new Map<string, ArchiveRow[]>()
+                // 연도를 직접 고른 상태에서는 접지 않는다 — 고른 것을 다시 펴게 하면 번거롭다
+                const open = selectedYear !== null || openYears.has(year)
+                const byMonth = visible.get(year) ?? new Map<string, ArchiveRow[]>()
                 const yearCount = [...byMonth.values()].reduce((sum, list) => sum + list.length, 0)
 
                 return (
@@ -226,6 +322,29 @@ export default function SermonArchivePage() {
   )
 }
 
+function FilterChip({
+  active,
+  label,
+  onClick,
+}: {
+  active: boolean
+  label: string
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={`rounded-full px-2.5 py-1 text-xs font-bold transition ${
+        active ? 'bg-rose-accent-deep text-white' : 'bg-rose-chip text-rose-key hover:text-rose-accent'
+      }`}
+    >
+      {label}
+    </button>
+  )
+}
+
 function ArchiveCard({
   row,
   lang,
@@ -236,7 +355,7 @@ function ArchiveCard({
   onOpen: () => void
 }) {
   const title = localizedText(row.title, row.titleEn, lang)
-  const note = row.note
+  const note = row.note ?? undefined
 
   return (
     <button
@@ -249,6 +368,11 @@ function ArchiveCard({
         <span className="rounded-full bg-rose-chip px-2 py-0.5 text-[11px] font-black text-rose-accent">
           {serviceLabel(row.service)}
         </span>
+        {note?.pendingSync && (
+          <span className="rounded-full bg-rose-accent-deep px-2 py-0.5 text-[11px] font-black text-white">
+            {t('sermonArchivePending')}
+          </span>
+        )}
       </div>
       <h3 className="mt-1 font-serif text-base font-extrabold text-rose-ink">{title}</h3>
       {row.passages.length > 0 && (

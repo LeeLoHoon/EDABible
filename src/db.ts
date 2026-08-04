@@ -1,5 +1,5 @@
 import Dexie, { type Table } from 'dexie'
-import { emptyField, type Entry, type Field, type VerseHighlight } from './types'
+import { emptyField, isFieldEmpty, type Entry, type Field, type VerseHighlight } from './types'
 import { supabase } from './supabase'
 import { SerializedSaveQueue } from './serializedSaveQueue'
 import { commitEntryInTransaction, type EntryCommitResult } from './entryCommit'
@@ -681,6 +681,8 @@ export interface SermonNoteSummary {
   highlightCount: number
   answeredPoints: number
   writtenFields: number
+  /** 이 기기에만 있고 아직 서버에 못 올라간 기록 */
+  pendingSync?: boolean
 }
 
 interface SermonNoteSummaryRow {
@@ -721,6 +723,52 @@ export async function listMySermonNotes(): Promise<SermonNoteSummary[]> {
     answeredPoints: row.answered_points ?? 0,
     writtenFields: row.written_fields ?? 0,
   }))
+}
+
+/**
+ * 이 기기(IndexedDB)에 남아 있는 내 묵상 요약.
+ * 서버 저장이 실패했거나 오프라인이라 아직 못 올라간 기록도 보관함에서 보이게 하려는 것이다 —
+ * 서버 목록만 믿으면 "분명히 썼는데 보관함에 없다"가 된다.
+ * 아무것도 적히지 않은 빈 노트는 세지 않는다(화면을 열기만 해도 캐시가 생기기 때문).
+ */
+export async function listLocalSermonNoteSummaries(userId?: string): Promise<SermonNoteSummary[]> {
+  const owner = userId ?? SERMON_LOCAL_USER
+  const [notes, sermons] = await Promise.all([
+    db.sermonNotes.where('key').startsWith(`${owner}:`).toArray(),
+    db.sermons.toArray(),
+  ])
+  const sermonById = new Map(sermons.map((sermon) => [sermon.id, sermon]))
+
+  return notes.flatMap((note) => {
+    const sermon = sermonById.get(note.sermonId)
+    if (!sermon) return []
+
+    const highlightCount =
+      note.highlightRanges.length +
+      Object.values(note.highlightVersions ?? {}).reduce((sum, ranges) => sum + ranges.length, 0)
+    const answeredPoints = note.pointAnswers.filter((answer) => !isFieldEmpty(answer)).length
+    const writtenFields = [note.impression, note.application, note.freeNote].filter(
+      (field) => field && !isFieldEmpty(field),
+    ).length
+    if (highlightCount === 0 && answeredPoints === 0 && writtenFields === 0) return []
+
+    return [
+      {
+        sermonId: sermon.id,
+        preachedOn: sermon.preachedOn,
+        service: sermon.service,
+        title: sermon.title,
+        ...(sermon.titleEn ? { titleEn: sermon.titleEn } : {}),
+        passages: sermon.passages,
+        updatedAt: note.updatedAt,
+        revision: note.revision,
+        highlightCount,
+        answeredPoints,
+        writtenFields,
+        pendingSync: note.dirty === true,
+      },
+    ]
+  })
 }
 
 export function createSermonNote(sermonId: string, pointCount: number): SermonNote {
