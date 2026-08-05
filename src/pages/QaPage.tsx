@@ -7,67 +7,11 @@ import QaAdminPanel from '../components/QaAdminPanel'
 import { useQaAdmin } from '../hooks/useQaAdmin'
 import { getLang } from '../i18n/lang'
 import { t } from '../i18n/strings'
-import {
-  listMyQaQuestions,
-  QaIdempotencyConflictError,
-  submitQaQuestion,
-  type QaQuestion,
-  type QaQuestionStatus,
-} from '../qa'
+import { QaQuestionLengthError, qaSubmitErrorMessage, useQaSubmit } from '../hooks/useQaSubmit'
+import { listMyQaThreads, type QaQuestionStatus, type QaThreadSummary } from '../qa'
 
 const ADMIN_TAP_COUNT = 5
 const ADMIN_TAP_WINDOW_MS = 2_000
-const QA_PENDING_TOKEN_PREFIX = 'edabible:qa-submit-token:v2:'
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
-
-function pendingTokenKey(userId: string): string {
-  return `${QA_PENDING_TOKEN_PREFIX}${userId}`
-}
-
-interface PendingQaSubmission {
-  token: string
-  question: string
-  lang: 'ko' | 'en'
-}
-
-function readPendingSubmission(userId: string): PendingQaSubmission | undefined {
-  try {
-    const raw = sessionStorage.getItem(pendingTokenKey(userId))
-    if (!raw) return undefined
-    const value: unknown = JSON.parse(raw)
-    if (
-      typeof value !== 'object' ||
-      value === null ||
-      !('token' in value) ||
-      typeof value.token !== 'string' ||
-      !UUID_PATTERN.test(value.token) ||
-      !('question' in value) ||
-      typeof value.question !== 'string' ||
-      !('lang' in value) ||
-      (value.lang !== 'ko' && value.lang !== 'en')
-    ) return undefined
-    return { token: value.token, question: value.question, lang: value.lang }
-  } catch (storageError) {
-    if (import.meta.env.DEV) console.warn('Q&A idempotency marker could not be read.', storageError instanceof Error)
-    return undefined
-  }
-}
-
-function writePendingSubmission(userId: string, pending: PendingQaSubmission): void {
-  try {
-    sessionStorage.setItem(pendingTokenKey(userId), JSON.stringify(pending))
-  } catch (storageError) {
-    if (import.meta.env.DEV) console.warn('Q&A idempotency marker could not be saved.', storageError instanceof Error)
-  }
-}
-
-function clearPendingToken(userId: string): void {
-  try {
-    sessionStorage.removeItem(pendingTokenKey(userId))
-  } catch (storageError) {
-    if (import.meta.env.DEV) console.warn('Q&A idempotency marker could not be cleared.', storageError instanceof Error)
-  }
-}
 
 function formatQaDate(value: string): string {
   const date = new Date(value)
@@ -84,49 +28,37 @@ function userStatusLabel(status: QaQuestionStatus): string {
   return t('qaStatusPending')
 }
 
-function submitErrorMessage(error: unknown): string {
-  const message = error instanceof Error ? error.message : ''
-  if (message.includes('QA_RATE_LIMIT_HOUR')) return t('qaRateLimitHour')
-  if (message.includes('QA_RATE_LIMIT_DAY')) return t('qaRateLimitDay')
-  if (message.includes('QA_INVALID_QUESTION')) return t('qaQuestionLengthError')
-  if (error instanceof QaIdempotencyConflictError || message.includes('QA_IDEMPOTENCY_CONFLICT')) {
-    return t('qaIdempotencyConflict')
-  }
-  return t('qaErrorGeneric')
-}
-
 export default function QaPage() {
   const navigate = useNavigate()
   const { authError, loading: authLoading, user, signInWithGoogle, signOut } = useAuth()
   // Q&A는 공개 전 단계 — 로그인한 뒤에도 관리자가 아니면 홈으로 되돌린다.
   const { checking: qaAdminChecking, isAdmin: qaAdmin } = useQaAdmin()
+  const { submitting, submit: submitQuestion } = useQaSubmit()
   const userId = user?.id
-  const [questions, setQuestions] = useState<QaQuestion[]>([])
+  const [threads, setThreads] = useState<QaThreadSummary[]>([])
   const [question, setQuestion] = useState('')
   const [adminModeUserId, setAdminModeUserId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
-  const [submitting, setSubmitting] = useState(false)
   const [signingIn, setSigningIn] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const adminTapRef = useRef({ count: 0, deadline: 0 })
-  const clientSubmissionsRef = useRef<Record<string, PendingQaSubmission>>({})
   const questionsRequestRef = useRef(0)
   const adminMode = adminModeUserId !== null && adminModeUserId === userId
 
   const reload = useCallback(async () => {
     const requestId = ++questionsRequestRef.current
     if (!userId) {
-      setQuestions([])
+      setThreads([])
       setLoading(false)
       return
     }
     setLoading(true)
     setError(null)
     try {
-      const next = await listMyQaQuestions()
-      if (requestId === questionsRequestRef.current) setQuestions(next)
+      const next = await listMyQaThreads()
+      if (requestId === questionsRequestRef.current) setThreads(next)
     } catch (loadError) {
-      if (requestId === questionsRequestRef.current) setError(submitErrorMessage(loadError))
+      if (requestId === questionsRequestRef.current) setError(qaSubmitErrorMessage(loadError))
     } finally {
       if (requestId === questionsRequestRef.current) setLoading(false)
     }
@@ -167,7 +99,7 @@ export default function QaPage() {
       await signInWithGoogle()
       setSigningIn(false)
     } catch (signInError) {
-      setError(submitErrorMessage(signInError))
+      setError(qaSubmitErrorMessage(signInError))
       setSigningIn(false)
     }
   }
@@ -175,44 +107,17 @@ export default function QaPage() {
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     if (!user || submitting) return
-    const normalized = question.trim()
-    if (normalized.length < 2 || normalized.length > 4000) {
-      setError(t('qaQuestionLengthError'))
-      return
-    }
-
-    setSubmitting(true)
     setError(null)
-    const lang = getLang()
-    const previous = readPendingSubmission(user.id) ?? clientSubmissionsRef.current[user.id]
-    const pending: PendingQaSubmission =
-      previous?.question === normalized && previous.lang === lang
-        ? previous
-        : { token: crypto.randomUUID(), question: normalized, lang }
-    clientSubmissionsRef.current[user.id] = pending
-    writePendingSubmission(user.id, pending)
     try {
-      const created = await submitQaQuestion({
-        question: normalized,
-        lang,
-        clientToken: pending.token,
-      })
-      clearPendingToken(user.id)
-      delete clientSubmissionsRef.current[user.id]
+      const created = await submitQuestion({ userId: user.id, question })
       setQuestion('')
       navigate(`/qa/${created.id}`)
     } catch (submitError) {
-      if (
-        submitError instanceof QaIdempotencyConflictError ||
-        (submitError instanceof Error && submitError.message.includes('QA_IDEMPOTENCY_CONFLICT'))
-      ) {
-        const retry = { ...pending, token: crypto.randomUUID() }
-        clientSubmissionsRef.current[user.id] = retry
-        writePendingSubmission(user.id, retry)
+      if (submitError instanceof QaQuestionLengthError) {
+        setError(t('qaQuestionLengthError'))
+        return
       }
-      setError(submitErrorMessage(submitError))
-    } finally {
-      setSubmitting(false)
+      setError(qaSubmitErrorMessage(submitError))
     }
   }
 
@@ -340,21 +245,34 @@ export default function QaPage() {
                   {t('qaRefresh')}
                 </button>
               </div>
-              {questions.length === 0 ? (
+              {threads.length === 0 ? (
                 <p className="rounded-2xl border border-dashed border-rose-line bg-rose-card/60 px-4 py-12 text-center text-sm font-bold text-rose-key">
                   {t('qaMyQuestionsEmpty')}
                 </p>
               ) : (
                 <ul className="space-y-2.5">
-                  {questions.map((item) => (
+                  {threads.map((item) => (
                     <li key={item.id}>
                       <Link
                         to={`/qa/${item.id}`}
-                        className="group flex min-h-11 items-center gap-3 rounded-2xl border border-rose-line bg-rose-card px-4 py-3.5 transition hover:border-rose-accent focus:outline-none focus:ring-2 focus:ring-rose-accent"
+                        className={`group flex min-h-11 items-center gap-3 rounded-2xl border bg-rose-card px-4 py-3.5 transition hover:border-rose-accent focus:outline-none focus:ring-2 focus:ring-rose-accent ${item.unread ? 'border-rose-accent/60' : 'border-rose-line'}`}
                       >
+                        {/* 안 읽은 답변이 있는 스레드만 점으로 표시한다 */}
+                        {item.unread && (
+                          <span
+                            aria-hidden
+                            className="h-2 w-2 shrink-0 rounded-full bg-rose-accent-deep"
+                          />
+                        )}
                         <span className="min-w-0 flex-1">
-                          <span className="line-clamp-2 block font-serif text-[16px] font-bold leading-6 text-rose-ink">{item.question}</span>
-                          <span className="mt-1 block text-xs font-bold text-rose-key/70">{formatQaDate(item.createdAt)}</span>
+                          <span className={`line-clamp-2 block font-serif text-[16px] leading-6 text-rose-ink ${item.unread ? 'font-extrabold' : 'font-bold'}`}>
+                            {item.question}
+                          </span>
+                          <span className="mt-1 flex flex-wrap items-center gap-x-2 text-xs font-bold text-rose-key/70">
+                            <span>{formatQaDate(item.createdAt)}</span>
+                            {item.followUpCount > 0 && <span>· {t('qaFollowUpCount')(item.followUpCount)}</span>}
+                            {item.unread && <span className="text-rose-accent-deep">· {t('qaUnreadBadge')}</span>}
+                          </span>
                         </span>
                         <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-black ${item.status === 'approved' ? 'bg-leaf-pale/70 text-leaf-deep' : item.status === 'rejected' ? 'bg-rose-bg text-rose-accent' : 'bg-rose-chip text-rose-key'}`}>
                           {userStatusLabel(item.status)}

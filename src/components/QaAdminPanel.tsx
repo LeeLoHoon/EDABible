@@ -171,7 +171,8 @@ export default function QaAdminPanel() {
       const [nextCitations, nextRevisions, nextPublished] = await Promise.all([
         nextAnswer ? listQaAdminCitations(nextAnswer.id) : Promise.resolve([]),
         listQaRevisions(question.id),
-        question.status === 'approved'
+        // 이어진 질문은 승인 전이라도 루트 맥락이 필요하다 — 그것 없이는 되묻는 질문에 답할 수 없다.
+        question.status === 'approved' || question.rootQuestionId
           ? readMyPublishedQaThread(question.id)
           : Promise.resolve(undefined),
       ])
@@ -431,6 +432,15 @@ export default function QaAdminPanel() {
   const detailStalled =
     !!selectedQuestion && !detailLoading && loadedQuestionId !== selectedQuestion.id
 
+  // 스레드에서 지금 보고 있는 질문의 항목과, 이어진 질문일 때 참고할 루트 항목.
+  const publishedItem = selectedQuestion
+    ? publishedThread?.items.find((item) => item.question.id === selectedQuestion.id)
+    : undefined
+  const threadContext =
+    selectedQuestion?.rootQuestionId && publishedThread
+      ? publishedThread.items.filter((item) => item.question.id !== selectedQuestion.id)
+      : []
+
   const retryDetail = () => {
     if (!selectedQuestion) return
     clearDetail(true)
@@ -482,6 +492,11 @@ export default function QaAdminPanel() {
                     active ? 'border-rose-accent bg-white shadow-sm' : 'border-transparent hover:bg-white/70'
                   }`}
                 >
+                  {question.rootQuestionId && (
+                    <span className="mb-1 block text-[10px] font-black tracking-wider text-rose-accent-deep">
+                      ↳ {t('qaAdminFollowUpBadge')}
+                    </span>
+                  )}
                   <span className="line-clamp-2 text-sm font-bold leading-5 text-rose-ink">{question.question}</span>
                   <span className="mt-1.5 flex items-center justify-between gap-2">
                     <span className={`rounded-full px-2 py-0.5 text-[10px] font-black ${statusClass(question.status)}`}>
@@ -525,6 +540,31 @@ export default function QaAdminPanel() {
                   </div>
                 )}
 
+                {/* 이어진 질문은 앞선 문답을 봐야 답할 수 있다. 기본은 접어두고 필요할 때 펼친다. */}
+                {threadContext.length > 0 && (
+                  <details className="rounded-2xl border border-rose-line bg-rose-bg/60 p-3">
+                    <summary className="cursor-pointer text-sm font-black text-rose-accent-deep">
+                      {t('qaAdminThreadContext')(threadContext.length)}
+                    </summary>
+                    <div className="mt-3 space-y-3">
+                      {threadContext.map((item) => (
+                        <div key={item.question.id} className="rounded-xl bg-rose-card px-3 py-2.5">
+                          <p className="text-[11px] font-black tracking-wider text-rose-key/70">{t('qaQuestionLabel')}</p>
+                          <p className="mt-0.5 whitespace-pre-wrap text-sm font-bold leading-6 text-rose-ink">
+                            {item.question.question}
+                          </p>
+                          {item.answer && (
+                            <>
+                              <p className="mt-2 text-[11px] font-black tracking-wider text-leaf-deep">{t('qaPastorAnswer')}</p>
+                              <p className="mt-0.5 whitespace-pre-wrap text-sm leading-6 text-rose-key">{item.answer.body}</p>
+                            </>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </details>
+                )}
+
                 {answer?.insufficientEvidence && selectedQuestion.status === 'draft_ready' && (
                   <div className="rounded-xl border border-rose-accent/40 bg-rose-bg px-3 py-3">
                     <p className="text-sm font-black text-rose-accent">{t('qaAdminInsufficientTitle')}</p>
@@ -532,13 +572,13 @@ export default function QaAdminPanel() {
                   </div>
                 )}
 
-                {selectedQuestion.status === 'approved' && publishedThread?.answer ? (
+                {selectedQuestion.status === 'approved' && publishedItem?.answer ? (
                   <section className="rounded-2xl border border-leaf-soft bg-leaf-pale/20 p-4">
                     <h4 className="font-serif text-base font-extrabold text-leaf-deep">{t('qaAdminPublishedAnswer')}</h4>
-                    <p className="mt-2 whitespace-pre-wrap text-sm leading-7 text-rose-ink">{publishedThread.answer.body}</p>
-                    {publishedThread.citations.length > 0 && (
+                    <p className="mt-2 whitespace-pre-wrap text-sm leading-7 text-rose-ink">{publishedItem.answer.body}</p>
+                    {publishedItem.citations.length > 0 && (
                       <ol className="mt-3 space-y-2 border-t border-leaf-soft/60 pt-3">
-                        {publishedThread.citations.map((citation) => (
+                        {publishedItem.citations.map((citation) => (
                           <li key={citation.id} className="text-xs leading-5 text-rose-key">
                             <span className="font-black text-rose-ink">[{citation.ordinal + 1}] {citation.sourceTitle}</span>
                             <span className="mt-0.5 block">{citation.excerpt}</span>

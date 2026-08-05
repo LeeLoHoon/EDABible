@@ -687,6 +687,15 @@ alter table public.qa_answers drop constraint if exists qa_answers_promotion_con
 alter table public.qa_answers
   add constraint qa_answers_promotion_content_hash_check
   check (promotion_content_hash is null or promotion_content_hash ~ '^[0-9a-f]{64}$');
+
+-- 추가 질문(스레드)과 읽음 표시.
+-- 추가 질문도 독립된 qa_questions 행이라 검토·승인 게이트를 그대로 통과해야 한다.
+-- root_question_id는 체인이 아니라 평면 구조다 — 루트는 NULL, 이어진 질문은 루트를 가리킨다.
+alter table public.qa_questions
+  add column if not exists root_question_id uuid references public.qa_questions(id) on delete cascade;
+-- 질문자가 이 질문의 게시 답변을 마지막으로 본 시각. NULL이면 아직 안 읽은 것이다.
+alter table public.qa_questions
+  add column if not exists answer_read_at timestamptz;
 alter table public.qa_sources
   add column if not exists answer_revision_id uuid references public.qa_revisions(id) on delete restrict;
 alter table public.qa_sources
@@ -810,6 +819,8 @@ create index if not exists qa_questions_user_created_idx
   on public.qa_questions (user_id, created_at desc);
 create index if not exists qa_questions_status_updated_idx
   on public.qa_questions (status, updated_at);
+create index if not exists qa_questions_root_created_idx
+  on public.qa_questions (root_question_id, created_at);
 create index if not exists qa_answers_status_updated_idx
   on public.qa_answers (status, updated_at);
 create index if not exists qa_revisions_question_created_idx
@@ -1026,10 +1037,14 @@ using (
   )
 );
 
+-- 추가 질문 인자가 붙어 시그니처가 바뀌므로 이전 3-인자 버전을 먼저 지운다.
+drop function if exists public.qa_submit_question(text, text, uuid);
+
 create or replace function public.qa_submit_question(
   p_question text,
   p_lang text,
-  p_client_token uuid
+  p_client_token uuid,
+  p_root_question_id uuid default null
 )
 returns jsonb
 language plpgsql
@@ -1041,6 +1056,7 @@ declare
   actor_id uuid := auth.uid();
   existing_question public.qa_questions%rowtype;
   inserted_question public.qa_questions%rowtype;
+  root_question public.qa_questions%rowtype;
   recent_hour integer;
   recent_day integer;
 begin
@@ -1057,6 +1073,20 @@ begin
     raise exception using errcode = '22023', message = 'QA_INVALID_QUESTION';
   end if;
 
+  -- 이어진 질문은 답변이 게시된 본인 루트에만 붙일 수 있다. 중첩 스레드는 만들지 않는다.
+  if p_root_question_id is not null then
+    select question_row.*
+      into root_question
+      from public.qa_questions as question_row
+     where question_row.id = p_root_question_id;
+    if not found
+       or root_question.user_id <> actor_id
+       or root_question.status <> 'approved'
+       or root_question.root_question_id is not null then
+      raise exception using errcode = '22023', message = 'QA_INVALID_PARENT';
+    end if;
+  end if;
+
   perform pg_catalog.pg_advisory_xact_lock(
     pg_catalog.hashtextextended(actor_id::text, 7012026)
   );
@@ -1069,7 +1099,8 @@ begin
 
   if found then
     if existing_question.question <> pg_catalog.btrim(p_question)
-       or existing_question.lang <> p_lang then
+       or existing_question.lang <> p_lang
+       or existing_question.root_question_id is distinct from p_root_question_id then
       raise exception using errcode = 'P0001', message = 'QA_IDEMPOTENCY_CONFLICT';
     end if;
     return pg_catalog.jsonb_build_object(
@@ -1078,6 +1109,8 @@ begin
       'lang', existing_question.lang,
       'status', existing_question.status,
       'version', existing_question.version,
+      'rootQuestionId', existing_question.root_question_id,
+      'answerReadAt', existing_question.answer_read_at,
       'draftClaimedAt', existing_question.draft_claimed_at,
       'createdAt', existing_question.created_at,
       'updatedAt', existing_question.updated_at
@@ -1102,8 +1135,8 @@ begin
     raise exception using errcode = 'P0001', message = 'QA_RATE_LIMIT_DAY';
   end if;
 
-  insert into public.qa_questions (user_id, client_token, question, lang)
-  values (actor_id, p_client_token, pg_catalog.btrim(p_question), p_lang)
+  insert into public.qa_questions (user_id, client_token, question, lang, root_question_id)
+  values (actor_id, p_client_token, pg_catalog.btrim(p_question), p_lang, p_root_question_id)
   returning * into inserted_question;
 
   return pg_catalog.jsonb_build_object(
@@ -1112,10 +1145,117 @@ begin
     'lang', inserted_question.lang,
     'status', inserted_question.status,
     'version', inserted_question.version,
+    'rootQuestionId', inserted_question.root_question_id,
+    'answerReadAt', inserted_question.answer_read_at,
     'draftClaimedAt', inserted_question.draft_claimed_at,
     'createdAt', inserted_question.created_at,
     'updatedAt', inserted_question.updated_at
   );
+end;
+$$;
+
+-- 질문자가 게시된 답변을 열어봤다고 표시한다. client에 UPDATE 권한을 주지 않기 위해 RPC로만 연다.
+create or replace function public.qa_mark_answer_read(p_question_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+#variable_conflict use_variable
+declare
+  actor_id uuid := auth.uid();
+begin
+  if actor_id is null then
+    raise exception using errcode = '42501', message = 'QA_AUTH_REQUIRED';
+  end if;
+
+  -- 소유자 본인이고 실제로 게시된 답변이 있을 때만 기록한다.
+  update public.qa_questions as question_row
+     set answer_read_at = pg_catalog.clock_timestamp()
+   where question_row.id = p_question_id
+     and question_row.user_id = actor_id
+     and exists (
+       select 1
+         from public.qa_published_answers as published
+        where published.question_id = question_row.id
+     );
+end;
+$$;
+
+-- 목록 화면용 스레드 요약. 스레드마다 왕복하지 않도록 안읽음 여부까지 서버에서 집계한다.
+create or replace function public.qa_list_my_threads()
+returns jsonb
+language plpgsql
+security definer
+stable
+set search_path = ''
+as $$
+#variable_conflict use_variable
+declare
+  actor_id uuid := auth.uid();
+  result jsonb;
+begin
+  if actor_id is null then
+    raise exception using errcode = '42501', message = 'QA_AUTH_REQUIRED';
+  end if;
+
+  with thread_member as (
+    -- 루트와 그 아래 이어진 질문을 한 묶음으로 본다.
+    select question_row.*,
+           coalesce(question_row.root_question_id, question_row.id) as thread_id
+      from public.qa_questions as question_row
+     where question_row.user_id = actor_id
+  ),
+  member_state as (
+    select member.*,
+           published.published_at,
+           (
+             published.published_at is not null
+             and (
+               member.answer_read_at is null
+               or published.published_at > member.answer_read_at
+             )
+           ) as unread
+      from thread_member as member
+      left join public.qa_published_answers as published
+        on published.question_id = member.id
+  )
+  select coalesce(pg_catalog.jsonb_agg(thread_json order by thread_json ->> 'lastActivityAt' desc), '[]'::jsonb)
+    into result
+    from (
+      select pg_catalog.jsonb_build_object(
+               'id', root_state.id,
+               'question', root_state.question,
+               'lang', root_state.lang,
+               'status', root_state.status,
+               'version', root_state.version,
+               'rootQuestionId', root_state.root_question_id,
+               'answerReadAt', root_state.answer_read_at,
+               'draftClaimedAt', root_state.draft_claimed_at,
+               'createdAt', root_state.created_at,
+               'updatedAt', root_state.updated_at,
+               'followUpCount', (
+                 select pg_catalog.count(*)
+                   from member_state as follow_up
+                  where follow_up.thread_id = root_state.id
+                    and follow_up.id <> root_state.id
+               ),
+               'unread', (
+                 select pg_catalog.bool_or(member.unread)
+                   from member_state as member
+                  where member.thread_id = root_state.id
+               ),
+               'lastActivityAt', (
+                 select pg_catalog.max(member.updated_at)
+                   from member_state as member
+                  where member.thread_id = root_state.id
+               )
+             ) as thread_json
+        from member_state as root_state
+       where root_state.root_question_id is null
+    ) as threads;
+
+  return result;
 end;
 $$;
 
@@ -1194,7 +1334,7 @@ begin
            draft_attempts = q.draft_attempts + 1,
            draft_claimed_at = claimed_at,
            draft_restore_status = case
-             when pg_catalog.char_length(pg_catalog.btrim(pg_catalog.coalesce(preserved_body, ''))) > 0
+             when pg_catalog.char_length(pg_catalog.btrim(coalesce(preserved_body, ''))) > 0
               and question_row.status in ('draft_ready', 'failed', 'drafting') then 'draft_ready'
              else null
            end,
@@ -2517,7 +2657,9 @@ end;
 $$;
 
 revoke all on function public.qa_guard_approved_corpus() from public, anon, authenticated;
-revoke all on function public.qa_submit_question(text, text, uuid) from public, anon, authenticated;
+revoke all on function public.qa_submit_question(text, text, uuid, uuid) from public, anon, authenticated;
+revoke all on function public.qa_mark_answer_read(uuid) from public, anon, authenticated;
+revoke all on function public.qa_list_my_threads() from public, anon, authenticated;
 revoke all on function public.qa_claim_draft(uuid, integer, boolean) from public, anon, authenticated;
 revoke all on function public.qa_complete_insufficient_draft(uuid, integer, boolean) from public, anon, authenticated;
 revoke all on function public.qa_complete_draft(uuid, integer, text, jsonb) from public, anon, authenticated;
@@ -2533,7 +2675,9 @@ revoke all on function public.qa_retrieve_evidence(uuid, extensions.vector, inte
 revoke all on function public.qa_backfill_approved_chunk_embedding(uuid, text, extensions.vector) from public, anon, authenticated;
 revoke all on function public.qa_import_approved_source(text, text, text, text, text, jsonb) from public, anon, authenticated;
 
-grant execute on function public.qa_submit_question(text, text, uuid) to authenticated;
+grant execute on function public.qa_submit_question(text, text, uuid, uuid) to authenticated;
+grant execute on function public.qa_mark_answer_read(uuid) to authenticated;
+grant execute on function public.qa_list_my_threads() to authenticated;
 grant execute on function public.qa_claim_draft(uuid, integer, boolean) to authenticated;
 grant execute on function public.qa_complete_insufficient_draft(uuid, integer, boolean) to authenticated;
 grant execute on function public.qa_complete_draft(uuid, integer, text, jsonb) to authenticated;

@@ -16,9 +16,20 @@ export interface QaQuestion {
   lang: Lang
   status: QaQuestionStatus
   version: number
+  /** 이어진 질문이면 루트 질문 id. 루트 자신은 없다. */
+  rootQuestionId?: string
+  /** 질문자가 게시 답변을 마지막으로 본 시각. 없으면 아직 안 읽은 것이다. */
+  answerReadAt?: string
   draftClaimedAt?: string
   createdAt: string
   updatedAt: string
+}
+
+/** 목록 화면용 스레드 요약 — 안읽음 집계는 서버(qa_list_my_threads)에서 계산한다. */
+export interface QaThreadSummary extends QaQuestion {
+  followUpCount: number
+  unread: boolean
+  lastActivityAt: string
 }
 
 export interface QaPublishedAnswer {
@@ -37,10 +48,17 @@ export interface QaPublishedCitation {
   excerpt: string
 }
 
-export interface QaThread {
+/** 스레드 한 칸 — 질문 하나와 (승인된 경우) 그 답변. */
+export interface QaThreadItem {
   question: QaQuestion
   answer?: QaPublishedAnswer
   citations: QaPublishedCitation[]
+}
+
+export interface QaThread {
+  root: QaQuestion
+  /** 루트부터 시간순. 최소 1개(루트). */
+  items: QaThreadItem[]
 }
 
 export interface QaAdminAnswer {
@@ -89,6 +107,8 @@ interface QaQuestionRow {
   lang: Lang
   status: QaQuestionStatus
   version: number
+  root_question_id: string | null
+  answer_read_at: string | null
   draft_claimed_at: string | null
   created_at: string
   updated_at: string
@@ -104,6 +124,7 @@ interface QaPublishedAnswerRow {
 
 interface QaPublishedCitationRow {
   id: string
+  question_id: string
   ordinal: number
   source_title: string
   source_url: string | null
@@ -194,6 +215,8 @@ function mapQuestion(row: QaQuestionRow): QaQuestion {
     lang: row.lang,
     status: row.status,
     version: row.version,
+    ...(row.root_question_id ? { rootQuestionId: row.root_question_id } : {}),
+    ...(row.answer_read_at ? { answerReadAt: row.answer_read_at } : {}),
     ...(row.draft_claimed_at ? { draftClaimedAt: row.draft_claimed_at } : {}),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -238,6 +261,12 @@ function parseRpcQuestion(value: unknown): QaQuestion {
     lang: value.lang,
     status: value.status,
     version: value.version,
+    ...('rootQuestionId' in value && typeof value.rootQuestionId === 'string'
+      ? { rootQuestionId: value.rootQuestionId }
+      : {}),
+    ...('answerReadAt' in value && typeof value.answerReadAt === 'string'
+      ? { answerReadAt: value.answerReadAt }
+      : {}),
     ...('draftClaimedAt' in value && typeof value.draftClaimedAt === 'string'
       ? { draftClaimedAt: value.draftClaimedAt }
       : {}),
@@ -301,12 +330,15 @@ export async function submitQaQuestion(input: {
   question: string
   lang: Lang
   clientToken: string
+  /** 이어진 질문이면 답변이 게시된 루트 질문의 id. */
+  rootQuestionId?: string
 }): Promise<QaQuestion> {
   const { data, error } = await qaClient()
     .rpc('qa_submit_question', {
       p_question: input.question,
       p_lang: input.lang,
       p_client_token: input.clientToken,
+      p_root_question_id: input.rootQuestionId ?? null,
     })
   if (error) throwQaError(error)
   if (!data) throw new Error('QA_EMPTY_RESPONSE')
@@ -314,72 +346,109 @@ export async function submitQaQuestion(input: {
 }
 
 /** 사용자에게는 본인 질문 metadata와 이미 publish된 답변만 읽힌다. */
-export async function listMyQaQuestions(): Promise<QaQuestion[]> {
-  const client = qaClient()
-  const { data: authData, error: authError } = await client.auth.getUser()
-  if (authError) throwQaError(authError)
-  if (!authData.user) return []
-  const { data, error } = await client
-    .from('qa_questions')
-    .select('id, question, lang, status, version, draft_claimed_at, created_at, updated_at')
-    .eq('user_id', authData.user.id)
-    .order('created_at', { ascending: false })
-    .returns<QaQuestionRow[]>()
+/** 목록은 스레드(루트) 단위다. 안읽음·이어진 질문 수는 서버가 집계해 왕복을 늘리지 않는다. */
+export async function listMyQaThreads(): Promise<QaThreadSummary[]> {
+  const { data, error } = await qaClient().rpc('qa_list_my_threads')
   if (error) throwQaError(error)
-  return (data ?? []).map(mapQuestion)
+  if (!Array.isArray(data)) return []
+  return data.map((value) => {
+    const question = parseRpcQuestion(value)
+    const record = value as Record<string, unknown>
+    return {
+      ...question,
+      followUpCount: typeof record.followUpCount === 'number' ? record.followUpCount : Number(record.followUpCount ?? 0),
+      unread: record.unread === true,
+      lastActivityAt:
+        typeof record.lastActivityAt === 'string' ? record.lastActivityAt : question.updatedAt,
+    }
+  })
 }
 
+/** 질문자가 게시 답변을 열어봤다고 기록한다. 실패해도 열람 자체는 막지 않는다. */
+export async function markQaAnswerRead(questionId: string): Promise<void> {
+  const { error } = await qaClient().rpc('qa_mark_answer_read', { p_question_id: questionId })
+  if (error) throwQaError(error)
+}
+
+const QA_QUESTION_COLUMNS =
+  'id, question, lang, status, version, root_question_id, answer_read_at, draft_claimed_at, created_at, updated_at'
+
+/**
+ * 루트 질문과 이어진 질문을 한 스레드로 읽는다. questionId는 스레드 안의 어느 질문이어도 된다.
+ * 항목마다 왕복하지 않도록 답변·인용은 `in` 필터로 한 번에 가져온다.
+ */
 export async function readMyPublishedQaThread(questionId: string): Promise<QaThread | undefined> {
   const client = qaClient()
-  const { data: questionData, error: questionError } = await client
+  const { data: entryData, error: entryError } = await client
     .from('qa_questions')
-    .select('id, question, lang, status, version, draft_claimed_at, created_at, updated_at')
+    .select(QA_QUESTION_COLUMNS)
     .eq('id', questionId)
     .maybeSingle<QaQuestionRow>()
-  if (questionError) throwQaError(questionError)
-  if (!questionData) return undefined
+  if (entryError) throwQaError(entryError)
+  if (!entryData) return undefined
+
+  const rootId = entryData.root_question_id ?? entryData.id
+  const { data: memberData, error: memberError } = await client
+    .from('qa_questions')
+    .select(QA_QUESTION_COLUMNS)
+    .or(`id.eq.${rootId},root_question_id.eq.${rootId}`)
+    .order('created_at', { ascending: true })
+    .returns<QaQuestionRow[]>()
+  if (memberError) throwQaError(memberError)
+
+  const members = memberData ?? []
+  const rootRow = members.find((row) => row.id === rootId)
+  if (!rootRow) return undefined
+  const memberIds = members.map((row) => row.id)
 
   const { data: answerData, error: answerError } = await client
     .from('qa_published_answers')
     .select('question_id, revision_id, body, lang, published_at')
-    .eq('question_id', questionId)
-    .maybeSingle<QaPublishedAnswerRow>()
+    .in('question_id', memberIds)
+    .returns<QaPublishedAnswerRow[]>()
   if (answerError) throwQaError(answerError)
+  const answers = new Map((answerData ?? []).map((row) => [row.question_id, row]))
 
-  let citationData: QaPublishedCitationRow[] = []
-  if (answerData) {
+  let citationRows: QaPublishedCitationRow[] = []
+  if (answers.size > 0) {
     const { data, error } = await client
       .from('qa_published_citations')
-      .select('id, ordinal, source_title, source_url, excerpt')
-      .eq('question_id', questionId)
-      .eq('revision_id', answerData.revision_id)
+      .select('id, question_id, ordinal, source_title, source_url, excerpt')
+      .in('question_id', [...answers.keys()])
       .order('ordinal')
       .returns<QaPublishedCitationRow[]>()
     if (error) throwQaError(error)
-    citationData = data ?? []
+    citationRows = data ?? []
   }
 
-  return {
-    question: mapQuestion(questionData),
-    ...(answerData
-      ? {
-          answer: {
-            questionId: answerData.question_id,
-            revisionId: answerData.revision_id,
-            body: answerData.body,
-            lang: answerData.lang,
-            publishedAt: answerData.published_at,
-          },
-        }
-      : {}),
-    citations: citationData.map((row) => ({
-      id: row.id,
-      ordinal: row.ordinal,
-      sourceTitle: row.source_title,
-      ...(row.source_url ? { sourceUrl: row.source_url } : {}),
-      excerpt: row.excerpt,
-    })),
-  }
+  const items: QaThreadItem[] = members.map((row) => {
+    const answer = answers.get(row.id)
+    return {
+      question: mapQuestion(row),
+      ...(answer
+        ? {
+            answer: {
+              questionId: answer.question_id,
+              revisionId: answer.revision_id,
+              body: answer.body,
+              lang: answer.lang,
+              publishedAt: answer.published_at,
+            },
+          }
+        : {}),
+      citations: citationRows
+        .filter((citation) => citation.question_id === row.id)
+        .map((citation) => ({
+          id: citation.id,
+          ordinal: citation.ordinal,
+          sourceTitle: citation.source_title,
+          ...(citation.source_url ? { sourceUrl: citation.source_url } : {}),
+          excerpt: citation.excerpt,
+        })),
+    }
+  })
+
+  return { root: mapQuestion(rootRow), items }
 }
 
 export async function isQaAdmin(): Promise<boolean> {
@@ -396,7 +465,7 @@ export async function isQaAdmin(): Promise<boolean> {
 export async function listQaAdminQuestions(): Promise<QaQuestion[]> {
   const { data, error } = await qaClient()
     .from('qa_questions')
-    .select('id, question, lang, status, version, draft_claimed_at, created_at, updated_at')
+    .select(QA_QUESTION_COLUMNS)
     .order('created_at', { ascending: false })
     .returns<QaQuestionRow[]>()
   if (error) throwQaError(error)
