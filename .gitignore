@@ -36,6 +36,7 @@ edabible-qa-*
 # 실제 Q&A corpus는 승인 전용 외부 staging에서만 다룬다.
 data/qa-history*.jsonl
 !data/qa-history.example.jsonl
+data/qnaData/
 
 # supabase CLI가 배포할 때 남기는 프로젝트 참조 캐시
 supabase/.temp/
