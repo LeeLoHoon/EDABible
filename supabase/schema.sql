@@ -2280,10 +2280,19 @@ begin
     raise exception using errcode = 'P0002', message = 'QA_QUESTION_NOT_FOUND';
   end if;
 
-  query_terms := pg_catalog.websearch_to_tsquery(
-    'pg_catalog.simple'::pg_catalog.regconfig,
-    question_row.question
-  );
+  -- websearch_to_tsquery는 공백을 AND로 묶는다. 'simple' 사전은 한국어 형태소를 모르므로 조사가 붙은
+  -- 토큰이 그대로 남고("기도를"), 질문의 모든 토큰이 한 청크에 다 있어야 하는 조건은 사실상 성립하지
+  -- 않는다(실측 bestRank=0). 그래서 &를 |로 바꿔 OR 게이트로 쓴다 — 통과 여부만 보는 자리라 넓어도 된다.
+  -- 실제 근거 선별은 qa_retrieve_evidence의 벡터 검색이 하며, 그쪽은 AND를 유지해야 FTS가 상위 자리를
+  -- 싹쓸이하지 않는다. 구절 검색(<->)과 부정(!)은 그대로 남는다.
+  query_terms := pg_catalog.replace(
+    pg_catalog.websearch_to_tsquery(
+      'pg_catalog.simple'::pg_catalog.regconfig,
+      question_row.question
+    )::pg_catalog.text,
+    '&',
+    '|'
+  )::pg_catalog.tsquery;
   select coalesce(pg_catalog.max(pg_catalog.ts_rank_cd(chunk_row.search_vector, query_terms)), 0)
     into best_rank
     from public.qa_chunks as chunk_row
