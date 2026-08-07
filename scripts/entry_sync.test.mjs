@@ -93,35 +93,37 @@ test('selectEntryPullActions는 받아야 할 것만 고른다', () => {
   }
 })
 
-test('selectPushableEntries는 충돌·타계정 행을 빼고 고른다', () => {
-  const rows = [
-    record('clean'),
-    record('dirty', { dirty: true }),
-    record('conflicted', { dirty: true, conflict: true }),
-    record('other-owner', { dirty: true, ownerId: 'user-2' }),
+test('isEntryPushable은 충돌·타계정 행을 걸러 낸다', () => {
+  const cases = [
+    { name: '올릴 것 없음', row: record('clean'), expected: false },
+    { name: '아직 못 올린 편집', row: record('dirty', { dirty: true }), expected: true },
+    {
+      name: '충돌은 사용자가 고를 때까지 재시도하지 않는다',
+      row: record('conflicted', { dirty: true, conflict: true }),
+      expected: false,
+    },
+    {
+      name: '다른 계정 행은 건드리지 않는다',
+      row: record('other-owner', { dirty: true, ownerId: 'user-2' }),
+      expected: false,
+    },
   ]
-  assert.deepEqual(
-    sync.selectPushableEntries(rows, 'user-1').map((row) => row.id),
-    ['dirty'],
-  )
+  for (const testCase of cases) {
+    assert.equal(sync.isEntryPushable(testCase.row, 'user-1'), testCase.expected, testCase.name)
+  }
 })
 
-test('로그인 전 로컬 묵상만 승계 대상이 된다', () => {
-  const rows = [
-    record('local-1', { ownerId: sync.ENTRY_LOCAL_OWNER }),
-    record('owned', { ownerId: 'user-1' }),
-  ]
-  assert.deepEqual(
-    sync.selectClaimableEntries(rows).map((row) => row.id),
-    ['local-1'],
-  )
+test('applyEntryClaim은 행을 제자리에서 계정 소유로 바꾼다', () => {
+  const row = record('local-1', { ownerId: sync.ENTRY_LOCAL_OWNER, revision: 7, conflict: true })
+  const returned = sync.applyEntryClaim(row, 'user-1')
 
-  const claimed = sync.claimEntryRecord(rows[0], 'user-1')
-  assert.equal(claimed.ownerId, 'user-1')
+  assert.equal(returned, undefined, 'Dexie modify 콜백에서 쓰도록 제자리 수정만 한다')
+  assert.equal(row.ownerId, 'user-1')
   // 계정에 처음 올리는 것이므로 insert 경로(revision 0)에서 시작해야 한다
-  assert.equal(claimed.revision, 0)
-  assert.equal(claimed.dirty, true)
-  assert.equal(claimed.conflict, false)
+  assert.equal(row.revision, 0)
+  assert.equal(row.dirty, true)
+  assert.equal(row.conflict, false)
+  assert.equal(row.bibleRef, '시편 3편', '본문은 그대로 남는다')
 })
 
 test('normalizeRemoteEntry는 손상된 원격 데이터를 거른다', () => {

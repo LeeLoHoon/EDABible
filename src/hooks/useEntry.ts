@@ -109,7 +109,7 @@ export function useEntry(id: string | undefined, ownerId: string) {
     remotePendingRef.current = null
     if (!target || !syncsRemotely) return
     try {
-      await pushEntry(target, ownerId)
+      await pushEntry(target.id, ownerId)
     } catch (pushError) {
       console.warn('Meditation entry upload failed; it stays queued.', pushError)
     }

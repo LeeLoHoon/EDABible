@@ -16,17 +16,17 @@ import {
   type SermonNoteClaim,
 } from './sermonClaim'
 import {
-  claimEntryRecord,
+  applyEntryClaim,
   entryRevisionFromResponse,
   ENTRY_LOCAL_OWNER,
   isDeletedEntryError,
+  isEntryPushable,
   isStaleEntryError,
   normalizeRemoteEntry,
-  selectClaimableEntries,
   selectEntryPullActions,
-  selectPushableEntries,
   serializeEntry,
   type EntryRecord,
+  type LocalEntryMeta,
   type RemoteEntryMeta,
 } from './entrySync'
 
@@ -393,9 +393,11 @@ export async function deleteEntry(id: string, ownerId: string): Promise<void> {
 
 /** 이 계정의 묵상 전체 삭제 */
 export async function clearAllEntries(ownerId: string): Promise<void> {
-  const ids = (await db.entries.where('ownerId').equals(ownerId).toArray()).map(
-    (record) => record.id,
-  )
+  // 지울 대상은 id만 있으면 된다 — 본문까지 읽으면 손글씨가 쌓인 기기에서 메모리가 크게 튄다.
+  const ids = (await db.entries
+    .where('ownerId')
+    .equals(ownerId)
+    .primaryKeys()) as string[]
   await db.entries.bulkDelete(ids)
   await Promise.all(ids.map((id) => deleteRemoteEntry(id, ownerId)))
 }
@@ -426,13 +428,13 @@ async function deleteRemoteEntry(entryId: string, ownerId: string): Promise<void
  * 한 건을 원격에 올린다. 성공하면 서버가 확정한 revision을 로컬에 반영하고, revision이
  * 어긋나면(다른 기기가 먼저 저장) conflict로 표시해 자동 재시도를 멈춘다.
  */
-export async function pushEntry(entry: Entry, ownerId: string): Promise<void> {
+export async function pushEntry(entryId: string, ownerId: string): Promise<void> {
   if (!supabase || ownerId === ENTRY_LOCAL_OWNER) return
   const client = supabase
-  const record = await db.entries.get(entry.id)
-  if (!record || record.ownerId !== ownerId || record.dirty !== true) return
+  const record = await db.entries.get(entryId)
+  if (!record || !isEntryPushable(record, ownerId)) return
 
-  await entrySaveQueue.run(`${ownerId}:${entry.id}`, async () => {
+  await entrySaveQueue.run(`${ownerId}:${entryId}`, async () => {
     try {
       await verifyEntrySessionOwner(ownerId)
       const { data, error } = await client.rpc('put_meditation_entry', {
@@ -473,13 +475,18 @@ export async function pushEntry(entry: Entry, ownerId: string): Promise<void> {
 /** 아직 못 올린 묵상을 한꺼번에 재전송한다 — 앱 진입·온라인 복귀 시점에 부른다. */
 export async function flushDirtyEntries(ownerId: string): Promise<void> {
   if (!supabase || ownerId === ENTRY_LOCAL_OWNER) return
-  const pending = selectPushableEntries(
-    await db.entries.where('ownerId').equals(ownerId).toArray(),
-    ownerId,
-  )
-  for (const record of pending) {
+  // 커서로 훑으며 id만 모은다. 본문을 배열로 받으면 올릴 묵상 전체가 한꺼번에 메모리에 남는다.
+  const pendingIds: string[] = []
+  await db.entries
+    .where('ownerId')
+    .equals(ownerId)
+    .each((record) => {
+      if (isEntryPushable(record, ownerId)) pendingIds.push(record.id)
+    })
+
+  for (const entryId of pendingIds) {
     try {
-      await pushEntry(record, ownerId)
+      await pushEntry(entryId, ownerId)
     } catch (error) {
       // 오프라인·일시 오류면 dirty가 남아 다음 기회에 다시 올라간다.
       console.warn('Meditation entry upload failed; it stays queued.', error)
@@ -516,11 +523,15 @@ export async function pullEntries(ownerId: string): Promise<void> {
   const { data, error } = await client.rpc('list_my_meditation_entries')
   if (error) throw error
 
-  const local = await db.entries.where('ownerId').equals(ownerId).toArray()
-  const actions = selectEntryPullActions(
-    toRemoteEntryMeta(data),
-    new Map(local.map((record) => [record.id, record])),
-  )
+  // 대조에 필요한 건 revision·dirty뿐이다. 커서로 훑으며 그것만 남기고 본문은 흘려보낸다.
+  const local = new Map<string, LocalEntryMeta>()
+  await db.entries
+    .where('ownerId')
+    .equals(ownerId)
+    .each((record) => {
+      local.set(record.id, { revision: record.revision, dirty: record.dirty })
+    })
+  const actions = selectEntryPullActions(toRemoteEntryMeta(data), local)
 
   const dropped = actions.filter((action) => action.kind === 'drop').map((action) => action.entryId)
   if (dropped.length > 0) await db.entries.bulkDelete(dropped)
@@ -559,15 +570,19 @@ export async function claimLocalEntries(ownerId: string): Promise<number> {
   let claimed = 0
   await db.transaction('rw', db.entries, db.entryClaims, async () => {
     if (await db.entryClaims.get(ENTRY_LOCAL_CLAIM_ID)) return
-    const locals = selectClaimableEntries(await db.entries.toArray())
     await db.entryClaims.put({
       id: ENTRY_LOCAL_CLAIM_ID,
       ownerId,
       claimedAt: Date.now(),
     })
-    if (locals.length === 0) return
-    await db.entries.bulkPut(locals.map((record) => claimEntryRecord(record, ownerId)))
-    claimed = locals.length
+    // 커서로 제자리 수정한다 — toArray()+bulkPut이면 이 기기의 묵상 본문 전체가 한꺼번에
+    // 메모리에 올라가고, 손글씨 필사가 쌓인 기기에서는 그것만으로 화면이 멎는다.
+    claimed = await db.entries
+      .where('ownerId')
+      .equals(ENTRY_LOCAL_OWNER)
+      .modify((record) => {
+        applyEntryClaim(record, ownerId)
+      })
   })
   return claimed
 }

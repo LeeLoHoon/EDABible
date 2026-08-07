@@ -52,20 +52,38 @@ export default function HomePage() {
   useEffect(() => {
     let alive = true
 
+    const showLocalList = async () => {
+      const list = await listEntries(ownerId)
+      if (alive) setEntries(list)
+    }
+
     const run = async () => {
-      // 로그인 전에 이 기기에 쌓인 묵상을 먼저 계정으로 옮긴 뒤 원격과 맞춘다.
-      // 어느 단계가 실패해도(오프라인 등) 로컬 목록은 보여준다.
+      // 승계는 로컬 트랜잭션이라 금방 끝난다. 이것만 목록보다 먼저 해야 로그인 직후에
+      // 빈 목록이 스쳐 "묵상이 사라졌다"로 보이지 않는다.
       try {
         await claimLocalEntries(ownerId)
+      } catch (claimError) {
+        console.warn('Meditation claim failed; the device copy stays.', claimError)
+      }
+
+      // 기기에 있는 목록을 먼저 띄운다. 원격 왕복을 기다리게 하면, 첫 로그인 때
+      // 이 기기의 묵상을 전부 올리는 동안(손글씨 필사는 한 건이 수백 KB) 화면이 묶인다.
+      try {
+        await showLocalList()
+      } catch (listError) {
+        console.warn('Meditation list could not be read.', listError)
+      }
+      if (!alive) return
+      setLoading(false)
+
+      // 원격 동기화는 화면을 막지 않고 뒤에서 진행한다.
+      try {
         await pullEntries(ownerId)
+        await showLocalList()
         await flushDirtyEntries(ownerId)
       } catch (syncError) {
-        console.warn('Meditation sync failed; showing the device copy.', syncError)
+        console.warn('Meditation sync failed; the device copy stays.', syncError)
       }
-      const list = await listEntries(ownerId)
-      if (!alive) return
-      setEntries(list)
-      setLoading(false)
     }
 
     void run()

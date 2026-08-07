@@ -32,12 +32,21 @@ export type EntryPullAction =
   | { kind: 'drop'; entryId: string }
 
 /**
+ * 대조에 필요한 로컬 메타만 추린 형태. 본문(손글씨 획)까지 들고 다니면 묵상이 쌓인
+ * 기기에서 목록을 그릴 메모리를 동기화가 다 먹는다.
+ */
+export interface LocalEntryMeta {
+  revision: number
+  dirty?: boolean
+}
+
+/**
  * 원격 메타 목록과 로컬 캐시를 대조해 실제로 받아야 할 것만 고른다.
  * 본문(손글씨 획 포함)은 여기서 고른 행만 개별 조회한다 — 목록 한 번에 다 내려받으면 무겁다.
  */
 export function selectEntryPullActions(
   remote: readonly RemoteEntryMeta[],
-  local: ReadonlyMap<string, EntryRecord>,
+  local: ReadonlyMap<string, LocalEntryMeta>,
 ): EntryPullAction[] {
   const actions: EntryPullAction[] = []
   for (const meta of remote) {
@@ -56,26 +65,22 @@ export function selectEntryPullActions(
 }
 
 /**
- * 재전송 대상 — 충돌 표시된 행은 제외한다. 충돌은 서버가 계속 거절하므로 자동 재시도하면
+ * 재전송 대상인지 — 충돌 표시된 행은 제외한다. 충돌은 서버가 계속 거절하므로 자동 재시도하면
  * 실패만 반복하고, 어느 쪽을 남길지는 사용자가 배너에서 고른다.
  */
-export function selectPushableEntries(
-  local: readonly EntryRecord[],
-  ownerId: string,
-): EntryRecord[] {
-  return local.filter(
-    (record) => record.ownerId === ownerId && record.dirty === true && record.conflict !== true,
-  )
+export function isEntryPushable(record: EntryRecord, ownerId: string): boolean {
+  return record.ownerId === ownerId && record.dirty === true && record.conflict !== true
 }
 
-/** 로그인 전에 이 기기에 쌓인 묵상 — 로그인 시 계정으로 옮긴다 */
-export function selectClaimableEntries(local: readonly EntryRecord[]): EntryRecord[] {
-  return local.filter((record) => record.ownerId === ENTRY_LOCAL_OWNER)
-}
-
-/** 승계된 묵상은 계정에 처음 올리는 것이므로 revision 0(= insert 경로)에서 시작한다. */
-export function claimEntryRecord(record: EntryRecord, userId: string): EntryRecord {
-  return { ...record, ownerId: userId, revision: 0, dirty: true, conflict: false }
+/**
+ * 로그인 전 로컬 묵상을 계정 소유로 바꾼다 — Dexie 커서 콜백에서 쓰도록 제자리 수정한다.
+ * 계정에 처음 올리는 것이므로 revision 0(= insert 경로)에서 시작한다.
+ */
+export function applyEntryClaim(record: EntryRecord, ownerId: string): void {
+  record.ownerId = ownerId
+  record.revision = 0
+  record.dirty = true
+  record.conflict = false
 }
 
 function normalizeField(value: unknown): Field {
