@@ -12,7 +12,16 @@ import QaThreadPage from './pages/QaThreadPage'
 
 const router = createHashRouter([
   { path: '/', element: <LandingPage /> },
-  { path: '/note', element: <HomePage /> },
+  // 묵상은 계정에 저장되어 기기 간에 이어진다 — 형광펜·필사가 이 기기에만 남지 않도록
+  // 로그인 뒤에 연다. Supabase가 없는 배포에서는 동기화 자체가 불가능하므로 그냥 통과시킨다.
+  {
+    path: '/note',
+    element: (
+      <RequireGoogleLogin variant="note" allowWithoutSupabase>
+        <HomePage />
+      </RequireGoogleLogin>
+    ),
+  },
   {
     path: '/binder',
     element: (
@@ -21,7 +30,14 @@ const router = createHashRouter([
       </RequireGoogleLogin>
     ),
   },
-  { path: '/entry/:id', element: <EntryPage /> },
+  {
+    path: '/entry/:id',
+    element: (
+      <RequireGoogleLogin variant="note" allowWithoutSupabase>
+        <EntryPage />
+      </RequireGoogleLogin>
+    ),
+  },
   { path: '/sermon', element: <SermonPage /> },
   // 정적 경로가 :id보다 먼저 매칭되도록 위에 둔다
   { path: '/sermon/archive', element: <SermonArchivePage /> },

@@ -1,6 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { DEFAULT_QUESTION_SET_ID, emptyTemptationVictory, type Entry } from '../types'
-import { commitEntrySnapshot, getEntry } from '../db'
+import {
+  commitEntrySnapshot,
+  ENTRY_LOCAL_OWNER,
+  getEntry,
+  hasEntryConflict,
+  pushEntry,
+  resolveEntryConflictKeepLocal,
+  resolveEntryConflictUseRemote,
+} from '../db'
 import { registerSaveFlush } from '../saveFlush'
 import { applyRanges } from '../highlights'
 import { drainPendingRef } from '../persistenceQueue'
@@ -29,17 +37,24 @@ export type EntryHookError =
 type RetrySource = 'journal' | 'save' | 'transition' | 'load'
 type EntryOwnerRef = { current: Entry | null }
 
+/** 원격 업로드는 로컬 저장보다 느긋하게 — 획 하나마다 본문 전체를 올리지 않기 위해서다 */
+const REMOTE_PUSH_IDLE_MS = 3000
+
 /**
  * 단일 묵상 엔트리를 로드하고, 변경 시 debounce 자동저장한다.
  * update(partial 또는 updater)로 부분 갱신.
+ *
+ * 저장은 두 단계다 — 로컬(IndexedDB)에 먼저 확정하고(오프라인에서도 글이 남는다),
+ * 계정 소유일 때만 그보다 느긋한 간격으로 원격에 올린다.
  */
-export function useEntry(id: string | undefined) {
+export function useEntry(id: string | undefined, ownerId: string) {
   const [entry, setEntry] = useState<Entry | null>(null)
   const [loadedId, setLoadedId] = useState<string | undefined | null>(undefined)
   const [saveState, setSaveState] = useState<EntrySaveState>('idle')
   const [error, setError] = useState<EntryHookError | null>(null)
   const [editingBlocked, setEditingBlocked] = useState(false)
   const [navigationBlocked, setNavigationBlocked] = useState(false)
+  const [conflict, setConflict] = useState(false)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const entryRef = useRef<Entry | null>(null)
   // 아직 저장으로 확정되지 않은 최신 엔트리 — 디바운스 중 리로드/이탈이
@@ -53,6 +68,9 @@ export function useEntry(id: string | undefined) {
   const errorRef = useRef<EntryHookError | null>(null)
   const editingBlockedRef = useRef(false)
   const retrySourceRef = useRef<RetrySource | null>(null)
+  // 원격 업로드 대기 — 로컬 저장과 별도 타이머로 돌린다
+  const remoteTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const remotePendingRef = useRef<Entry | null>(null)
   const [transitionTick, setTransitionTick] = useState(0)
   const loading = id !== loadedId && error === null
 
@@ -79,8 +97,45 @@ export function useEntry(id: string | undefined) {
     [setBlocking],
   )
 
+  const syncsRemotely = !!ownerId && ownerId !== ENTRY_LOCAL_OWNER
+
+  /** 대기 중인 원격 업로드를 즉시 실행. 실패해도 dirty가 남아 다음 기회에 다시 올라간다. */
+  const pushRemote = useCallback(async (): Promise<void> => {
+    if (remoteTimer.current) {
+      clearTimeout(remoteTimer.current)
+      remoteTimer.current = null
+    }
+    const target = remotePendingRef.current
+    remotePendingRef.current = null
+    if (!target || !syncsRemotely) return
+    try {
+      await pushEntry(target, ownerId)
+    } catch (pushError) {
+      console.warn('Meditation entry upload failed; it stays queued.', pushError)
+    }
+    try {
+      setConflict(await hasEntryConflict(target.id, ownerId))
+    } catch {
+      // 충돌 표시를 못 읽어도 편집은 계속할 수 있어야 한다
+    }
+  }, [ownerId, syncsRemotely])
+
+  const scheduleRemotePush = useCallback(
+    (snapshot: Entry) => {
+      if (!syncsRemotely) return
+      remotePendingRef.current = snapshot
+      if (remoteTimer.current) clearTimeout(remoteTimer.current)
+      remoteTimer.current = setTimeout(() => {
+        remoteTimer.current = null
+        void pushRemote()
+      }, REMOTE_PUSH_IDLE_MS)
+    },
+    [pushRemote, syncsRemotely],
+  )
+
   const commitEntry = useCallback(async (snapshot: Entry, ownerRef: EntryOwnerRef) => {
-    const result = await commitEntrySnapshot(snapshot)
+    const result = await commitEntrySnapshot(snapshot, ownerId)
+    scheduleRemotePush(snapshot)
     const shouldReadDurable =
       result.status === 'superseded' &&
       ownerRef.current === snapshot &&
@@ -89,7 +144,7 @@ export function useEntry(id: string | undefined) {
 
     let durable: Entry | undefined
     if (shouldReadDurable) {
-      durable = await getEntry(snapshot.id)
+      durable = await getEntry(snapshot.id, ownerId)
     }
 
     const ownsSnapshot = ownerRef.current === snapshot
@@ -119,7 +174,7 @@ export function useEntry(id: string | undefined) {
       entryRef.current = next
       setEntry(next)
     }
-  }, [])
+  }, [ownerId, scheduleRemotePush])
 
   // 대기 중인 변경을 즉시 저장. 실패하면 pending을 유지해 다음 flush에서 재시도.
   const flush = useCallback((): Promise<void> => {
@@ -229,7 +284,7 @@ export function useEntry(id: string | undefined) {
         flushPending: () => flush(),
         clearExposedEntry,
         loadEntry: async (targetId) => {
-          const stored = await retryEntryOperation(() => getEntry(targetId))
+          const stored = await retryEntryOperation(() => getEntry(targetId, ownerId))
           if (!alive || idRef.current !== targetId) return
 
           const matchingPending =
@@ -253,6 +308,11 @@ export function useEntry(id: string | undefined) {
           setEntry(next)
           loadedIdRef.current = targetId
           setLoadedId(targetId)
+          try {
+            setConflict(await hasEntryConflict(targetId, ownerId))
+          } catch {
+            // 충돌 표시를 못 읽어도 묵상은 열려야 한다
+          }
           if (!recovered) return
 
           pendingRef.current = recovered
@@ -288,16 +348,25 @@ export function useEntry(id: string | undefined) {
     return () => {
       alive = false
     }
-  }, [clearFailure, commitEntry, fail, flush, id, setBlocking, transitionTick])
+  }, [clearFailure, commitEntry, fail, flush, id, ownerId, setBlocking, transitionTick])
 
   // SW 업데이트 리로드(main.tsx)·탭 전환·앱 종료·언마운트 시 대기 중인 저장 flush
   useEffect(() => {
+    // 이탈 시엔 원격 업로드도 앞당겨 다른 기기에서 곧바로 이어 볼 수 있게 한다.
+    // 실패해도 dirty가 남아 다음 진입 때 flushDirtyEntries가 올린다.
+    const flushAll = () => {
+      void flush()
+        .catch(() => undefined)
+        .then(() => pushRemote())
+        .catch(() => undefined)
+    }
     const onPageHide = () => {
-      void flush().catch(() => undefined)
+      flushAll()
     }
     const onVisibilityChange = () => {
-      if (document.visibilityState === 'hidden') void flush().catch(() => undefined)
+      if (document.visibilityState === 'hidden') flushAll()
     }
+    // 업데이트 리로드는 로컬 저장만 기다린다 — 네트워크 왕복까지 붙들면 리로드가 늦어진다.
     const unregister = registerSaveFlush(flush)
     window.addEventListener('pagehide', onPageHide)
     document.addEventListener('visibilitychange', onVisibilityChange)
@@ -305,9 +374,9 @@ export function useEntry(id: string | undefined) {
       unregister()
       window.removeEventListener('pagehide', onPageHide)
       document.removeEventListener('visibilitychange', onVisibilityChange)
-      void flush().catch(() => undefined)
+      flushAll()
     }
-  }, [flush])
+  }, [flush, pushRemote])
 
   useEffect(() => {
     if (!navigationBlocked) return
@@ -375,6 +444,33 @@ export function useEntry(id: string | undefined) {
     [fail, flush],
   )
 
+  /** 충돌 배너 — 내 기기 내용을 원격 위에 덮어쓴다 */
+  const keepMineOnConflict = useCallback(async (): Promise<void> => {
+    if (!id || !syncsRemotely) return
+    // 대기 중인 편집까지 로컬에 확정한 뒤 올려야 방금 쓴 내용이 빠지지 않는다
+    await flush().catch(() => undefined)
+    await resolveEntryConflictKeepLocal(id, ownerId)
+    setConflict(false)
+  }, [flush, id, ownerId, syncsRemotely])
+
+  /** 충돌 배너 — 이 기기의 편집을 버리고 원격본을 다시 불러온다 */
+  const useRemoteOnConflict = useCallback(async (): Promise<void> => {
+    if (!id || !syncsRemotely) return
+    await resolveEntryConflictUseRemote(id, ownerId)
+    if (remoteTimer.current) {
+      clearTimeout(remoteTimer.current)
+      remoteTimer.current = null
+    }
+    remotePendingRef.current = null
+    pendingRef.current = null
+    fallbackCandidateRef.current = null
+    entryRef.current = null
+    loadedIdRef.current = undefined
+    setLoadedId(undefined)
+    setConflict(false)
+    setTransitionTick((value) => value + 1)
+  }, [id, ownerId, syncsRemotely])
+
   return {
     entry,
     loading,
@@ -382,8 +478,11 @@ export function useEntry(id: string | undefined) {
     error,
     editingBlocked,
     navigationBlocked,
+    conflict,
     retry,
     update,
+    keepMineOnConflict,
+    useRemoteOnConflict,
   }
 }
 

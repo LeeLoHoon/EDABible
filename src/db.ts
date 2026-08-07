@@ -15,8 +15,23 @@ import {
   shouldInheritAnonymousSermonNote,
   type SermonNoteClaim,
 } from './sermonClaim'
+import {
+  claimEntryRecord,
+  entryRevisionFromResponse,
+  ENTRY_LOCAL_OWNER,
+  isDeletedEntryError,
+  isStaleEntryError,
+  normalizeRemoteEntry,
+  selectClaimableEntries,
+  selectEntryPullActions,
+  selectPushableEntries,
+  serializeEntry,
+  type EntryRecord,
+  type RemoteEntryMeta,
+} from './entrySync'
 
 export { normalizeBinderWork } from './binderCache'
+export { ENTRY_LOCAL_OWNER } from './entrySync'
 
 export interface BibleIndexCache {
   id: string
@@ -47,6 +62,13 @@ export interface BinderWork {
 }
 
 interface BinderClaim {
+  id: string
+  ownerId: string
+  claimedAt: number
+}
+
+/** 로그인 전 묵상을 계정으로 옮긴 기록 — 기기당 한 번만 승계해 중복 업로드를 막는다 */
+interface EntryClaim {
   id: string
   ownerId: string
   claimedAt: number
@@ -150,12 +172,13 @@ interface SermonNoteCache extends SermonNote {
 
 /** 로컬(IndexedDB) 저장소 — 묵상 노트 저장 및 바인더 오프라인 캐시. */
 class EdaBibleDB extends Dexie {
-  entries!: Table<Entry, string>
+  entries!: Table<EntryRecord, string>
   bibleIndex!: Table<BibleIndexCache, string>
   bibleBooks!: Table<BibleBookCache, string>
   binderWorks!: Table<BinderWork, string>
   binderWorksByOwner!: Table<BinderWorkCacheRecord, [string, string]>
   binderClaims!: Table<BinderClaim, string>
+  entryClaims!: Table<EntryClaim, string>
   binderHiddenPages!: Table<BinderHiddenPages, string>
   recordings!: Table<Recording, string>
   sermons!: Table<Sermon, string>
@@ -241,6 +264,34 @@ class EdaBibleDB extends Dexie {
             Object.assign(row, migrated)
           })
       })
+    // v9: 묵상에 소유자·동기화 메타를 붙인다. 기존 묵상은 전부 로컬 소유로 표시해 두고
+    // 로그인 시 claimLocalEntries가 계정으로 옮긴다(dirty=true라 그대로 업로드된다).
+    this.version(9)
+      .stores({
+        entries: 'id, ownerId, date, updatedAt',
+        bibleIndex: 'id, build',
+        bibleBooks: 'file, build',
+        binderWorks: 'bookId, updatedAt',
+        binderWorksByOwner: '[ownerId+bookId], ownerId, updatedAt',
+        binderClaims: 'id',
+        entryClaims: 'id',
+        recordings: 'id, entryId, createdAt',
+        binderHiddenPages: 'setId, updatedAt',
+        sermons: 'id, preachedOn, updatedAt',
+        sermonNotes: 'key, sermonId, updatedAt',
+        sermonNoteClaims: 'sermonId',
+      })
+      .upgrade(async (transaction) => {
+        await transaction
+          .table('entries')
+          .toCollection()
+          .modify((row: Record<string, unknown>) => {
+            row.ownerId = ENTRY_LOCAL_OWNER
+            row.revision = 0
+            row.dirty = true
+            row.conflict = false
+          })
+      })
   }
 }
 
@@ -248,9 +299,13 @@ export const db = new EdaBibleDB()
 
 const binderSaveQueue = new SerializedSaveQueue()
 const sermonSaveQueue = new SerializedSaveQueue()
+const entrySaveQueue = new SerializedSaveQueue()
 
 export const BINDER_LOCAL_OWNER = 'local'
 const BINDER_LEGACY_CLAIM_ID = 'legacy-binder-works:v1'
+const ENTRY_LOCAL_CLAIM_ID = 'local-entries:v1'
+/** 원격 본문을 한 번에 받아올 묶음 크기 — 손글씨 획까지 담겨 있어 크게 잡지 않는다 */
+const ENTRY_FETCH_CHUNK = 10
 
 const REMOVED_BIBLE_CACHE_PRUNE_KEY = 'edabible:cache-pruned:removed-nkt:v1'
 
@@ -277,40 +332,323 @@ export async function pruneRemovedBibleVersionCaches(): Promise<void> {
   }
 }
 
-export async function getEntry(id: string): Promise<Entry | undefined> {
-  return db.entries.get(id)
+/**
+ * 편집 결과에 동기화 메타를 붙인다. 소유자가 바뀐 행(로그인 전 로컬 → 계정)은 계정에
+ * 처음 올리는 것이므로 revision 0에서 다시 시작한다.
+ */
+function withEntrySyncMeta(
+  entry: Entry,
+  ownerId: string,
+  current: EntryRecord | undefined,
+): EntryRecord {
+  const sameOwner = current?.ownerId === ownerId
+  return {
+    ...entry,
+    ownerId,
+    revision: sameOwner ? current.revision : 0,
+    dirty: true,
+    conflict: sameOwner ? current.conflict === true : false,
+  }
 }
 
-export async function putEntry(entry: Entry): Promise<void> {
-  await db.entries.put(entry)
+/** 다른 계정의 묵상은 열어주지 않는다 — 한 기기를 여러 계정이 함께 쓸 수 있다. */
+export async function getEntry(id: string, ownerId: string): Promise<Entry | undefined> {
+  const record = await db.entries.get(id)
+  if (!record || record.ownerId !== ownerId) return undefined
+  return record
 }
 
-export async function commitEntrySnapshot(snapshot: Entry): Promise<EntryCommitResult> {
-  return db.transaction('rw', db.entries, () =>
-    commitEntryInTransaction(
+export async function putEntry(entry: Entry, ownerId: string): Promise<void> {
+  await db.transaction('rw', db.entries, async () => {
+    const current = await db.entries.get(entry.id)
+    await db.entries.put(withEntrySyncMeta(entry, ownerId, current))
+  })
+}
+
+export async function commitEntrySnapshot(
+  snapshot: Entry,
+  ownerId: string,
+): Promise<EntryCommitResult> {
+  return db.transaction('rw', db.entries, () => {
+    let current: EntryRecord | undefined
+    return commitEntryInTransaction(
       {
-        get: (id) => db.entries.get(id),
+        get: async (id) => {
+          current = await db.entries.get(id)
+          return current?.ownerId === ownerId ? current : undefined
+        },
         put: async (entry) => {
-          await db.entries.put(entry)
+          await db.entries.put(withEntrySyncMeta(entry, ownerId, current))
         },
       },
       snapshot,
-    ),
-  )
+    )
+  })
 }
 
-export async function deleteEntry(id: string): Promise<void> {
+export async function deleteEntry(id: string, ownerId: string): Promise<void> {
   await db.entries.delete(id)
+  await deleteRemoteEntry(id, ownerId)
 }
 
-/** 모든 묵상 삭제 */
-export async function clearAllEntries(): Promise<void> {
-  await db.entries.clear()
+/** 이 계정의 묵상 전체 삭제 */
+export async function clearAllEntries(ownerId: string): Promise<void> {
+  const ids = (await db.entries.where('ownerId').equals(ownerId).toArray()).map(
+    (record) => record.id,
+  )
+  await db.entries.bulkDelete(ids)
+  await Promise.all(ids.map((id) => deleteRemoteEntry(id, ownerId)))
 }
 
-/** 최신순 전체 목록 */
-export async function listEntries(): Promise<Entry[]> {
-  return db.entries.orderBy('updatedAt').reverse().toArray()
+/** 이 계정의 묵상 목록 (최신순) */
+export async function listEntries(ownerId: string): Promise<Entry[]> {
+  const rows = await db.entries.where('ownerId').equals(ownerId).sortBy('updatedAt')
+  return rows.reverse()
+}
+
+async function verifyEntrySessionOwner(userId: string): Promise<void> {
+  // Defense-in-depth only. SQL validates p_owner_user_id against auth.uid() at the write boundary.
+  await assertActiveSupabaseOwner(userId, 'MEDITATION_ENTRY_OWNER_CHANGED')
+}
+
+/** 로컬에서 지운 묵상을 원격에도 tombstone으로 남긴다 — 없으면 다른 기기에서 되살아난다. */
+async function deleteRemoteEntry(entryId: string, ownerId: string): Promise<void> {
+  if (!supabase || ownerId === ENTRY_LOCAL_OWNER) return
+  const client = supabase
+  await entrySaveQueue.run(`${ownerId}:${entryId}`, async () => {
+    await verifyEntrySessionOwner(ownerId)
+    const { error } = await client.rpc('delete_meditation_entry', { p_entry_id: entryId })
+    if (error) throw error
+  })
+}
+
+/**
+ * 한 건을 원격에 올린다. 성공하면 서버가 확정한 revision을 로컬에 반영하고, revision이
+ * 어긋나면(다른 기기가 먼저 저장) conflict로 표시해 자동 재시도를 멈춘다.
+ */
+export async function pushEntry(entry: Entry, ownerId: string): Promise<void> {
+  if (!supabase || ownerId === ENTRY_LOCAL_OWNER) return
+  const client = supabase
+  const record = await db.entries.get(entry.id)
+  if (!record || record.ownerId !== ownerId || record.dirty !== true) return
+
+  await entrySaveQueue.run(`${ownerId}:${entry.id}`, async () => {
+    try {
+      await verifyEntrySessionOwner(ownerId)
+      const { data, error } = await client.rpc('put_meditation_entry', {
+        p_owner_user_id: ownerId,
+        p_entry_id: record.id,
+        p_expected_revision: record.revision,
+        p_data: serializeEntry(record),
+      })
+      if (error) throw error
+      const revision = entryRevisionFromResponse(data)
+      await db.transaction('rw', db.entries, async () => {
+        const latest = await db.entries.get(record.id)
+        if (!latest || latest.ownerId !== ownerId) return
+        // 전송하는 사이에 더 편집됐으면 dirty를 유지해 다음 flush가 이어서 올린다.
+        await db.entries.put({
+          ...latest,
+          revision,
+          dirty: latest.updatedAt > record.updatedAt,
+          conflict: false,
+        })
+      })
+    } catch (error) {
+      const blocked = isStaleEntryError(error) || isDeletedEntryError(error)
+      await db.transaction('rw', db.entries, async () => {
+        const latest = await db.entries.get(record.id)
+        if (!latest || latest.ownerId !== ownerId) return
+        await db.entries.put({
+          ...latest,
+          dirty: true,
+          conflict: blocked || latest.conflict === true,
+        })
+      })
+      throw error
+    }
+  })
+}
+
+/** 아직 못 올린 묵상을 한꺼번에 재전송한다 — 앱 진입·온라인 복귀 시점에 부른다. */
+export async function flushDirtyEntries(ownerId: string): Promise<void> {
+  if (!supabase || ownerId === ENTRY_LOCAL_OWNER) return
+  const pending = selectPushableEntries(
+    await db.entries.where('ownerId').equals(ownerId).toArray(),
+    ownerId,
+  )
+  for (const record of pending) {
+    try {
+      await pushEntry(record, ownerId)
+    } catch (error) {
+      // 오프라인·일시 오류면 dirty가 남아 다음 기회에 다시 올라간다.
+      console.warn('Meditation entry upload failed; it stays queued.', error)
+    }
+  }
+}
+
+function toRemoteEntryMeta(rows: unknown): RemoteEntryMeta[] {
+  if (!Array.isArray(rows)) return []
+  const metas: RemoteEntryMeta[] = []
+  for (const row of rows) {
+    if (typeof row !== 'object' || row === null) continue
+    const source = row as { entry_id?: unknown; revision?: unknown; deleted_at?: unknown }
+    if (typeof source.entry_id !== 'string') continue
+    metas.push({
+      entryId: source.entry_id,
+      revision:
+        typeof source.revision === 'number' && Number.isInteger(source.revision)
+          ? source.revision
+          : 0,
+      deleted: source.deleted_at !== null && source.deleted_at !== undefined,
+    })
+  }
+  return metas
+}
+
+/**
+ * 원격에서 이 계정의 묵상을 내려받아 로컬을 맞춘다. 목록은 메타만 받고, 실제 본문은
+ * 로컬에 없거나 뒤처진 것만 골라 가져온다.
+ */
+export async function pullEntries(ownerId: string): Promise<void> {
+  if (!supabase || ownerId === ENTRY_LOCAL_OWNER) return
+  const client = supabase
+  const { data, error } = await client.rpc('list_my_meditation_entries')
+  if (error) throw error
+
+  const local = await db.entries.where('ownerId').equals(ownerId).toArray()
+  const actions = selectEntryPullActions(
+    toRemoteEntryMeta(data),
+    new Map(local.map((record) => [record.id, record])),
+  )
+
+  const dropped = actions.filter((action) => action.kind === 'drop').map((action) => action.entryId)
+  if (dropped.length > 0) await db.entries.bulkDelete(dropped)
+
+  const wanted = actions.filter((action) => action.kind === 'fetch').map((action) => action.entryId)
+  for (let index = 0; index < wanted.length; index += ENTRY_FETCH_CHUNK) {
+    const chunk = wanted.slice(index, index + ENTRY_FETCH_CHUNK)
+    const { data: rows, error: fetchError } = await client
+      .from('meditation_entries')
+      .select('entry_id, data, revision')
+      .eq('user_id', ownerId)
+      .in('entry_id', chunk)
+    if (fetchError) throw fetchError
+
+    for (const row of rows ?? []) {
+      const entry = normalizeRemoteEntry(String(row.entry_id), row.data)
+      if (!entry) continue
+      const revision =
+        typeof row.revision === 'number' && Number.isInteger(row.revision) ? row.revision : 0
+      await db.transaction('rw', db.entries, async () => {
+        const latest = await db.entries.get(entry.id)
+        // 받아오는 사이에 편집이 들어왔으면 로컬을 지킨다 — push가 이어서 올린다.
+        if (latest?.dirty) return
+        await db.entries.put({ ...entry, ownerId, revision, dirty: false, conflict: false })
+      })
+    }
+  }
+}
+
+/**
+ * 로그인 전에 이 기기에 쌓인 묵상을 계정으로 옮긴다. 기기당 한 번만 수행해
+ * 계정을 바꿔 로그인해도 같은 묵상이 여러 계정에 복제되지 않게 한다.
+ */
+export async function claimLocalEntries(ownerId: string): Promise<number> {
+  if (ownerId === ENTRY_LOCAL_OWNER) return 0
+  let claimed = 0
+  await db.transaction('rw', db.entries, db.entryClaims, async () => {
+    if (await db.entryClaims.get(ENTRY_LOCAL_CLAIM_ID)) return
+    const locals = selectClaimableEntries(await db.entries.toArray())
+    await db.entryClaims.put({
+      id: ENTRY_LOCAL_CLAIM_ID,
+      ownerId,
+      claimedAt: Date.now(),
+    })
+    if (locals.length === 0) return
+    await db.entries.bulkPut(locals.map((record) => claimEntryRecord(record, ownerId)))
+    claimed = locals.length
+  })
+  return claimed
+}
+
+/** 이 묵상에 해결하지 않은 저장 충돌이 있는지 */
+export async function hasEntryConflict(id: string, ownerId: string): Promise<boolean> {
+  const record = await db.entries.get(id)
+  return record?.ownerId === ownerId && record.conflict === true
+}
+
+/** 충돌 배너에서 "내 것 유지"를 고른 경우 — 원격 revision 위에 로컬 내용을 덮어쓴다. */
+export async function resolveEntryConflictKeepLocal(id: string, ownerId: string): Promise<void> {
+  if (!supabase || ownerId === ENTRY_LOCAL_OWNER) throw new Error('MEDITATION_ENTRY_OWNER_CHANGED')
+  const client = supabase
+  const record = await db.entries.get(id)
+  if (!record || record.ownerId !== ownerId) throw new Error('MEDITATION_ENTRY_OWNER_CHANGED')
+
+  await entrySaveQueue.run(`${ownerId}:${id}`, async () => {
+    await verifyEntrySessionOwner(ownerId)
+    const { data: remote, error: revisionError } = await client
+      .from('meditation_entries')
+      .select('revision')
+      .eq('user_id', ownerId)
+      .eq('entry_id', id)
+      .maybeSingle()
+    if (revisionError) throw revisionError
+    const expectedRevision =
+      typeof remote?.revision === 'number' && Number.isInteger(remote.revision)
+        ? remote.revision
+        : 0
+
+    await verifyEntrySessionOwner(ownerId)
+    const { data, error } = await client.rpc('put_meditation_entry', {
+      p_owner_user_id: ownerId,
+      p_entry_id: id,
+      p_expected_revision: expectedRevision,
+      p_data: serializeEntry(record),
+    })
+    if (error) throw error
+    const revision = entryRevisionFromResponse(data)
+    await db.transaction('rw', db.entries, async () => {
+      const latest = await db.entries.get(id)
+      if (!latest || latest.ownerId !== ownerId) return
+      await db.entries.put({
+        ...latest,
+        revision,
+        dirty: latest.updatedAt > record.updatedAt,
+        conflict: false,
+      })
+    })
+  })
+}
+
+/** 충돌 배너에서 "다시 불러오기"를 고른 경우 — 로컬 편집을 버리고 원격으로 되돌린다. */
+export async function resolveEntryConflictUseRemote(
+  id: string,
+  ownerId: string,
+): Promise<Entry | undefined> {
+  if (!supabase || ownerId === ENTRY_LOCAL_OWNER) throw new Error('MEDITATION_ENTRY_OWNER_CHANGED')
+  await verifyEntrySessionOwner(ownerId)
+  const { data, error } = await supabase
+    .from('meditation_entries')
+    .select('data, revision, deleted_at')
+    .eq('user_id', ownerId)
+    .eq('entry_id', id)
+    .maybeSingle()
+  if (error) throw error
+
+  // 다른 기기에서 지운 묵상이면 이쪽에서도 없앤다.
+  if (!data || data.deleted_at) {
+    await db.entries.delete(id)
+    return undefined
+  }
+
+  const entry = normalizeRemoteEntry(id, data.data)
+  if (!entry) throw new Error('MEDITATION_ENTRY_INVALID_RESPONSE')
+  const revision =
+    typeof data.revision === 'number' && Number.isInteger(data.revision) ? data.revision : 0
+  const restored: EntryRecord = { ...entry, ownerId, revision, dirty: false, conflict: false }
+  await db.entries.put(restored)
+  return restored
 }
 
 export async function listRecordings(entryId: string): Promise<Recording[]> {

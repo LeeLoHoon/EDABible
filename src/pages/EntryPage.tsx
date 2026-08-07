@@ -4,6 +4,8 @@ import { useBlocker, useNavigate, useParams } from 'react-router-dom'
 /** 묵상 노트 홈 경로 — 통합(all) 배포는 /note, 단독 배포는 앱 루트 */
 const NOTE_HOME_PATH = __APP_TARGET__ === 'all' ? '/note' : '/'
 import { enableBibleCopy } from '../bibleCopy'
+import { useAuth } from '../authState'
+import { ENTRY_LOCAL_OWNER } from '../db'
 import { useEntry } from '../hooks/useEntry'
 import BackButton from '../components/BackButton'
 import FieldEditor from '../components/FieldEditor'
@@ -46,15 +48,21 @@ const ENTRY_ERROR_MESSAGE_KEYS = {
 export default function EntryPage() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const { user } = useAuth()
+  // Supabase 미설정 배포(GitHub Pages)에서는 계정이 없어 이 기기에만 남는다
+  const ownerId = user?.id ?? ENTRY_LOCAL_OWNER
   const {
     entry,
     loading,
     error,
     editingBlocked,
     navigationBlocked,
+    conflict,
     retry,
     update,
-  } = useEntry(id)
+    keepMineOnConflict,
+    useRemoteOnConflict,
+  } = useEntry(id, ownerId)
   const blocker = useBlocker(navigationBlocked)
   const [tab, setTab] = useState<Tab>('meditation')
   const [passage, setPassage] = useState<PassageInfo | null>(null)
@@ -73,6 +81,20 @@ export default function EntryPage() {
   const [showShareCard, setShowShareCard] = useState(false)
   const canShare = Object.values(shareSections).some(Boolean)
   const errorMessage = error ? t(ENTRY_ERROR_MESSAGE_KEYS[error]) : null
+  const [resolvingConflict, setResolvingConflict] = useState(false)
+
+  const resolveConflict = async (resolve: () => Promise<void>) => {
+    if (resolvingConflict) return
+    setResolvingConflict(true)
+    try {
+      await resolve()
+    } catch (conflictError) {
+      console.error(conflictError)
+      alert(t('entryConflictFailed'))
+    } finally {
+      setResolvingConflict(false)
+    }
+  }
 
   useEffect(() => {
     if (blocker.state === 'blocked') blocker.reset()
@@ -233,6 +255,33 @@ export default function EntryPage() {
           >
             {t('entryRetrySave')}
           </button>
+        </aside>
+      )}
+
+      {conflict && (
+        <aside
+          role="alert"
+          className="mx-4 mt-4 rounded-xl border border-rose-accent/50 bg-rose-card px-4 py-3 shadow-sm"
+        >
+          <p className="text-sm font-bold leading-5 text-rose-accent">{t('entrySaveConflict')}</p>
+          <div className="mt-2.5 flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={resolvingConflict}
+              onClick={() => void resolveConflict(useRemoteOnConflict)}
+              className="min-h-11 rounded-full border border-rose-accent/60 bg-white px-4 py-2 text-sm font-bold text-rose-accent transition hover:bg-rose-accent hover:text-white focus:outline-none focus:ring-2 focus:ring-rose-accent disabled:opacity-60"
+            >
+              {t('entryConflictReload')}
+            </button>
+            <button
+              type="button"
+              disabled={resolvingConflict}
+              onClick={() => void resolveConflict(keepMineOnConflict)}
+              className="min-h-11 rounded-full bg-rose-accent px-4 py-2 text-sm font-bold text-white transition hover:bg-rose-accent-deep focus:outline-none focus:ring-2 focus:ring-rose-accent disabled:opacity-60"
+            >
+              {t('entryConflictKeepMine')}
+            </button>
+          </div>
         </aside>
       )}
 

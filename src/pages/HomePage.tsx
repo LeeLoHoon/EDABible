@@ -2,7 +2,17 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import BackButton from '../components/BackButton'
 import GuideButton from '../components/GuideButton'
-import { listEntries, putEntry, deleteEntry, clearAllEntries } from '../db'
+import { useAuth } from '../authState'
+import {
+  claimLocalEntries,
+  clearAllEntries,
+  deleteEntry,
+  ENTRY_LOCAL_OWNER,
+  flushDirtyEntries,
+  listEntries,
+  pullEntries,
+  putEntry,
+} from '../db'
 import { createEntry, emptyTemptationVictory, isFieldEmpty, type Entry } from '../types'
 import { formatEntryDate } from '../i18n/format'
 import { getLang } from '../i18n/lang'
@@ -32,27 +42,48 @@ function progress(e: Entry): { done: number; total: number } {
 
 export default function HomePage() {
   const navigate = useNavigate()
+  const { user, signOut } = useAuth()
+  // Supabase 미설정 배포(GitHub Pages)에서는 계정이 없어 이 기기에만 남는다
+  const ownerId = user?.id ?? ENTRY_LOCAL_OWNER
   const [entries, setEntries] = useState<Entry[]>([])
   const [loading, setLoading] = useState(true)
   const recordsRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    listEntries().then((e) => {
-      setEntries(e)
+    let alive = true
+
+    const run = async () => {
+      // 로그인 전에 이 기기에 쌓인 묵상을 먼저 계정으로 옮긴 뒤 원격과 맞춘다.
+      // 어느 단계가 실패해도(오프라인 등) 로컬 목록은 보여준다.
+      try {
+        await claimLocalEntries(ownerId)
+        await pullEntries(ownerId)
+        await flushDirtyEntries(ownerId)
+      } catch (syncError) {
+        console.warn('Meditation sync failed; showing the device copy.', syncError)
+      }
+      const list = await listEntries(ownerId)
+      if (!alive) return
+      setEntries(list)
       setLoading(false)
-    })
-  }, [])
+    }
+
+    void run()
+    return () => {
+      alive = false
+    }
+  }, [ownerId])
 
   const startNew = async () => {
     const entry = createEntry(new Date())
-    await putEntry(entry)
+    await putEntry(entry, ownerId)
     navigate(`/entry/${entry.id}`)
   }
 
   const remove = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation()
     if (!confirm(t('homeDeleteConfirm'))) return
-    await deleteEntry(id)
+    await deleteEntry(id, ownerId)
     setEntries((prev) => prev.filter((x) => x.id !== id))
   }
 
@@ -63,7 +94,7 @@ export default function HomePage() {
       )
     )
       return
-    await clearAllEntries()
+    await clearAllEntries(ownerId)
     setEntries([])
   }
 
@@ -77,6 +108,15 @@ export default function HomePage() {
       <div className="absolute right-4 top-4 z-10 flex items-center gap-2">
         <LangToggle />
         <GuideButton />
+        {user && (
+          <button
+            type="button"
+            onClick={() => void signOut()}
+            className="whitespace-nowrap rounded-full px-2 py-1.5 text-[13px] font-bold text-rose-key/80 transition hover:text-rose-accent"
+          >
+            {t('sermonLogout')}
+          </button>
+        )}
       </div>
       {/* 책 표지 — 첫 페이지 */}
       <section className="relative flex min-h-[86vh] flex-col items-center justify-center px-6 text-center">

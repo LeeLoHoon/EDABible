@@ -104,20 +104,63 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 
-export function RequireGoogleLogin({ children }: { children: React.ReactNode }) {
+/** 로그인 게이트의 브랜딩 — 통합(all) 배포는 화면마다 다른 앱이라 호출부가 지정한다 */
+export type LoginGateVariant = 'binder' | 'sermon' | 'note'
+
+const LOGIN_GATE_COPY: Record<
+  LoginGateVariant,
+  () => { appName: string; eyebrow: string; spineWord: string; spineLabel: string; description: string; syncNotice: string }
+> = {
+  binder: () => ({
+    appName: t('authBinderName'),
+    eyebrow: 'EDA BINDER',
+    spineWord: 'SPL',
+    spineLabel: t('authBinderShort'),
+    description: t('authLoginDescription'),
+    syncNotice: t('authSyncAfterLogin'),
+  }),
+  sermon: () => ({
+    appName: t('authSermonName'),
+    eyebrow: t('authSermonEyebrow'),
+    spineWord: t('authSermonSpineWord'),
+    spineLabel: t('authSermonSpineLabel'),
+    description: t('authSermonDescription'),
+    syncNotice: t('authSermonSyncAfterLogin'),
+  }),
+  note: () => ({
+    appName: t('authNoteName'),
+    eyebrow: t('authNoteEyebrow'),
+    spineWord: t('authNoteSpineWord'),
+    spineLabel: t('authNoteSpineLabel'),
+    description: t('authNoteDescription'),
+    syncNotice: t('authNoteSyncAfterLogin'),
+  }),
+}
+
+export function RequireGoogleLogin({
+  children,
+  variant,
+  allowWithoutSupabase = false,
+}: {
+  children: React.ReactNode
+  /** 생략하면 배포 타깃에서 고른다 — 단독 배포(binder/sermon)의 기존 동작 그대로 */
+  variant?: LoginGateVariant
+  /**
+   * Supabase가 설정되지 않은 배포(GitHub Pages 노트 앱)에서 게이트를 통과시킨다.
+   * 그 채널은 애초에 동기화가 불가능하므로, 막아 세우는 대신 로컬 전용으로 계속 쓰게 둔다.
+   */
+  allowWithoutSupabase?: boolean
+}) {
   const { authError, loading, user, signInWithGoogle } = useAuth()
   const [error, setError] = useState<string | null>(null)
   const [signingIn, setSigningIn] = useState(false)
   const inAppBrowser = useMemo(() => detectInAppBrowser(), [])
   // 로그인 게이트는 앱 이름·설명·아이콘까지 브랜딩되어 있어 sermon 타깃에서 바인더 문구가
-  // 그대로 노출되던 문제(교인에게 SPL 바인더로 보임)를 이 분기로 교정한다. 다른 타깃은 무변화.
-  const isSermon = __APP_TARGET__ === 'sermon'
-  const appName = isSermon ? t('authSermonName') : t('authBinderName')
-  const eyebrow = isSermon ? t('authSermonEyebrow') : 'EDA BINDER'
-  const spineWord = isSermon ? t('authSermonSpineWord') : 'SPL'
-  const spineLabel = isSermon ? t('authSermonSpineLabel') : t('authBinderShort')
-  const description = isSermon ? t('authSermonDescription') : t('authLoginDescription')
-  const syncNotice = isSermon ? t('authSermonSyncAfterLogin') : t('authSyncAfterLogin')
+  // 그대로 노출되던 문제(교인에게 SPL 바인더로 보임)를 이 분기로 교정한다.
+  const resolvedVariant: LoginGateVariant =
+    variant ?? (__APP_TARGET__ === 'sermon' ? 'sermon' : 'binder')
+  const { appName, eyebrow, spineWord, spineLabel, description, syncNotice } =
+    LOGIN_GATE_COPY[resolvedVariant]()
 
   const handleSignIn = async () => {
     setError(null)
@@ -140,6 +183,8 @@ export function RequireGoogleLogin({ children }: { children: React.ReactNode }) 
       </div>
     )
   }
+
+  if (!supabase && allowWithoutSupabase) return children
 
   if (!supabase) {
     return (
