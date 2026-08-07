@@ -32,8 +32,17 @@ export type Block = ChapterMark &
         label: string | null
         text: string
         /** 절 마커 있으면 '<장 카운터>:<절 라벨>', 없으면 위치 기반 'p<블록 인덱스>' —
-            스캔 전사본은 절 마커 없는 문단이 많아(365개 장) 모든 문단이 칠해질 수 있어야 한다 */
+            스캔 전사본은 절 마커 없는 문단이 많아(365개 장) 모든 문단이 칠해질 수 있어야 한다.
+            이 값은 본문 시작 장 기준 상대 좌표라 본문이 다르면 같은 키가 다른 구절을 가리킨다 —
+            렌더 안에서 구절을 식별하는 용도로만 쓰고, 저장에는 verseHighlights의 절대 키를 쓴다. */
         verseKey: string
+        /** 이 구절이 실제로 속한 장의 절대 좌표 — chunk가 알려준다(모르면 비어 있다) */
+        bookOrder?: number
+        chapter?: number
+        /** 절 마커 라벨('12', '2-3'). 마커가 없으면 장 안에서의 순번 */
+        verseLabel: string | null
+        /** 마커 없는 문단의 장 내 순번 — 절대 키를 만들 때 verseLabel 대신 쓴다 */
+        paragraphIndex: number
       }
   )
 
@@ -69,6 +78,8 @@ export function splitBlocks(chunks: readonly PassageChunk[], startChapter: numbe
 
   for (const chunk of chunks) {
     const chunkStart = blocks.length
+    // 조각 하나가 곧 한 장이라, 장 내 순번은 조각마다 0에서 다시 센다.
+    let paragraphIndex = 0
 
     for (const rawLine of chunk.text.split('\n')) {
       const line = rawLine.trim()
@@ -100,7 +111,16 @@ export function splitBlocks(chunks: readonly PassageChunk[], startChapter: numbe
           // 본문 편집으로 인덱스가 밀리면 orphan(렌더에서 무시)으로 수용
           verseKey = `p${blocks.length}`
         }
-        blocks.push({ type: 'segment', ...segment, verseKey })
+        blocks.push({
+          type: 'segment',
+          ...segment,
+          verseKey,
+          bookOrder: chunk.bookOrder,
+          chapter: chunk.chapter,
+          verseLabel: segment.label,
+          paragraphIndex,
+        })
+        paragraphIndex += 1
       }
     }
 

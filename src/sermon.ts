@@ -129,7 +129,14 @@ export async function loadSermonPassages(
       const full = doc ? chapterTextAt(doc, current) : ''
       const wanted = wantedByChapter.get(current)
       const text = wanted ? sliceVerses(full, wanted) : full
-      if (text) own.push({ label: makeRef(bookLabel, current), text })
+      if (text) {
+        own.push({
+          label: makeRef(bookLabel, current),
+          text,
+          bookOrder: meta?.order ?? bookOrderByName(book) ?? undefined,
+          chapter: current,
+        })
+      }
     }
     if (own.length === 0) continue
 

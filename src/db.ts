@@ -16,6 +16,19 @@ import {
   type SermonNoteClaim,
 } from './sermonClaim'
 import {
+  chapterKey,
+  highlightRevisionFromResponse,
+  highlightRowKey,
+  isHighlightPushable,
+  isStaleHighlightError,
+  normalizeRemoteRanges,
+  selectHighlightPulls,
+  type ChapterRef,
+  type LocalHighlightMeta,
+  type RemoteHighlightMeta,
+  type VerseHighlightRecord,
+} from './verseHighlights'
+import {
   applyEntryClaim,
   entryRevisionFromResponse,
   ENTRY_LOCAL_OWNER,
@@ -184,6 +197,8 @@ class EdaBibleDB extends Dexie {
   binderWorksByOwner!: Table<BinderWorkCacheRecord, [string, string]>
   binderClaims!: Table<BinderClaim, string>
   entryClaims!: Table<EntryClaim, string>
+  /** 성경 본문에 귀속된 형광펜 — 역본 × 장 단위, 모든 묵상·설교가 공유한다 */
+  verseHighlights!: Table<VerseHighlightRecord & { key: string }, string>
   binderHiddenPages!: Table<BinderHiddenPages, string>
   recordings!: Table<Recording, string>
   sermons!: Table<Sermon, string>
@@ -297,6 +312,23 @@ class EdaBibleDB extends Dexie {
             row.conflict = false
           })
       })
+    // v10: 형광펜을 묵상에서 떼어 본문(역본 × 장)에 귀속시킨다. 기존 노트 안의 밑줄은
+    // 상대 좌표라 옮길 수 없어 그대로 남겨 두고(읽지 않는다) 여기서는 빈 채로 시작한다.
+    this.version(10).stores({
+      entries: 'id, ownerId, date, updatedAt',
+      bibleIndex: 'id, build',
+      bibleBooks: 'file, build',
+      binderWorks: 'bookId, updatedAt',
+      binderWorksByOwner: '[ownerId+bookId], ownerId, updatedAt',
+      binderClaims: 'id',
+      entryClaims: 'id',
+      verseHighlights: 'key, [ownerId+version], ownerId, updatedAt',
+      recordings: 'id, entryId, createdAt',
+      binderHiddenPages: 'setId, updatedAt',
+      sermons: 'id, preachedOn, updatedAt',
+      sermonNotes: 'key, sermonId, updatedAt',
+      sermonNoteClaims: 'sermonId',
+    })
   }
 }
 
@@ -305,6 +337,7 @@ export const db = new EdaBibleDB()
 const binderSaveQueue = new SerializedSaveQueue()
 const sermonSaveQueue = new SerializedSaveQueue()
 const entrySaveQueue = new SerializedSaveQueue()
+const highlightSaveQueue = new SerializedSaveQueue()
 
 export const BINDER_LOCAL_OWNER = 'local'
 const BINDER_LEGACY_CLAIM_ID = 'legacy-binder-works:v1'
@@ -669,6 +702,218 @@ export async function resolveEntryConflictUseRemote(
   const restored: EntryRecord = { ...entry, ownerId, revision, dirty: false, conflict: false }
   await db.entries.put(restored)
   return restored
+}
+
+/* ── 형광펜: 성경 본문(역본 × 장)에 귀속되어 모든 묵상·설교가 공유한다 ── */
+
+async function verifyHighlightSessionOwner(userId: string): Promise<void> {
+  await assertActiveSupabaseOwner(userId, 'VERSE_HIGHLIGHT_OWNER_CHANGED')
+}
+
+/** 화면에 띄운 본문이 걸친 장들의 밑줄을 한 번에 읽는다 */
+export async function getChapterHighlights(
+  ownerId: string,
+  version: string,
+  refs: readonly ChapterRef[],
+): Promise<Map<string, VerseHighlight[]>> {
+  const result = new Map<string, VerseHighlight[]>()
+  if (refs.length === 0) return result
+
+  const rows = await db.verseHighlights.bulkGet(
+    refs.map((ref) => highlightRowKey(ownerId, version, ref)),
+  )
+  for (const row of rows) {
+    if (!row || row.ranges.length === 0) continue
+    result.set(chapterKey(row), row.ranges)
+  }
+  return result
+}
+
+/**
+ * 한 장의 밑줄을 통째로 갈아 끼운다. 로컬에 먼저 확정하고(오프라인에서도 남는다)
+ * 계정 소유일 때만 원격에 올린다.
+ */
+export async function saveChapterHighlights(
+  ownerId: string,
+  version: string,
+  ref: ChapterRef,
+  ranges: readonly VerseHighlight[],
+): Promise<void> {
+  const key = highlightRowKey(ownerId, version, ref)
+  await db.transaction('rw', db.verseHighlights, async () => {
+    const current = await db.verseHighlights.get(key)
+    await db.verseHighlights.put({
+      key,
+      ownerId,
+      version,
+      bookOrder: ref.bookOrder,
+      chapter: ref.chapter,
+      ranges: [...ranges],
+      revision: current?.revision ?? 0,
+      dirty: true,
+      conflict: current?.conflict === true,
+      updatedAt: Date.now(),
+    })
+  })
+  await pushVerseHighlights(ownerId, version, ref).catch((error) => {
+    // 오프라인·일시 오류면 dirty가 남아 다음 기회에 올라간다
+    console.warn('Verse highlight upload failed; it stays queued.', error)
+  })
+}
+
+/** 한 장을 원격에 올린다 — revision이 어긋나면 conflict로 표시하고 자동 재시도를 멈춘다 */
+export async function pushVerseHighlights(
+  ownerId: string,
+  version: string,
+  ref: ChapterRef,
+): Promise<void> {
+  if (!supabase || ownerId === ENTRY_LOCAL_OWNER) return
+  const client = supabase
+  const key = highlightRowKey(ownerId, version, ref)
+  const record = await db.verseHighlights.get(key)
+  if (!record || !isHighlightPushable(record, ownerId)) return
+
+  await highlightSaveQueue.run(key, async () => {
+    try {
+      await verifyHighlightSessionOwner(ownerId)
+      const { data, error } = await client.rpc('put_verse_highlights', {
+        p_owner_user_id: ownerId,
+        p_version: version,
+        p_book_order: ref.bookOrder,
+        p_chapter: ref.chapter,
+        p_expected_revision: record.revision,
+        p_ranges: record.ranges,
+      })
+      if (error) throw error
+      const revision = highlightRevisionFromResponse(data)
+      await db.transaction('rw', db.verseHighlights, async () => {
+        const latest = await db.verseHighlights.get(key)
+        if (!latest) return
+        // 올리는 사이에 더 칠했으면 dirty를 유지해 다음 flush가 이어서 올린다
+        await db.verseHighlights.put({
+          ...latest,
+          revision,
+          dirty: latest.updatedAt > record.updatedAt,
+          conflict: false,
+        })
+      })
+    } catch (error) {
+      const stale = isStaleHighlightError(error)
+      await db.transaction('rw', db.verseHighlights, async () => {
+        const latest = await db.verseHighlights.get(key)
+        if (!latest) return
+        await db.verseHighlights.put({
+          ...latest,
+          dirty: true,
+          conflict: stale || latest.conflict === true,
+        })
+      })
+      throw error
+    }
+  })
+}
+
+/** 아직 못 올린 밑줄을 한꺼번에 재전송한다 */
+export async function flushDirtyHighlights(ownerId: string): Promise<void> {
+  if (!supabase || ownerId === ENTRY_LOCAL_OWNER) return
+  const pending: Array<{ version: string; ref: ChapterRef }> = []
+  await db.verseHighlights
+    .where('ownerId')
+    .equals(ownerId)
+    .each((record) => {
+      if (isHighlightPushable(record, ownerId)) {
+        pending.push({
+          version: record.version,
+          ref: { bookOrder: record.bookOrder, chapter: record.chapter },
+        })
+      }
+    })
+
+  for (const item of pending) {
+    try {
+      await pushVerseHighlights(ownerId, item.version, item.ref)
+    } catch (error) {
+      console.warn('Verse highlight upload failed; it stays queued.', error)
+    }
+  }
+}
+
+function toRemoteHighlightMeta(rows: unknown): RemoteHighlightMeta[] {
+  if (!Array.isArray(rows)) return []
+  const metas: RemoteHighlightMeta[] = []
+  for (const row of rows) {
+    if (typeof row !== 'object' || row === null) continue
+    const source = row as {
+      version?: unknown
+      book_order?: unknown
+      chapter?: unknown
+      revision?: unknown
+    }
+    if (typeof source.version !== 'string') continue
+    if (!Number.isInteger(source.book_order) || !Number.isInteger(source.chapter)) continue
+    metas.push({
+      version: source.version,
+      bookOrder: source.book_order as number,
+      chapter: source.chapter as number,
+      revision: Number.isInteger(source.revision) ? (source.revision as number) : 0,
+    })
+  }
+  return metas
+}
+
+/** 원격에서 이 계정의 밑줄을 내려받아 로컬을 맞춘다 — 뒤처진 장만 골라 받는다 */
+export async function pullVerseHighlights(ownerId: string): Promise<void> {
+  if (!supabase || ownerId === ENTRY_LOCAL_OWNER) return
+  const client = supabase
+  const { data, error } = await client.rpc('list_my_verse_highlights')
+  if (error) throw error
+
+  const local = new Map<string, LocalHighlightMeta>()
+  await db.verseHighlights
+    .where('ownerId')
+    .equals(ownerId)
+    .each((record) => {
+      local.set(highlightRowKey(ownerId, record.version, record), {
+        revision: record.revision,
+        dirty: record.dirty,
+      })
+    })
+
+  const wanted = selectHighlightPulls(toRemoteHighlightMeta(data), local, ownerId)
+  for (const meta of wanted) {
+    const { data: rows, error: fetchError } = await client
+      .from('verse_highlights')
+      .select('ranges, revision')
+      .eq('user_id', ownerId)
+      .eq('version', meta.version)
+      .eq('book_order', meta.bookOrder)
+      .eq('chapter', meta.chapter)
+      .maybeSingle()
+    if (fetchError) throw fetchError
+    if (!rows) continue
+
+    const key = highlightRowKey(ownerId, meta.version, meta)
+    const ranges = normalizeRemoteRanges(rows.ranges)
+    const revision =
+      typeof rows.revision === 'number' && Number.isInteger(rows.revision) ? rows.revision : 0
+    await db.transaction('rw', db.verseHighlights, async () => {
+      const latest = await db.verseHighlights.get(key)
+      // 받아오는 사이에 칠했으면 로컬을 지킨다 — push가 이어서 올린다
+      if (latest?.dirty) return
+      await db.verseHighlights.put({
+        key,
+        ownerId,
+        version: meta.version,
+        bookOrder: meta.bookOrder,
+        chapter: meta.chapter,
+        ranges,
+        revision,
+        dirty: false,
+        conflict: false,
+        updatedAt: Date.now(),
+      })
+    })
+  }
 }
 
 export async function listRecordings(entryId: string): Promise<Recording[]> {

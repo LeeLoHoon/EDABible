@@ -1,13 +1,15 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
-import type { Entry, HighlightColor, VerseHighlight } from '../types'
-import type { PassageInfo } from '../components/BiblePicker'
+import type { Entry, HighlightColor } from '../types'
+import type { PassageChunk, PassageInfo } from '../components/BiblePicker'
 import PassageText from '../components/PassageText'
 import VoiceRecorder from '../components/VoiceRecorder'
 import PrayerSection from './PrayerSection'
 import { useDockedTextarea } from '../hooks/useDockedTextarea'
-import { applyRanges, HIGHLIGHT_COLORS, removeRange } from '../highlights'
+import { useSharedHighlights } from '../hooks/useSharedHighlights'
+import { HIGHLIGHT_COLORS } from '../highlights'
 import { t } from '../i18n/strings'
+import { highlightVersionKey } from '../verseHighlights'
 
 interface Props {
   entry: Entry
@@ -15,6 +17,8 @@ interface Props {
   setPassage: Dispatch<SetStateAction<PassageInfo | null>>
   update: (patch: Partial<Entry> | ((e: Entry) => Entry)) => void
   FieldEditor: typeof import('../components/FieldEditor').default
+  /** 형광펜 소유자 — 계정 uuid 또는 로컬 소유자 */
+  ownerId: string
 }
 
 /**
@@ -54,24 +58,24 @@ function errorText(e: unknown): string {
   return String(e)
 }
 
+/** 본문이 없을 때도 훅은 호출해야 하므로 안정 참조로 둔다 */
+const EMPTY_CHUNKS: PassageChunk[] = []
+
 export default function MeditationSection({
   entry,
   passage,
   setPassage,
   update,
   FieldEditor,
+  ownerId,
 }: Props) {
-  // 형광펜 드래그 하이라이트 — 겹침 절단·같은 색 병합은 applyRanges가 처리,
-  // 저장은 기존 debounce+flush 파이프라인 그대로
-  const applyHighlights = useCallback(
-    (adds: VerseHighlight[]) =>
-      update((e) => ({ ...e, highlightRanges: applyRanges(e.highlightRanges ?? [], adds) })),
-    [update],
-  )
-  const removeHighlight = useCallback(
-    (key: string, start: number, end: number) =>
-      update((e) => ({ ...e, highlightRanges: removeRange(e.highlightRanges ?? [], key, start, end) })),
-    [update],
+  // 형광펜은 이 묵상이 아니라 성경 본문에 귀속된다 — 같은 구절이면 다른 묵상에서도,
+  // 설교 노트에서도 같은 밑줄이 보인다. 겹침 절단·같은 색 병합은 applyRanges가 처리.
+  const { ranges: highlightRanges, applyHighlights, removeHighlight } = useSharedHighlights(
+    passage?.chunks ?? EMPTY_CHUNKS,
+    passage?.chapter ?? 1,
+    ownerId,
+    highlightVersionKey(),
   )
 
   // 형광펜 상태 — null이면 꺼짐
@@ -435,7 +439,7 @@ export default function MeditationSection({
               <PassageText
                 chunks={passage!.chunks}
                 startChapter={passage!.chapter}
-                highlightRanges={entry.highlightRanges}
+                highlightRanges={highlightRanges}
                 onApplyRanges={applyHighlights}
                 onRemoveRange={removeHighlight}
                 penColor={penColor}

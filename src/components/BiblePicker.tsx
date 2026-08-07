@@ -21,6 +21,13 @@ import { t } from '../i18n/strings'
 export interface PassageChunk {
   label: string | null
   text: string
+  /**
+   * 이 조각이 담은 장의 절대 좌표(index.json order + 장 번호). 조각은 항상 정확히
+   * 한 장씩 만들어지므로 여기에 좌표를 실어 두면 형광펜을 본문에 귀속시킬 수 있다.
+   * 본문 여러 개일 때 끼우는 참조 줄처럼 장에 속하지 않는 조각은 비어 있다.
+   */
+  bookOrder?: number
+  chapter?: number
 }
 
 export interface PassageInfo {
@@ -239,7 +246,12 @@ export default function BiblePicker({
             const text = chapter?.text ?? chapterTextAt(doc, current)
             if (text) {
               texts.push(text)
-              chunks.push({ label: chapterLabel(book, current), text })
+              chunks.push({
+                label: chapterLabel(book, current),
+                text,
+                bookOrder: selection.order,
+                chapter: current,
+              })
             }
             sourceQualities.push(chapter?.sourceQuality === 'verified' ? 'verified' : 'fallback')
             if (chapter?.isFinalized) isFinalized = true

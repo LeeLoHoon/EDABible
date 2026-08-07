@@ -308,6 +308,7 @@ export default function EntryPage() {
             setPassage={setPassage}
             update={update}
             FieldEditor={FieldEditor}
+            ownerId={ownerId}
           />
         )}
         {tab === 'transcribe' && (

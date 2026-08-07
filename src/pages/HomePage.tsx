@@ -9,8 +9,10 @@ import {
   deleteEntry,
   ENTRY_LOCAL_OWNER,
   flushDirtyEntries,
+  flushDirtyHighlights,
   listEntries,
   pullEntries,
+  pullVerseHighlights,
   putEntry,
 } from '../db'
 import { createEntry, emptyTemptationVictory, isFieldEmpty, type Entry } from '../types'
@@ -83,6 +85,15 @@ export default function HomePage() {
         await flushDirtyEntries(ownerId)
       } catch (syncError) {
         console.warn('Meditation sync failed; the device copy stays.', syncError)
+      }
+
+      // 형광펜은 본문에 귀속되어 묵상 목록과 별개로 오간다 — 여기서 한 번 맞춰 두면
+      // 묵상을 열자마자 다른 기기에서 그은 밑줄이 보인다.
+      try {
+        await pullVerseHighlights(ownerId)
+        await flushDirtyHighlights(ownerId)
+      } catch (syncError) {
+        console.warn('Verse highlight sync failed; the device copy stays.', syncError)
       }
     }
 

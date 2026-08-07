@@ -6,10 +6,14 @@ import FieldEditor from '../components/FieldEditor'
 import LangToggle from '../components/LangToggle'
 import ModeToggle from '../components/ModeToggle'
 import PassageText from '../components/PassageText'
+import type { PassageChunk } from '../components/BiblePicker'
 import VoiceRecorder from '../components/VoiceRecorder'
 import {
+  ENTRY_LOCAL_OWNER,
+  flushDirtyHighlights,
   getSermonNote,
   hasSermonNoteConflict,
+  pullVerseHighlights,
   listSermons,
   putSermonNote,
   resolveSermonConflictKeepLocal,
@@ -29,10 +33,12 @@ import {
   type SermonPassageText,
 } from '../sermon'
 import { isWithinMeditationPeriod, meditationPeriod } from '../sermonWeek'
-import { applyRanges, HIGHLIGHT_COLORS, removeRange } from '../highlights'
+import { HIGHLIGHT_COLORS } from '../highlights'
+import { useSharedHighlights } from '../hooks/useSharedHighlights'
+import { highlightVersionKey } from '../verseHighlights'
 import { BIBLE_VERSIONS, getBibleVersion, setBibleVersion, type BibleVersion } from '../bibleVersion'
 import { getLang } from '../i18n/lang'
-import type { Field, FieldMode, HighlightColor, VerseHighlight } from '../types'
+import type { Field, FieldMode, HighlightColor } from '../types'
 import { formatClockTime, formatEntryDateDot } from '../i18n/format'
 import { t } from '../i18n/strings'
 import { registerSaveFlush } from '../saveFlush'
@@ -41,7 +47,7 @@ import { drainPendingRef, ResolvedTaskChain, runSingleFlight } from '../persiste
 const SAVE_DEBOUNCE_MS = 800
 
 /** memo된 PassageText가 헛되이 재렌더되지 않도록 빈 목록은 안정 참조로 넘긴다 */
-const EMPTY_RANGES: VerseHighlight[] = []
+const EMPTY_CHUNKS: PassageChunk[] = []
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
 
@@ -125,8 +131,6 @@ export default function SermonNotePage() {
   const [saveConflict, setSaveConflict] = useState(false)
   const [displayedOwnerId, setDisplayedOwnerId] = useState<string | undefined>(userId)
   const [bibleVersion, setBibleVersionState] = useState<BibleVersion>(() => getBibleVersion())
-  // 영어 모드는 역본 축이 없다(항상 영어 The Message) — 형광펜도 기본 저장소를 쓴다
-  const effectiveVersion: BibleVersion = getLang() === 'en' ? 'msg' : bibleVersion
 
   const saveTimerRef = useRef<number | null>(null)
   const pendingNoteRef = useRef<PendingSermonSave | null>(null)
@@ -247,6 +251,17 @@ export default function SermonNotePage() {
       // 이전에 저장해둔 입력 방식으로 시작해야 손글씨 획이 갑자기 텍스트 영역 뒤로 사라지지 않는다
       setMode(loadedNote.freeNote.mode)
       setLoading(false)
+
+      // 형광펜은 본문에 귀속되어 이 설교와 별개로 오간다 — 묵상 노트에서 그은 밑줄도
+      // 여기서 보여야 하므로 화면을 띄운 뒤 뒤에서 맞춘다.
+      if (userId) {
+        try {
+          await pullVerseHighlights(userId)
+          await flushDirtyHighlights(userId)
+        } catch (syncError) {
+          console.warn('Verse highlight sync failed; the device copy stays.', syncError)
+        }
+      }
     })().catch(() => {
       if (alive) {
         setNotFound(true)
@@ -454,40 +469,13 @@ export default function SermonNotePage() {
   const updateApplication = (field: Field) => {
     updateNote((prev) => ({ ...prev, application: field }))
   }
-  const applyHighlights = useCallback(
-    (adds: VerseHighlight[]) =>
-      updateNote((prev) =>
-        effectiveVersion === 'msg'
-          ? { ...prev, highlightRanges: applyRanges(prev.highlightRanges, adds) }
-          : {
-              ...prev,
-              highlightVersions: {
-                ...prev.highlightVersions,
-                [effectiveVersion]: applyRanges(prev.highlightVersions[effectiveVersion] ?? [], adds),
-              },
-            },
-      ),
-    [updateNote, effectiveVersion],
-  )
-  const removeHighlight = useCallback(
-    (key: string, start: number, end: number) =>
-      updateNote((prev) =>
-        effectiveVersion === 'msg'
-          ? { ...prev, highlightRanges: removeRange(prev.highlightRanges, key, start, end) }
-          : {
-              ...prev,
-              highlightVersions: {
-                ...prev.highlightVersions,
-                [effectiveVersion]: removeRange(
-                  prev.highlightVersions[effectiveVersion] ?? [],
-                  key,
-                  start,
-                  end,
-                ),
-              },
-            },
-      ),
-    [updateNote, effectiveVersion],
+  // 형광펜은 이 설교 노트가 아니라 성경 본문에 귀속된다 — 말씀 묵상 노트에서 같은 구절에
+  // 그은 밑줄이 여기서도 보이고, 반대도 마찬가지다.
+  const { ranges: activeHighlights, applyHighlights, removeHighlight } = useSharedHighlights(
+    passages?.chunks ?? EMPTY_CHUNKS,
+    passages?.startChapter ?? 1,
+    userId ?? ENTRY_LOCAL_OWNER,
+    highlightVersionKey(),
   )
   const selectBibleVersion = (next: BibleVersion) => {
     if (next === bibleVersion) return
@@ -529,15 +517,11 @@ export default function SermonNotePage() {
   const sermonPreacher = localizedSermonPreacher(sermon, lang)
   const sermonSummary = localizedSermonSummary(sermon, lang)
   const sermonPoints = localizedSermonPoints(sermon, lang)
-  const passageChunks = passages?.chunks ?? []
+  const passageChunks = passages?.chunks ?? EMPTY_CHUNKS
   const passageStart = passages?.startChapter ?? 1
   const passageLabel = sermon.passages
     .map((passage) => localizedSermonPassageLabel(passage, lang))
     .join(', ')
-  const activeHighlights =
-    effectiveVersion === 'msg'
-      ? note.highlightRanges
-      : note.highlightVersions[effectiveVersion] ?? EMPTY_RANGES
   const versionNames = t('bibleVersionNames')
   const showVersionToggle = getLang() === 'ko'
   const serviceLabelText =
