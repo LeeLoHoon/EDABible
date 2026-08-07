@@ -8,6 +8,7 @@ import { t } from './i18n/strings'
 import {
   finalizeRemoteChapter,
   loadRemoteBook,
+  loadRemoteBookStamp,
   saveRemoteChapterText,
   unfinalizeRemoteChapter,
 } from './remoteBible'
@@ -94,9 +95,13 @@ export function loadBook(file: string): Promise<BookDoc> {
     p = (async () => {
       const cached = await db.bibleBooks.get(key)
       let doc: BookDoc
+      // 캐시에서 꺼낸 경우에만 remoteStamp가 이 doc의 것이다. 정적 산출물을 새로 받았다면
+      // 원격 반영 전이라 stamp를 믿고 건너뛰면 안 된다.
+      let usedCache = false
 
       if (cached?.build === BUILD && cached.doc) {
         doc = cached.doc as BookDoc
+        usedCache = true
       } else {
         doc = await fetchJson<BookDoc>(`${BASE}bible/${key}?v=${BUILD}`, t('bibleBookError'))
         await db.bibleBooks.put({
@@ -110,15 +115,22 @@ export function loadBook(file: string): Promise<BookDoc> {
       // Supabase bible_chapters는 메시지성경 원문만 담는다 — 다른 역본은 정적 산출물 그대로
       if (getLang() === 'ko' && getBibleVersion() === 'msg') {
         try {
-          const remoteDoc = await loadRemoteBook(file, doc)
-          if (remoteDoc) {
+          // 먼저 최신 수정 시각만 받아 캐시와 대조한다. 관리자가 본문을 고치지 않는 한
+          // 이 값이 그대로라, 앱을 켤 때마다 책 한 권(시편 기준 316KB)을 다시 받지 않는다.
+          const stamp = await loadRemoteBookStamp(file, doc.order)
+          const cachedStamp = usedCache ? cached?.remoteStamp : undefined
+          if (stamp && cachedStamp === stamp) return doc
+
+          const remote = await loadRemoteBook(file, doc)
+          if (remote) {
             await db.bibleBooks.put({
               file,
               build: BUILD,
-              doc: remoteDoc,
+              doc: remote.doc,
+              remoteStamp: remote.stamp ?? stamp ?? undefined,
               updatedAt: new Date().toISOString(),
             })
-            return remoteDoc
+            return remote.doc
           }
         } catch (error) {
           console.warn('Supabase Bible load failed; using local cache.', error)
@@ -177,6 +189,8 @@ export async function saveBibleChapterText(file: string, chapter: number, text: 
   }
 
   const nextDoc: BookDoc = { ...doc, chapters }
+  // 편집·확정 뒤에는 remoteStamp를 남기지 않는다 — 서버가 새로 찍은 updated_at을 여기서는
+  // 알 수 없으므로, 다음 로드에서 한 번 다시 받아 확실히 맞추게 둔다(관리자 1회 비용).
   await db.bibleBooks.put({
     file,
     build: BUILD,

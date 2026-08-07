@@ -44,6 +44,11 @@ export interface BibleBookCache {
   file: string
   build: string
   doc: unknown
+  /**
+   * 이 캐시가 반영한 Supabase 본문의 최신 updated_at. 다음 로드 때 이 값만 비교해
+   * 바뀐 게 없으면 본문(책 한 권이 수백 KB) 내려받기를 통째로 건너뛴다.
+   */
+  remoteStamp?: string
   updatedAt: string
 }
 

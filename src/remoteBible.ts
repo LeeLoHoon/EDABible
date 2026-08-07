@@ -9,6 +9,7 @@ interface BibleChapterRow {
   chapter: number
   text: string
   is_finalized?: boolean
+  updated_at?: string
 }
 
 function orderFromFile(file: string): number | null {
@@ -16,7 +17,33 @@ function orderFromFile(file: string): number | null {
   return match ? Number(match[1]) : null
 }
 
-export async function loadRemoteBook(file: string, fallback: BookDoc): Promise<BookDoc | null> {
+export interface RemoteBook {
+  doc: BookDoc
+  /** 이 본문의 최신 updated_at — 다음 로드에서 재다운로드 여부를 가리는 기준 */
+  stamp: string | null
+}
+
+/**
+ * 그 책에서 가장 최근에 바뀐 시각만 받아온다(수십 바이트). 관리자가 본문을 고치지 않는 한
+ * 이 값이 그대로이므로, 캐시가 최신인지 확인하려고 책 한 권(수백 KB)을 받을 필요가 없다.
+ */
+export async function loadRemoteBookStamp(file: string, order?: number): Promise<string | null> {
+  if (!supabase) return null
+  const bookOrder = order || orderFromFile(file)
+  if (!bookOrder) return null
+
+  const { data, error } = await supabase
+    .from('bible_chapters')
+    .select('updated_at')
+    .eq('book_order', bookOrder)
+    .order('updated_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (error) throw error
+  return typeof data?.updated_at === 'string' ? data.updated_at : null
+}
+
+export async function loadRemoteBook(file: string, fallback: BookDoc): Promise<RemoteBook | null> {
   if (!supabase) return null
 
   const order = fallback.order || orderFromFile(file)
@@ -24,7 +51,7 @@ export async function loadRemoteBook(file: string, fallback: BookDoc): Promise<B
 
   const initial = await supabase
     .from('bible_chapters')
-    .select('book_order, book, abbr, file, chapter, text, is_finalized')
+    .select('book_order, book, abbr, file, chapter, text, is_finalized, updated_at')
     .eq('book_order', order)
     .order('chapter', { ascending: true })
   let data = initial.data as BibleChapterRow[] | null
@@ -34,7 +61,7 @@ export async function loadRemoteBook(file: string, fallback: BookDoc): Promise<B
   if (error && /is_finalized|schema cache/i.test(error.message)) {
     const fallback = await supabase
       .from('bible_chapters')
-      .select('book_order, book, abbr, file, chapter, text')
+      .select('book_order, book, abbr, file, chapter, text, updated_at')
       .eq('book_order', order)
       .order('chapter', { ascending: true })
     data = fallback.data as BibleChapterRow[] | null
@@ -62,12 +89,22 @@ export async function loadRemoteBook(file: string, fallback: BookDoc): Promise<B
 
   chapters.sort((a, b) => a.chapter - b.chapter)
 
+  let stamp: string | null = null
+  for (const row of rows) {
+    if (typeof row.updated_at === 'string' && (!stamp || row.updated_at > stamp)) {
+      stamp = row.updated_at
+    }
+  }
+
   return {
-    order: fallback.order || rows[0].book_order,
-    book: fallback.book || rows[0].book,
-    abbr: fallback.abbr || rows[0].abbr,
-    chapters,
-    supportsFinalize,
+    doc: {
+      order: fallback.order || rows[0].book_order,
+      book: fallback.book || rows[0].book,
+      abbr: fallback.abbr || rows[0].abbr,
+      chapters,
+      supportsFinalize,
+    },
+    stamp,
   }
 }
 
