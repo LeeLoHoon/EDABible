@@ -17,6 +17,16 @@ function orderFromFile(file: string): number | null {
   return match ? Number(match[1]) : null
 }
 
+// Supabase DB가 무응답(커넥션 풀 고갈 등)일 때 요청이 무한정 매달리면 loadBook이
+// 영영 resolve되지 않아 장/편 셀렉트가 disabled로 고착된다. 제한 시간 안에 답이
+// 없으면 끊고 throw — loadBook의 catch가 로컬 캐시/정적 본문으로 넘어간다.
+const STAMP_TIMEOUT_MS = 4_000
+const BOOK_TIMEOUT_MS = 10_000
+
+function timeoutSignal(ms: number): AbortSignal | null {
+  return typeof AbortSignal.timeout === 'function' ? AbortSignal.timeout(ms) : null
+}
+
 export interface RemoteBook {
   doc: BookDoc
   /** 이 본문의 최신 updated_at — 다음 로드에서 재다운로드 여부를 가리는 기준 */
@@ -32,13 +42,15 @@ export async function loadRemoteBookStamp(file: string, order?: number): Promise
   const bookOrder = order || orderFromFile(file)
   if (!bookOrder) return null
 
-  const { data, error } = await supabase
+  let query = supabase
     .from('bible_chapters')
     .select('updated_at')
     .eq('book_order', bookOrder)
     .order('updated_at', { ascending: false })
     .limit(1)
-    .maybeSingle()
+  const signal = timeoutSignal(STAMP_TIMEOUT_MS)
+  if (signal) query = query.abortSignal(signal)
+  const { data, error } = await query.maybeSingle()
   if (error) throw error
   return typeof data?.updated_at === 'string' ? data.updated_at : null
 }
@@ -49,21 +61,27 @@ export async function loadRemoteBook(file: string, fallback: BookDoc): Promise<R
   const order = fallback.order || orderFromFile(file)
   if (!order) return null
 
-  const initial = await supabase
+  let initialQuery = supabase
     .from('bible_chapters')
     .select('book_order, book, abbr, file, chapter, text, is_finalized, updated_at')
     .eq('book_order', order)
     .order('chapter', { ascending: true })
+  const initialSignal = timeoutSignal(BOOK_TIMEOUT_MS)
+  if (initialSignal) initialQuery = initialQuery.abortSignal(initialSignal)
+  const initial = await initialQuery
   let data = initial.data as BibleChapterRow[] | null
   let error = initial.error
   let supportsFinalize = true
 
   if (error && /is_finalized|schema cache/i.test(error.message)) {
-    const fallback = await supabase
+    let fallbackQuery = supabase
       .from('bible_chapters')
       .select('book_order, book, abbr, file, chapter, text, updated_at')
       .eq('book_order', order)
       .order('chapter', { ascending: true })
+    const fallbackSignal = timeoutSignal(BOOK_TIMEOUT_MS)
+    if (fallbackSignal) fallbackQuery = fallbackQuery.abortSignal(fallbackSignal)
+    const fallback = await fallbackQuery
     data = fallback.data as BibleChapterRow[] | null
     error = fallback.error
     supportsFinalize = false
