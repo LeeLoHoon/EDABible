@@ -196,6 +196,8 @@ function qaClient(): SupabaseClient {
 }
 
 function throwQaError(error: QaErrorLike): never {
+  // 과거 배포는 errcode 40001을 썼으나 PostgREST가 40001을 무한 재시도해 P0001로 바꿨다.
+  // 코드가 아니라 메시지로 분기한다 — P0001은 모든 raise exception의 기본 코드라 겹친다.
   if (error.message.includes('QA_STALE_VERSION') || error.code === '40001') {
     throw new QaStaleVersionError()
   }

@@ -80,7 +80,7 @@ begin
 
   if not found then
     if p_expected_revision <> 0 then
-      raise exception using errcode = '40001', message = 'MEDITATION_ENTRY_STALE_REVISION';
+      raise exception using errcode = 'P0001', message = 'MEDITATION_ENTRY_STALE_REVISION';
     end if;
     insert into public.meditation_entries (user_id, entry_id, data, revision, updated_at)
     values (actor_id, p_entry_id, p_data, 1, saved_at);
@@ -89,10 +89,10 @@ begin
     -- 지운 묵상은 되살리지 않는다. 다른 기기의 삭제가 뒤늦게 도착한 편집으로 뒤집히면
     -- "지웠는데 되살아난다"가 된다.
     if current_deleted_at is not null then
-      raise exception using errcode = '40001', message = 'MEDITATION_ENTRY_DELETED';
+      raise exception using errcode = 'P0001', message = 'MEDITATION_ENTRY_DELETED';
     end if;
     if current_revision <> p_expected_revision then
-      raise exception using errcode = '40001', message = 'MEDITATION_ENTRY_STALE_REVISION';
+      raise exception using errcode = 'P0001', message = 'MEDITATION_ENTRY_STALE_REVISION';
     end if;
     next_revision := current_revision + 1;
     update public.meditation_entries as entry

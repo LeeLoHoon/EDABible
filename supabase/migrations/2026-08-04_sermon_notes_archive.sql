@@ -191,14 +191,14 @@ begin
 
   if not found then
     if p_expected_revision <> 0 then
-      raise exception using errcode = '40001', message = 'SERMON_NOTE_STALE_REVISION';
+      raise exception using errcode = 'P0001', message = 'SERMON_NOTE_STALE_REVISION';
     end if;
     insert into public.sermon_notes (user_id, sermon_id, data, revision, updated_at)
     values (actor_id, p_sermon_id, p_data, 1, saved_at);
     next_revision := 1;
   else
     if current_revision <> p_expected_revision then
-      raise exception using errcode = '40001', message = 'SERMON_NOTE_STALE_REVISION';
+      raise exception using errcode = 'P0001', message = 'SERMON_NOTE_STALE_REVISION';
     end if;
     next_revision := current_revision + 1;
     update public.sermon_notes as note

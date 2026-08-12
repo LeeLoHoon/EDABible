@@ -390,14 +390,14 @@ begin
 
   if not found then
     if p_expected_revision <> 0 then
-      raise exception using errcode = '40001', message = 'SERMON_NOTE_STALE_REVISION';
+      raise exception using errcode = 'P0001', message = 'SERMON_NOTE_STALE_REVISION';
     end if;
     insert into public.sermon_notes (user_id, sermon_id, data, revision, updated_at)
     values (actor_id, p_sermon_id, p_data, 1, saved_at);
     next_revision := 1;
   else
     if current_revision <> p_expected_revision then
-      raise exception using errcode = '40001', message = 'SERMON_NOTE_STALE_REVISION';
+      raise exception using errcode = 'P0001', message = 'SERMON_NOTE_STALE_REVISION';
     end if;
     next_revision := current_revision + 1;
     update public.sermon_notes as note
@@ -596,7 +596,7 @@ begin
 
   if not found then
     if p_expected_revision <> 0 then
-      raise exception using errcode = '40001', message = 'MEDITATION_ENTRY_STALE_REVISION';
+      raise exception using errcode = 'P0001', message = 'MEDITATION_ENTRY_STALE_REVISION';
     end if;
     insert into public.meditation_entries (user_id, entry_id, data, revision, updated_at)
     values (actor_id, p_entry_id, p_data, 1, saved_at);
@@ -605,10 +605,10 @@ begin
     -- 지운 묵상은 되살리지 않는다. 다른 기기의 삭제가 뒤늦게 도착한 편집으로 뒤집히면
     -- "지웠는데 되살아난다"가 된다.
     if current_deleted_at is not null then
-      raise exception using errcode = '40001', message = 'MEDITATION_ENTRY_DELETED';
+      raise exception using errcode = 'P0001', message = 'MEDITATION_ENTRY_DELETED';
     end if;
     if current_revision <> p_expected_revision then
-      raise exception using errcode = '40001', message = 'MEDITATION_ENTRY_STALE_REVISION';
+      raise exception using errcode = 'P0001', message = 'MEDITATION_ENTRY_STALE_REVISION';
     end if;
     next_revision := current_revision + 1;
     update public.meditation_entries as entry
@@ -796,7 +796,7 @@ begin
 
   if not found then
     if p_expected_revision <> 0 then
-      raise exception using errcode = '40001', message = 'VERSE_HIGHLIGHT_STALE_REVISION';
+      raise exception using errcode = 'P0001', message = 'VERSE_HIGHLIGHT_STALE_REVISION';
     end if;
     insert into public.verse_highlights
       (user_id, version, book_order, chapter, ranges, revision, updated_at)
@@ -804,7 +804,7 @@ begin
     next_revision := 1;
   else
     if current_revision <> p_expected_revision then
-      raise exception using errcode = '40001', message = 'VERSE_HIGHLIGHT_STALE_REVISION';
+      raise exception using errcode = 'P0001', message = 'VERSE_HIGHLIGHT_STALE_REVISION';
     end if;
     next_revision := current_revision + 1;
     update public.verse_highlights as highlight
@@ -1638,7 +1638,7 @@ begin
     raise exception using errcode = 'P0002', message = 'QA_QUESTION_NOT_FOUND';
   end if;
   if question_row.version <> p_expected_version then
-    raise exception using errcode = '40001', message = 'QA_STALE_VERSION';
+    raise exception using errcode = 'P0001', message = 'QA_STALE_VERSION';
   end if;
   if question_row.status = 'drafting'
      and question_row.draft_claimed_at is not null
@@ -1739,7 +1739,7 @@ begin
     raise exception using errcode = 'P0002', message = 'QA_QUESTION_NOT_FOUND';
   end if;
   if question_row.version <> p_expected_version then
-    raise exception using errcode = '40001', message = 'QA_STALE_VERSION';
+    raise exception using errcode = 'P0001', message = 'QA_STALE_VERSION';
   end if;
   if question_row.status = 'drafting'
      and question_row.draft_claimed_at is not null
@@ -1934,7 +1934,7 @@ begin
     raise exception using errcode = 'P0002', message = 'QA_QUESTION_NOT_FOUND';
   end if;
   if question_row.version <> p_expected_version then
-    raise exception using errcode = '40001', message = 'QA_STALE_VERSION';
+    raise exception using errcode = 'P0001', message = 'QA_STALE_VERSION';
   end if;
   if question_row.status <> 'drafting' then
     raise exception using errcode = 'P0001', message = 'QA_INVALID_TRANSITION';
@@ -2032,7 +2032,7 @@ begin
     raise exception using errcode = 'P0002', message = 'QA_QUESTION_NOT_FOUND';
   end if;
   if question_row.version <> p_expected_version then
-    raise exception using errcode = '40001', message = 'QA_STALE_VERSION';
+    raise exception using errcode = 'P0001', message = 'QA_STALE_VERSION';
   end if;
   if question_row.status <> 'draft_ready' then
     raise exception using errcode = 'P0001', message = 'QA_INVALID_TRANSITION';
@@ -2109,7 +2109,7 @@ begin
     raise exception using errcode = 'P0002', message = 'QA_QUESTION_NOT_FOUND';
   end if;
   if question_row.version <> p_expected_version then
-    raise exception using errcode = '40001', message = 'QA_STALE_VERSION';
+    raise exception using errcode = 'P0001', message = 'QA_STALE_VERSION';
   end if;
   if question_row.status <> 'drafting' then
     raise exception using errcode = 'P0001', message = 'QA_INVALID_TRANSITION';
@@ -2198,7 +2198,7 @@ begin
     raise exception using errcode = 'P0002', message = 'QA_QUESTION_NOT_FOUND';
   end if;
   if question_row.version <> p_expected_version then
-    raise exception using errcode = '40001', message = 'QA_STALE_VERSION';
+    raise exception using errcode = 'P0001', message = 'QA_STALE_VERSION';
   end if;
 
   if question_row.status = 'approved' then
@@ -2470,7 +2470,7 @@ begin
     raise exception using errcode = 'P0002', message = 'QA_QUESTION_NOT_FOUND';
   end if;
   if question_row.version <> p_expected_version then
-    raise exception using errcode = '40001', message = 'QA_STALE_VERSION';
+    raise exception using errcode = 'P0001', message = 'QA_STALE_VERSION';
   end if;
   if question_row.status <> 'approved' then
     raise exception using errcode = 'P0001', message = 'QA_INVALID_TRANSITION';
@@ -2544,7 +2544,7 @@ begin
     raise exception using errcode = 'P0002', message = 'QA_QUESTION_NOT_FOUND';
   end if;
   if question_row.version <> p_expected_version then
-    raise exception using errcode = '40001', message = 'QA_STALE_VERSION';
+    raise exception using errcode = 'P0001', message = 'QA_STALE_VERSION';
   end if;
   if question_row.status not in ('submitted', 'failed', 'draft_ready') then
     raise exception using errcode = 'P0001', message = 'QA_INVALID_TRANSITION';
@@ -2869,7 +2869,7 @@ begin
      and chunk_row.embedding is null;
   get diagnostics updated_count = row_count;
   if updated_count <> 1 then
-    raise exception using errcode = '40001', message = 'QA_BACKFILL_STALE';
+    raise exception using errcode = 'P0001', message = 'QA_BACKFILL_STALE';
   end if;
 
   return pg_catalog.jsonb_build_object(

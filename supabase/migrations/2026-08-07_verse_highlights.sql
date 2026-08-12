@@ -93,7 +93,7 @@ begin
 
   if not found then
     if p_expected_revision <> 0 then
-      raise exception using errcode = '40001', message = 'VERSE_HIGHLIGHT_STALE_REVISION';
+      raise exception using errcode = 'P0001', message = 'VERSE_HIGHLIGHT_STALE_REVISION';
     end if;
     insert into public.verse_highlights
       (user_id, version, book_order, chapter, ranges, revision, updated_at)
@@ -101,7 +101,7 @@ begin
     next_revision := 1;
   else
     if current_revision <> p_expected_revision then
-      raise exception using errcode = '40001', message = 'VERSE_HIGHLIGHT_STALE_REVISION';
+      raise exception using errcode = 'P0001', message = 'VERSE_HIGHLIGHT_STALE_REVISION';
     end if;
     next_revision := current_revision + 1;
     update public.verse_highlights as highlight
